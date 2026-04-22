@@ -2,7 +2,7 @@
 // Profile: user info, reading stats, edit, logout
 // FR-54~57: 사용자 정보, 독서 통계, 프로필 수정, 로그아웃
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from 'react-router-dom';
 import { Settings, LogOut, Edit3, BookOpen, Flame, TrendingUp, Award, ChevronRight, ArrowLeft, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ const GENRE_DATA = [
     { genre: "기타", count: 1 },
 ];
 export default function Profile() {
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     const [view, setView] = useState("main");
     const [editForm, setEditForm] = useState({ name: MOCK_USER.name, bio: MOCK_USER.bio });
     const doneBooks = MOCK_BOOKS.filter(b => b.status === "done").length;

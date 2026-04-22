@@ -1,7 +1,7 @@
 // Booklog Home — 「따뜻한 라이브러리」
 // Main page: personalized recommendations, recent books, activity summary
 // FR-09~13: 개인화 추천, 최근 읽은 책, 활동 요약, 검색 이동, 키워드 추천
-import { useLocation } from "wouter";
+import { useNavigate } from 'react-router-dom';
 import { Search, Flame, BookOpen, TrendingUp, ChevronRight } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import BookCard from "@/components/BookCard";
@@ -11,7 +11,7 @@ const KEYWORDS = ["소설", "자기계발", "한국문학", "SF", "철학", "에
 const readingBooks = MOCK_BOOKS.filter(b => b.status === "reading");
 const recommendedBooks = MOCK_BOOKS.slice(0, 6);
 export default function Home() {
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     return (<PageLayout>
       <div className="stagger-children">
         {/* Hero Header */}

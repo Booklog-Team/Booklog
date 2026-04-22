@@ -2,7 +2,7 @@
 // 서재: featured book, status tabs, reading calendar, streak visualization
 // FR-24~40: 대표 도서, 상태별 목록, 캘린더, streak
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from 'react-router-dom';
 import { Plus, Flame, LayoutGrid, List, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -26,7 +26,7 @@ function getFirstDayOfMonth(year, month) {
     return new Date(year, month, 1).getDay();
 }
 export default function Library() {
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     const [viewMode, setViewMode] = useState("list");
     const [activeTab, setActiveTab] = useState("all");
     const [calYear, setCalYear] = useState(2024);

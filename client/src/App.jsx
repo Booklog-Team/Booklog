@@ -1,44 +1,55 @@
 // Booklog App — 「따뜻한 라이브러리」
-// Route configuration for all pages
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch } from "wouter";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
+// PRD.md §5 라우팅 구조 기반 (react-router-dom v6)
+import { Routes, Route } from 'react-router-dom';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import ErrorBoundary from './components/ErrorBoundary';
+import { ThemeProvider } from './contexts/ThemeContext';
+import PrivateRoute from './components/PrivateRoute';
+import PageLayout from './components/PageLayout';
 // Pages
-import Home from "./pages/Home";
-import Onboarding from "./pages/Onboarding";
-import Auth from "./pages/Auth";
-import Search from "./pages/Search";
-import BookDetail from "./pages/BookDetail";
-import Library from "./pages/Library";
-import Community from "./pages/Community";
-import Profile from "./pages/Profile";
-import Points from "./pages/Points";
-import NotFound from "./pages/NotFound";
-function Router() {
-    return (<Switch>
-      <Route path="/" component={Home}/>
-      <Route path="/onboarding" component={Onboarding}/>
-      <Route path="/auth" component={Auth}/>
-      <Route path="/search" component={Search}/>
-      <Route path="/book/:id" component={BookDetail}/>
-      <Route path="/library" component={Library}/>
-      <Route path="/community" component={Community}/>
-      <Route path="/profile" component={Profile}/>
-      <Route path="/points" component={Points}/>
-      <Route path="/404" component={NotFound}/>
-      <Route component={NotFound}/>
-    </Switch>);
-}
+import Home from './pages/Home';
+import Onboarding from './pages/Onboarding';
+import Auth from './pages/Auth';
+import Search from './pages/Search';
+import BookDetail from './pages/BookDetail';
+import Library from './pages/Library';
+import Community from './pages/Community';
+import Profile from './pages/Profile';
+import Points from './pages/Points';
+import NotFound from './pages/NotFound';
+
 function App() {
-    return (<ErrorBoundary>
+  return (
+    <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
-          <Toaster position="top-center" richColors/>
-          <Router />
+          <Toaster position="top-center" richColors />
+          <Routes>
+            {/* 비로그인 접근 가능 */}
+            <Route path="/auth" element={<Auth />} />
+
+            {/* 로그인 필수 (PrivateRoute) */}
+            <Route element={<PrivateRoute />}>
+              <Route element={<PageLayout />}>
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/" element={<Home />} />
+                <Route path="/search" element={<Search />} />
+                <Route path="/book/:id" element={<BookDetail />} />
+                <Route path="/library" element={<Library />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/community" element={<Community />} />
+                <Route path="/points" element={<Points />} />
+              </Route>
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </TooltipProvider>
       </ThemeProvider>
-    </ErrorBoundary>);
+    </ErrorBoundary>
+  );
 }
+
 export default App;
+

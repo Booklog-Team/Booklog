@@ -1,11 +1,11 @@
 // Booklog NotFound — 「따뜻한 라이브러리」
 // 404 page with warm library aesthetic
 // FR-65: 404 페이지
-import { useLocation } from "wouter";
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Home, BookOpen } from "lucide-react";
 export default function NotFound() {
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     return (<div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 text-center">
       {/* Decorative book illustration */}
       <div className="relative mb-8">

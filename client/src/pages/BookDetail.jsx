@@ -2,7 +2,7 @@
 // Book detail: info, status, progress, memo, related books
 // FR-17~23: 도서 정보, 상태 설정, 진행률, 페이지 기록, 메모, 저장, 관련 추천
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bookmark, Share2, Star, ChevronDown, Check, BookOpen, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +24,7 @@ const STATUS_CLASS = {
 };
 export default function BookDetail() {
     const { id } = useParams();
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     const book = MOCK_BOOKS.find(b => b.id === id) ?? MOCK_BOOKS[0];
     const related = MOCK_BOOKS.filter(b => b.id !== book.id && b.genre.some(g => book.genre.includes(g))).slice(0, 6);
     const [status, setStatus] = useState(book.status);

@@ -1,6 +1,6 @@
 // Booklog BookCard — 「따뜻한 라이브러리」
 // Reusable book card with cover, title, author, status, and progress
-import { Link } from "wouter";
+import { Link } from 'react-router-dom';
 const STATUS_LABEL = {
     reading: "읽는 중",
     want: "읽고 싶음",
@@ -16,7 +16,7 @@ export default function BookCard({ book, variant = "compact" }) {
         ? Math.round((book.currentPage / book.totalPages) * 100)
         : null;
     if (variant === "full") {
-        return (<Link href={`/book/${book.id}`}>
+        return (<Link to={`/book/${book.id}`}>
         <div className="book-card p-4 flex gap-4 active:scale-[0.99] transition-transform">
           <img src={book.cover} alt={book.title} className="w-16 h-24 object-cover rounded-lg shadow-sm flex-shrink-0"/>
           <div className="flex-1 min-w-0">
@@ -43,7 +43,7 @@ export default function BookCard({ book, variant = "compact" }) {
         </div>
       </Link>);
     }
-    return (<Link href={`/book/${book.id}`}>
+    return (<Link to={`/book/${book.id}`}>
       <div className="flex flex-col gap-2 active:scale-[0.97] transition-transform">
         <div className="relative">
           <img src={book.cover} alt={book.title} className="w-full aspect-[2/3] object-cover rounded-lg shadow-md"/>

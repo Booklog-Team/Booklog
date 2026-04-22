@@ -2,7 +2,7 @@
 // Points and donation system
 // FR-58~64: 활동 기반 포인트, 하루 1회, 중복 방지, 포인트 누적, 기부 환산, 시각화
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Gift, Flame, BookOpen, MessageSquare, Star, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ const PIE_DATA = [
     { name: "기타", value: 100, color: "#E8DDD0" },
 ];
 export default function Points() {
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     const [donating, setDonating] = useState(null);
     const handleDonate = (orgId, points) => {
         if (MOCK_USER.points < points) {
