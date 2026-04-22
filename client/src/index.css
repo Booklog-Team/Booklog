@@ -1,0 +1,230 @@
+/* Booklog Design System — 「따뜻한 라이브러리」
+ * Color Philosophy: Ivory White (#FDFAF6) + Terracotta (#B85C38) + Moss Green (#4A7C59)
+ * Typography: Pretendard (body) + Noto Serif KR (display/headings)
+ * Layout: Web-first, top navigation bar, card-based content, max-w-5xl centered
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* Booklog Warm Library Palette */
+  --background: oklch(0.985 0.008 75);        /* #FDFAF6 ivory */
+  --foreground: oklch(0.22 0.03 55);           /* #2C2416 deep brown ink */
+  --card: oklch(1 0.004 75);                   /* slightly warmer white */
+  --card-foreground: oklch(0.22 0.03 55);
+  --popover: oklch(1 0.004 75);
+  --popover-foreground: oklch(0.22 0.03 55);
+
+  /* Primary: Terracotta */
+  --primary: oklch(0.55 0.13 40);             /* #B85C38 terracotta */
+  --primary-foreground: oklch(0.98 0.005 75); /* near white */
+
+  /* Secondary: Warm Beige */
+  --secondary: oklch(0.92 0.015 70);          /* #E8DDD0 warm beige */
+  --secondary-foreground: oklch(0.35 0.04 55);
+
+  /* Muted */
+  --muted: oklch(0.94 0.01 75);
+  --muted-foreground: oklch(0.55 0.025 60);   /* warm gray */
+
+  /* Accent: Moss Green */
+  --accent: oklch(0.88 0.04 150);             /* light moss tint */
+  --accent-foreground: oklch(0.35 0.08 150);  /* #4A7C59 moss green */
+
+  /* Destructive */
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /* Border / Input */
+  --border: oklch(0.88 0.012 70);
+  --input: oklch(0.88 0.012 70);
+  --ring: oklch(0.55 0.13 40);               /* terracotta ring */
+
+  /* Charts — warm tones */
+  --chart-1: oklch(0.55 0.13 40);            /* terracotta */
+  --chart-2: oklch(0.48 0.1 150);            /* moss green */
+  --chart-3: oklch(0.72 0.1 80);             /* amber gold */
+  --chart-4: oklch(0.65 0.08 200);           /* teal */
+  --chart-5: oklch(0.62 0.12 30);            /* rust */
+
+  /* Sidebar */
+  --sidebar: oklch(0.97 0.01 75);
+  --sidebar-foreground: oklch(0.22 0.03 55);
+  --sidebar-primary: oklch(0.55 0.13 40);
+  --sidebar-primary-foreground: oklch(0.98 0.005 75);
+  --sidebar-accent: oklch(0.92 0.015 70);
+  --sidebar-accent-foreground: oklch(0.35 0.04 55);
+  --sidebar-border: oklch(0.88 0.012 70);
+  --sidebar-ring: oklch(0.55 0.13 40);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: 'Noto Serif KR', 'Georgia', serif;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+
+  /* Booklog custom utilities */
+  .book-card {
+    @apply bg-card rounded-xl shadow-sm border border-border/60 transition-all duration-200;
+  }
+  .book-card:hover {
+    @apply shadow-md -translate-y-0.5;
+  }
+
+  .progress-bar {
+    @apply h-1.5 rounded-full bg-secondary overflow-hidden;
+  }
+  .progress-fill {
+    @apply h-full rounded-full bg-primary transition-all duration-500;
+  }
+
+  .tag-pill {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-reading {
+    @apply bg-primary/10 text-primary;
+  }
+  .status-want {
+    @apply bg-accent text-accent-foreground;
+  }
+  .status-done {
+    @apply bg-secondary text-secondary-foreground;
+  }
+
+  /* Scrollbar hide utility */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Keyframe animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes streakFlicker {
+  0%, 100% { transform: rotate(-2deg) scale(1); }
+  50%       { transform: rotate(2deg) scale(1.05); }
+}
+
+@keyframes progressFill {
+  from { width: 0%; }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+.animate-streak {
+  animation: streakFlicker 1.5s ease-in-out infinite;
+}
+
+/* Stagger children */
+.stagger-children > * {
+  animation: fadeInUp 0.35s ease-out both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 360ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 420ms; }
