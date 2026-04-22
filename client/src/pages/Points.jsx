@@ -1,166 +1,267 @@
 // Booklog Points — 「따뜻한 라이브러리」
-// Points and donation system
-// FR-58~64: 활동 기반 포인트, 하루 1회, 중복 방지, 포인트 누적, 기부 환산, 시각화
-import { useState } from "react";
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Gift, Flame, BookOpen, MessageSquare, Star, Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { MOCK_USER } from "@/lib/mockData";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-const POINT_ACTIVITIES = [
-    { label: "독서 기록", points: 10, icon: BookOpen, earned: true, desc: "오늘 완료" },
-    { label: "댓글 작성", points: 5, icon: MessageSquare, earned: true, desc: "오늘 완료" },
-    { label: "독후감 작성", points: 20, icon: Star, earned: false, desc: "아직 미완료" },
-    { label: "연속 독서 7일", points: 50, icon: Flame, earned: false, desc: "5일 더 필요" },
+// PRD.md §8 10. Points / §9 포인트 & 기부 시스템
+//
+// 데이터 흐름
+//   useAuth()   → profile.totalPoints, profile.lastPointDates
+//   usePoint()  → globalData (onSnapshot), canEarnToday(), addPoint()
+//
+// 포인트 적립 규칙 (PRD §9)
+//   오늘 독서 체크  +10p  하루 1회
+//   메모 작성       +5p   하루 1회
+//   모임 게시글     +5p   하루 1회
+//   자유게시판 글   +3p   하루 1회
+//   완독            없음
+
+import { Gift, BookOpen, PenLine, Users, MessageSquare, Info, TrendingUp, Loader2, Trophy, CheckCircle2, Circle } from 'lucide-react';
+import { usePoint, POINT_VALUES } from '@/contexts/PointContext';
+
+// ─── 적립 규칙 메타 (PRD §9) ──────────────────────────────
+const EARN_RULES = [
+  {
+    type:  'reading_check',
+    label: '오늘 독서 체크',
+    pts:   POINT_VALUES.reading_check,
+    icon:  BookOpen,
+    desc:  '하루 1회',
+    bg:    'bg-primary/10',
+    fg:    'text-primary',
+  },
+  {
+    type:  'memo',
+    label: '메모 작성',
+    pts:   POINT_VALUES.memo,
+    icon:  PenLine,
+    desc:  '하루 1회',
+    bg:    'bg-amber-500/10',
+    fg:    'text-amber-600',
+  },
+  {
+    type:  'meeting_post',
+    label: '모임 게시글',
+    pts:   POINT_VALUES.meeting_post,
+    icon:  Users,
+    desc:  '하루 1회',
+    bg:    'bg-accent',
+    fg:    'text-accent-foreground',
+  },
+  {
+    type:  'board_post',
+    label: '자유게시판 글',
+    pts:   POINT_VALUES.board_post,
+    icon:  MessageSquare,
+    desc:  '하루 1회',
+    bg:    'bg-secondary',
+    fg:    'text-secondary-foreground',
+  },
 ];
-const DONATION_ORGS = [
-    { id: "1", name: "어린이 도서관 지원", description: "소외 지역 어린이들에게 책을 선물합니다", pointsNeeded: 500, icon: "📚", donated: 1 },
-    { id: "2", name: "독서 장학금", description: "경제적 어려움을 겪는 학생들의 독서 활동을 지원합니다", pointsNeeded: 1000, icon: "🎓", donated: 0 },
-    { id: "3", name: "노인 독서 프로그램", description: "어르신들의 독서 모임과 책 구입을 지원합니다", pointsNeeded: 300, icon: "👴", donated: 2 },
-];
-const PIE_DATA = [
-    { name: "독서 기록", value: 600, color: "#B85C38" },
-    { name: "댓글/게시글", value: 350, color: "#4A7C59" },
-    { name: "연속 독서", value: 200, color: "#D4A853" },
-    { name: "기타", value: 100, color: "#E8DDD0" },
-];
+
+const POINTS_PER_BOOK = 1_000;
+
+// ─── 메인 컴포넌트 ────────────────────────────────────────
 export default function Points() {
-    const navigate = useNavigate();
-    const [donating, setDonating] = useState(null);
-    const handleDonate = (orgId, points) => {
-        if (MOCK_USER.points < points) {
-            toast.error("포인트가 부족합니다.");
-            return;
-        }
-        toast.success("기부가 완료되었습니다! 🎉 독서로 세상을 바꿔요.");
-        setDonating(null);
-    };
-    return (<>
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-8 pb-4">
-        <button onClick={() => navigate("/profile")} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
-          <ArrowLeft size={18}/>
-        </button>
-        <h1 className="text-xl font-bold">포인트 & 기부</h1>
+  const {
+    myPoints,
+    lastPointDates,
+    globalData,
+    globalLoading,
+    canEarnToday,
+  } = usePoint();
+
+  // 파생 값
+  const today        = new Date().toISOString().slice(0, 10);
+  const earnedToday  = Object.values(lastPointDates).some(d => d === today);
+
+  const totalDonated = globalData?.totalDonated ?? 0;
+  const goalAmount   = globalData?.goalAmount   ?? 100_000;
+  const progressPct  = Math.min(100, Math.round((totalDonated / goalAmount) * 100));
+  const booksEquiv   = Math.floor(totalDonated / POINTS_PER_BOOK);
+  const myBookEquiv  = Math.floor(myPoints / POINTS_PER_BOOK);
+
+  return (
+    <>
+      {/* 헤더 */}
+      <div className="flex items-center justify-between px-4 pt-8 pb-4">
+        <h1
+          className="text-2xl font-bold"
+          style={{ fontFamily: "'Noto Serif KR', serif" }}
+        >
+          포인트 &amp; 기부
+        </h1>
+        <Gift size={22} className="text-primary" />
       </div>
 
       <div className="px-4 pb-10 stagger-children">
-        {/* Points Balance Card */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 mb-6 text-white">
-          <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/10"/>
-          <div className="absolute -right-2 bottom-0 w-20 h-20 rounded-full bg-white/5"/>
+
+        {/* ── 내 포인트 카드 ───────────────────────────── */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 mb-6 text-white shadow-lg">
+          {/* 장식 원 */}
+          <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
+          <div className="absolute -right-2 bottom-0 w-20 h-20 rounded-full bg-white/5 pointer-events-none" />
+
           <p className="text-sm text-white/80 mb-1">나의 포인트</p>
-          <p className="text-5xl font-bold mb-1">{MOCK_USER.points.toLocaleString()}<span className="text-2xl ml-1">P</span></p>
-          <p className="text-sm text-white/70">총 {MOCK_USER.donationTotal}권 기부에 참여했어요 🎁</p>
-          <div className="mt-4 flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
-            <Info size={14} className="text-white/70"/>
-            <p className="text-xs text-white/80">포인트는 하루 1회, 활동당 1회만 적립됩니다</p>
+          <div className="flex items-baseline gap-1 mb-2">
+            <span className="text-5xl font-bold">{myPoints.toLocaleString()}</span>
+            <span className="text-2xl font-semibold">P</span>
+          </div>
+
+          <p className="text-sm text-white/80 mb-3">
+            책{' '}
+            <span className="font-bold text-white">{myBookEquiv}권</span>{' '}
+            기부에 참여할 수 있어요 📚
+          </p>
+
+          {/* 오늘 활동 여부 */}
+          <div className="flex items-center gap-2 mb-3">
+            <span
+              className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                earnedToday ? 'bg-green-300' : 'bg-white/40'
+              }`}
+            />
+            <p className="text-xs text-white/90">
+              {earnedToday
+                ? '오늘 독서 활동 완료! 포인트가 적립됐어요 🎉'
+                : '오늘 아직 활동 포인트를 받지 않았어요'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
+            <Info size={14} className="text-white/70 flex-shrink-0" />
+            <p className="text-xs text-white/80">
+              포인트는 하루 1회, 활동당 1회만 적립됩니다
+            </p>
           </div>
         </div>
 
-        {/* Two-column: Activities + Chart */}
-        <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-2">
-          {/* Point Earning Activities */}
-          <div>
-            <h2 className="text-sm font-semibold mb-3">오늘의 포인트 활동</h2>
-            <div className="space-y-2">
-              {POINT_ACTIVITIES.map(({ label, points, icon: Icon, earned, desc }) => (<div key={label} className={`book-card p-3.5 flex items-center gap-3 ${earned ? "opacity-60" : ""}`}>
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${earned ? "bg-secondary" : "bg-primary/10"}`}>
-                    <Icon size={18} className={earned ? "text-muted-foreground" : "text-primary"}/>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${earned ? "text-muted-foreground line-through" : "text-amber-600"}`}>
-                      +{points}P
-                    </p>
-                    {earned && <p className="text-[10px] text-muted-foreground">완료</p>}
-                  </div>
-                </div>))}
-            </div>
+        {/* ── 전체 기부 현황 ──────────────────────────── */}
+        <div className="book-card p-5 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp size={16} className="text-primary" />
+            <h2 className="text-sm font-semibold">전체 기부 현황</h2>
           </div>
 
-          {/* Points Distribution Chart */}
-          <div className="book-card p-4">
-            <h2 className="text-sm font-semibold mb-4">포인트 적립 현황</h2>
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width={140} height={140}>
-                <PieChart>
-                  <Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={42} outerRadius={65} dataKey="value" strokeWidth={0}>
-                    {PIE_DATA.map((entry, i) => (<Cell key={i} fill={entry.color}/>))}
-                  </Pie>
-                  <Tooltip formatter={(v) => [`${v}P`, ""]}/>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex-1 space-y-2.5">
-                {PIE_DATA.map(({ name, value, color }) => (<div key={name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }}/>
-                      <span className="text-xs text-muted-foreground">{name}</span>
-                    </div>
-                    <span className="text-xs font-semibold">{value}P</span>
-                  </div>))}
+          {globalLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={24} className="animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              {/* 수치 요약 */}
+              <div className="flex items-end justify-between mb-4">
+                <div>
+                  <p className="text-3xl font-bold text-primary">
+                    {totalDonated.toLocaleString()}
+                    <span className="text-base ml-1 font-semibold">P</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    전체 독서인이 모은 누적 포인트
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center gap-1.5 justify-end mb-0.5">
+                    <Trophy size={14} className="text-amber-500" />
+                    <span className="text-lg font-bold text-amber-600">
+                      {booksEquiv}권
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">책 기부 환산</p>
+                </div>
+              </div>
+
+              {/* 진행률 바 */}
+              <div className="mb-3">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                  <span>0P</span>
+                  <span className="font-semibold text-primary">{progressPct}% 달성</span>
+                  <span>{goalAmount.toLocaleString()}P</span>
+                </div>
+                <div className="h-3 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                목표 달성 시 소외 지역 어린이에게 책을 선물해요 🎁
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* ── 오늘의 활동 현황 + 적립 방법 ────────────── */}
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold mb-3">포인트 적립 방법</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {EARN_RULES.map(({ type, label, pts, icon: Icon, desc, bg, fg }) => {
+              const earned = !canEarnToday(type);
+              return (
+                <div
+                  key={type}
+                  className={`book-card p-4 text-center transition-opacity ${
+                    earned ? 'opacity-60' : ''
+                  }`}
+                >
+                  {/* 아이콘 */}
+                  <div
+                    className={`w-10 h-10 rounded-xl ${bg} ${fg} flex items-center justify-center mx-auto mb-2 relative`}
+                  >
+                    <Icon size={18} />
+                    {/* 완료 뱃지 */}
+                    {earned && (
+                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                        <CheckCircle2 size={10} className="text-white" />
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs font-semibold mb-1 leading-tight">{label}</p>
+                  <p className={`text-lg font-bold ${earned ? 'text-muted-foreground line-through' : 'text-amber-600'}`}>
+                    +{pts}P
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {earned ? '오늘 완료 ✓' : desc}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 완독 안내 (포인트 없음) */}
+          <div className="flex items-center gap-2 mt-3 px-3 py-2.5 bg-secondary/60 rounded-xl">
+            <Circle size={14} className="text-muted-foreground flex-shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">완독</span>은 포인트가 적립되지 않아요
+              — 독서 자체가 보상입니다 📖
+            </p>
+          </div>
+        </div>
+
+        {/* ── 기부 시스템 안내 ────────────────────────── */}
+        <div className="book-card p-4 bg-primary/5 border-primary/20">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0">📖</span>
+            <div>
+              <h3 className="text-sm font-semibold mb-1.5">기부 시스템 안내</h3>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Booklog의 모든 독서인이 활동으로 적립한 포인트는 합산되어
+                  기부 금액으로 환산됩니다.
+                </p>
+                <div className="flex items-center gap-2 py-2 px-3 bg-background rounded-lg">
+                  <span className="text-xs font-semibold text-primary">1,000P</span>
+                  <span className="text-xs text-muted-foreground">=</span>
+                  <span className="text-xs font-semibold text-foreground">📚 책 1권</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  소외 지역 어린이, 독서 장학금, 노인 독서 프로그램 등
+                  다양한 곳에 독서의 가치를 전합니다.
+                </p>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Donation Section */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Gift size={16} className="text-primary"/>
-            <h2 className="text-sm font-semibold">포인트로 기부하기</h2>
-          </div>
-          <p className="text-xs text-muted-foreground mb-4">
-            독서 활동으로 모은 포인트를 사회적 가치로 환산할 수 있어요.
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {DONATION_ORGS.map(org => (<div key={org.id} className="book-card p-4">
-                <div className="flex items-start gap-3 mb-3">
-                  <span className="text-2xl">{org.icon}</span>
-                  <div className="flex-1">
-                    <h3 className="text-sm font-semibold mb-0.5">{org.name}</h3>
-                    <p className="text-xs text-muted-foreground">{org.description}</p>
-                    {org.donated > 0 && (<p className="text-xs text-primary mt-1">이미 {org.donated}회 기부했어요 ✨</p>)}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-muted-foreground">필요 포인트 </span>
-                    <span className="text-sm font-bold text-amber-600">{org.pointsNeeded.toLocaleString()}P</span>
-                  </div>
-                  <Button size="sm" onClick={() => handleDonate(org.id, org.pointsNeeded)} disabled={MOCK_USER.points < org.pointsNeeded} className="h-8 px-4 text-xs rounded-lg">
-                    기부하기
-                  </Button>
-                </div>
-              </div>))}
-          </div>
-        </div>
-
-        {/* Point History */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold mb-3">포인트 내역</h2>
-          <div className="book-card overflow-hidden">
-            {[
-            { label: "독서 기록", date: "2024-04-20", points: "+10", type: "earn" },
-            { label: "댓글 작성", date: "2024-04-20", points: "+5", type: "earn" },
-            { label: "어린이 도서관 기부", date: "2024-04-15", points: "-500", type: "donate" },
-            { label: "연속 독서 7일", date: "2024-04-14", points: "+50", type: "earn" },
-            { label: "독후감 작성", date: "2024-04-13", points: "+20", type: "earn" },
-        ].map((item, i) => (<div key={i} className="flex items-center justify-between px-4 py-3.5 border-b border-border/40 last:border-0">
-                <div>
-                  <p className="text-sm font-medium">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.date}</p>
-                </div>
-                <span className={`text-sm font-bold ${item.type === "earn" ? "text-primary" : "text-muted-foreground"}`}>
-                  {item.points}P
-                </span>
-              </div>))}
-          </div>
-        </div>
       </div>
-    </>);
+    </>
+  );
 }
