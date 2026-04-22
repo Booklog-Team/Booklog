@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import PageLayout from "@/components/PageLayout";
 import BookCard from "@/components/BookCard";
 import { MOCK_BOOKS } from "@/lib/mockData";
 const STATUS_OPTIONS = [
@@ -37,7 +36,7 @@ export default function BookDetail() {
     const handleSave = () => {
         toast.success("독서 기록이 저장되었습니다!");
     };
-    return (<PageLayout>
+    return (<>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/30">
         <button onClick={() => navigate(-1)} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
@@ -167,5 +166,5 @@ export default function BookDetail() {
             </div>
           </section>)}
       </div>
-    </PageLayout>);
+    </>);
 }

@@ -31,8 +31,9 @@ function App() {
 
             {/* 로그인 필수 (PrivateRoute) */}
             <Route element={<PrivateRoute />}>
+              {/* 온보딩: 풀스크린, 네비 없음 */}
+              <Route path="/onboarding" element={<Onboarding />} />
               <Route element={<PageLayout />}>
-                <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/" element={<Home />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/book/:id" element={<BookDetail />} />

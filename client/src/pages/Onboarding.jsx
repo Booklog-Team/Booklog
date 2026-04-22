@@ -4,7 +4,7 @@
 // - Firestore users/{uid}.genres 저장 + isOnboarded: true
 // - 건너뛰기 → isOnboarded: true만 저장 후 메인 이동
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -41,11 +41,19 @@ async function saveOnboarding(uid, genres) {
 // ─── 메인 컴포넌트 ────────────────────────────────────────
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, refreshProfile } = useAuth();
+  const { user, isOnboarded, refreshProfile } = useAuth();
 
   const [step, setStep] = useState('welcome'); // 'welcome' | 'genre'
   const [selected, setSelected] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  // 이미 온보딩 완료한 유저가 직접 /onboarding 접근 시 메인으로 리다이렉트
+  useEffect(() => {
+    if (isOnboarded) {
+      navigate('/', { replace: true });
+    }
+  }, [isOnboarded, navigate]);
 
   // 장르 토글 (최대 3개 제한)
   const toggleGenre = (id) => {
@@ -99,13 +107,19 @@ export default function Onboarding() {
   if (step === 'welcome') {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <div className="flex-1 relative overflow-hidden">
+        <div
+          className="flex-1 relative overflow-hidden"
+          style={{ background: imgError ? 'linear-gradient(160deg, #3d2b1f 0%, #5c3a25 50%, #2c1a0e 100%)' : undefined }}
+        >
           {/* 배경 이미지 */}
-          <img
-            src={ONBOARDING_IMAGE}
-            alt="Booklog 온보딩"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+          {!imgError && (
+            <img
+              src={ONBOARDING_IMAGE}
+              alt="Booklog 온보딩"
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={() => setImgError(true)}
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/25 to-black/75" />
 
           {/* 하단 콘텐츠 */}

@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Gift, Flame, BookOpen, MessageSquare, Star, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import PageLayout from "@/components/PageLayout";
 import { MOCK_USER } from "@/lib/mockData";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 const POINT_ACTIVITIES = [
@@ -37,7 +36,7 @@ export default function Points() {
         toast.success("기부가 완료되었습니다! 🎉 독서로 세상을 바꿔요.");
         setDonating(null);
     };
-    return (<PageLayout>
+    return (<>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-8 pb-4">
         <button onClick={() => navigate("/profile")} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
@@ -163,5 +162,5 @@ export default function Points() {
           </div>
         </div>
       </div>
-    </PageLayout>);
+    </>);
 }
