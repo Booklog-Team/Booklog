@@ -4,7 +4,6 @@
 import { useState } from "react";
 import { Search as SearchIcon, X, BookOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import PageLayout from "@/components/PageLayout";
 import BookCard from "@/components/BookCard";
 import { MOCK_BOOKS } from "@/lib/mockData";
 const RECENT_SEARCHES = ["한강", "채식주의자", "SF 소설", "자기계발"];
@@ -27,7 +26,7 @@ export default function Search() {
         setQuery("");
         setHasSearched(false);
     };
-    return (<PageLayout>
+    return (<>
       {/* Search Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-4 pb-3 border-b border-border/40">
         <div className="flex items-center gap-3">
@@ -109,5 +108,5 @@ export default function Search() {
             </button>
           </div>)}
       </div>
-    </PageLayout>);
+    </>);
 }

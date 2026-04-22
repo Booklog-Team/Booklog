@@ -1,6 +1,6 @@
 // Booklog SideNav — 「따뜻한 라이브러리」
 // Left sidebar navigation: logo → nav items → user info
-import { Link, useLocation } from "wouter";
+import { Link, useLocation } from 'react-router-dom';
 import { Home, Search, BookOpen, Users, User } from "lucide-react";
 import { MOCK_USER } from "@/lib/mockData";
 
@@ -13,12 +13,12 @@ const NAV_ITEMS = [
 ];
 
 export default function SideNav() {
-    const [location] = useLocation();
+    const location = useLocation();
     return (
         <aside className="w-60 bg-card border-r border-border/60 h-screen sticky top-0 flex flex-col flex-shrink-0 z-50" style={{ paddingTop: "28px", paddingBottom: "28px" }}>
             {/* Logo */}
             <div className="px-6 pb-7 border-b border-border/60 mb-5">
-                <Link href="/" className="block">
+                <Link to="/" className="block">
                     <span className="block font-bold text-lg text-primary leading-tight" style={{ fontFamily: "'Noto Serif KR', serif" }}>
                         Booklog
                     </span>
@@ -32,11 +32,11 @@ export default function SideNav() {
             <nav className="flex-1 px-3 flex flex-col gap-0.5">
                 {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
                     const isActive =
-                        path === "/" ? location === "/" : location.startsWith(path);
+                        path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
                     return (
                         <Link
                             key={path}
-                            href={path}
+                            to={path}
                             className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150 ${
                                 isActive
                                     ? "bg-primary/10 text-primary font-semibold"
@@ -53,7 +53,7 @@ export default function SideNav() {
             {/* User info */}
             <div className="px-3 pt-5 border-t border-border/60 mt-5">
                 <Link
-                    href="/profile"
+                    to="/profile"
                     className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg hover:bg-secondary transition-colors"
                 >
                     <img

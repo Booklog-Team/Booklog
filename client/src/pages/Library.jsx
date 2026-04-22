@@ -2,12 +2,11 @@
 // 서재: featured book, status tabs, reading calendar, streak visualization
 // FR-24~40: 대표 도서, 상태별 목록, 캘린더, streak
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from 'react-router-dom';
 import { Plus, Flame, LayoutGrid, List, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import PageLayout from "@/components/PageLayout";
 import BookCard from "@/components/BookCard";
 import { MOCK_BOOKS, MOCK_USER, READING_CALENDAR } from "@/lib/mockData";
 const STATUS_TABS = [
@@ -26,7 +25,7 @@ function getFirstDayOfMonth(year, month) {
     return new Date(year, month, 1).getDay();
 }
 export default function Library() {
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     const [viewMode, setViewMode] = useState("list");
     const [activeTab, setActiveTab] = useState("all");
     const [calYear, setCalYear] = useState(2024);
@@ -40,7 +39,7 @@ export default function Library() {
     const featuredProgress = featuredBook.totalPages && featuredBook.currentPage
         ? Math.round((featuredBook.currentPage / featuredBook.totalPages) * 100)
         : 0;
-    return (<PageLayout>
+    return (<>
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-8 pb-4">
         <h1 className="text-2xl font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>나의 서재</h1>
@@ -213,5 +212,5 @@ export default function Library() {
           </Tabs>
         </div>
       </div>
-    </PageLayout>);
+    </>);
 }

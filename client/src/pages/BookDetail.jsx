@@ -2,14 +2,13 @@
 // Book detail: info, status, progress, memo, related books
 // FR-17~23: 도서 정보, 상태 설정, 진행률, 페이지 기록, 메모, 저장, 관련 추천
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bookmark, Share2, Star, ChevronDown, Check, BookOpen, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import PageLayout from "@/components/PageLayout";
 import BookCard from "@/components/BookCard";
 import { MOCK_BOOKS } from "@/lib/mockData";
 const STATUS_OPTIONS = [
@@ -24,7 +23,7 @@ const STATUS_CLASS = {
 };
 export default function BookDetail() {
     const { id } = useParams();
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     const book = MOCK_BOOKS.find(b => b.id === id) ?? MOCK_BOOKS[0];
     const related = MOCK_BOOKS.filter(b => b.id !== book.id && b.genre.some(g => book.genre.includes(g))).slice(0, 6);
     const [status, setStatus] = useState(book.status);
@@ -37,7 +36,7 @@ export default function BookDetail() {
     const handleSave = () => {
         toast.success("독서 기록이 저장되었습니다!");
     };
-    return (<PageLayout>
+    return (<>
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/30">
         <button onClick={() => navigate(-1)} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
@@ -167,5 +166,5 @@ export default function BookDetail() {
             </div>
           </section>)}
       </div>
-    </PageLayout>);
+    </>);
 }

@@ -2,14 +2,13 @@
 // Profile: user info, reading stats, edit, logout
 // FR-54~57: 사용자 정보, 독서 통계, 프로필 수정, 로그아웃
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useNavigate } from 'react-router-dom';
 import { Settings, LogOut, Edit3, BookOpen, Flame, TrendingUp, Award, ChevronRight, ArrowLeft, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import PageLayout from "@/components/PageLayout";
 import { MOCK_USER, MOCK_BOOKS } from "@/lib/mockData";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 const PROFILE_BG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663584969128/K9LDMhfUcVKdtMjF2S9GdE/booklog-profile-bg-Sfmo955ETw2dHjqsmMB9Wh.webp";
@@ -29,12 +28,12 @@ const GENRE_DATA = [
     { genre: "기타", count: 1 },
 ];
 export default function Profile() {
-    const [, navigate] = useLocation();
+    const navigate = useNavigate();
     const [view, setView] = useState("main");
     const [editForm, setEditForm] = useState({ name: MOCK_USER.name, bio: MOCK_USER.bio });
     const doneBooks = MOCK_BOOKS.filter(b => b.status === "done").length;
     if (view === "edit") {
-        return (<PageLayout>
+        return (<>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button onClick={() => setView("main")} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
             <ArrowLeft size={18}/>
@@ -71,9 +70,9 @@ export default function Profile() {
             저장하기
           </Button>
         </div>
-      </PageLayout>);
+      </>);
     }
-    return (<PageLayout>
+    return (<>
       {/* Profile Header with background */}
       <div className="relative mt-6 mx-4 rounded-2xl overflow-hidden">
         <img src={PROFILE_BG} alt="프로필 배경" className="w-full h-44 object-cover"/>
@@ -194,5 +193,5 @@ export default function Profile() {
           로그아웃
         </Button>
       </div>
-    </PageLayout>);
+    </>);
 }

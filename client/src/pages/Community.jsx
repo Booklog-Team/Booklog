@@ -8,7 +8,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import PageLayout from "@/components/PageLayout";
 import { MOCK_CLUBS, MOCK_POSTS } from "@/lib/mockData";
 const CATEGORY_LABELS = {
     free: "자유",
@@ -30,7 +29,7 @@ export default function Community() {
     const selectedPost = MOCK_POSTS.find(p => p.id === selectedPostId);
     // Club Detail View
     if (view === "club-detail" && selectedClub) {
-        return (<PageLayout>
+        return (<>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button onClick={() => setView("list")} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
             <ArrowLeft size={18}/>
@@ -84,11 +83,11 @@ export default function Community() {
             </div>
           </div>
         </div>
-      </PageLayout>);
+      </>);
     }
     // Post Detail View
     if (view === "post-detail" && selectedPost) {
-        return (<PageLayout>
+        return (<>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button onClick={() => setView("list")} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
             <ArrowLeft size={18}/>
@@ -151,11 +150,11 @@ export default function Community() {
             </button>
           </div>
         </div>
-      </PageLayout>);
+      </>);
     }
     // Create Post View
     if (view === "create-post") {
-        return (<PageLayout>
+        return (<>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button onClick={() => setView("list")} className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors">
             <ArrowLeft size={18}/>
@@ -174,10 +173,10 @@ export default function Community() {
             게시하기
           </Button>
         </div>
-      </PageLayout>);
+      </>);
     }
     // Main Community List
-    return (<PageLayout>
+    return (<>
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-8 pb-4">
         <h1 className="text-2xl font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>커뮤니티</h1>
@@ -279,5 +278,5 @@ export default function Community() {
           </TabsContent>
         </Tabs>
       </div>
-    </PageLayout>);
+    </>);
 }
