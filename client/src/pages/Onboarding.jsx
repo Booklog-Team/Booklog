@@ -5,7 +5,7 @@
 // - 건너뛰기 → isOnboarded: true만 저장 후 메인 이동
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { BookOpen, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -41,19 +41,31 @@ async function saveOnboarding(uid, genres) {
 // ─── 메인 컴포넌트 ────────────────────────────────────────
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, isOnboarded, refreshProfile } = useAuth();
+  const location = useLocation();
+  const { user, profile, isOnboarded, refreshProfile } = useAuth();
 
-  const [step, setStep] = useState('welcome'); // 'welcome' | 'genre'
+  // 프로필에서 장르 수정 목적으로 진입한 경우
+  const editMode = location.state?.editGenres === true;
+
+  const [step, setStep] = useState(editMode ? 'genre' : 'welcome'); // 'welcome' | 'genre'
   const [selected, setSelected] = useState([]);
   const [saving, setSaving] = useState(false);
   const [imgError, setImgError] = useState(false);
 
   // 이미 온보딩 완료한 유저가 직접 /onboarding 접근 시 메인으로 리다이렉트
+  // (editMode로 진입한 경우는 제외)
   useEffect(() => {
-    if (isOnboarded) {
+    if (isOnboarded && !editMode) {
       navigate('/', { replace: true });
     }
-  }, [isOnboarded, navigate]);
+  }, [isOnboarded, editMode, navigate]);
+
+  // 편집 모드 진입 시 기존 장르 선택값으로 초기화
+  useEffect(() => {
+    if (editMode && profile?.genres?.length > 0) {
+      setSelected(profile.genres);
+    }
+  }, [editMode, profile]);
 
   // 장르 토글 (최대 3개 제한)
   const toggleGenre = (id) => {
@@ -77,8 +89,8 @@ export default function Onboarding() {
     try {
       await saveOnboarding(user.uid, selected);
       await refreshProfile();
-      toast.success('관심 장르가 저장되었습니다! 독서 여정을 시작해요 📚');
-      navigate('/', { replace: true });
+      toast.success(editMode ? '관심 장르가 수정되었습니다!' : '관심 장르가 저장되었습니다! 독서 여정을 시작해요 📚');
+      navigate(editMode ? '/profile' : '/', { replace: true });
     } catch (err) {
       console.error('[Onboarding] 저장 실패:', err);
       toast.error('저장에 실패했어요. 다시 시도해주세요.');
@@ -93,11 +105,10 @@ export default function Onboarding() {
     try {
       await saveOnboarding(user.uid, []);
       await refreshProfile();
-      navigate('/', { replace: true });
+      navigate(editMode ? '/profile' : '/', { replace: true });
     } catch (err) {
       console.error('[Onboarding] 건너뛰기 저장 실패:', err);
-      // 저장 실패해도 메인으로 이동 (UX 우선)
-      navigate('/', { replace: true });
+      navigate(editMode ? '/profile' : '/', { replace: true });
     } finally {
       setSaving(false);
     }

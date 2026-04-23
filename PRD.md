@@ -157,7 +157,7 @@ VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
-VITE_BOOKS_API_KEY=AIzaSyA1KiobbZhZSbH6_tXoP04urCr77ekLeFs
+VITE_ALADIN_API_KEY=
 ```
 
 > ⚠️ .env 파일은 절대 GitHub에 올리지 않는다. .gitignore에 반드시 포함할 것.
@@ -311,7 +311,7 @@ points/
 - Google Books API 검색 (400ms 디바운스)
 - 검색 결과 그리드
 - 검색 결과 없음 UI
-- 검색 결과에서 바로 찜 추가 가능
+- 검색 결과에서 바로 찜 추가 가능 ??????
 
 ### 05. BookDetail
 - Google Books API 상세 정보

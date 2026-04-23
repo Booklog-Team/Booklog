@@ -1,7 +1,4 @@
-// Booklog Library — 「따뜻한 라이브러리」
-// 서재: featured book, status tabs, reading calendar, streak visualization
-// FR-24~40: 대표 도서, 상태별 목록, 캘린더, streak
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -12,36 +9,39 @@ import {
   ChevronRight,
   X,
   Loader2,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
-import ShelfCard from "@/components/ShelfCard";
-import { useShelf } from "@/contexts/ShelfContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { getBookDetail } from "@/utils/api";
+import { useShelf } from "@/contexts/ShelfContext";
+import ShelfCard from "@/components/ShelfCard";
+
 const READING_STATUS_OPTS = [
   {
-    value:    "want",
-    label:    "읽고 싶음",
-    emoji:    "🔖",
-    inactive: "bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100",
-    active:   "bg-amber-400 text-white border border-amber-400",
+    value: "want",
+    label: "읽고 싶음",
+    emoji: "🔖",
+    inactive:
+      "bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100",
+    active: "bg-amber-400 text-white border border-amber-400",
   },
   {
-    value:    "reading",
-    label:    "읽는 중",
-    emoji:    "📖",
-    inactive: "bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10",
-    active:   "bg-primary text-primary-foreground border border-primary",
+    value: "reading",
+    label: "읽는 중",
+    emoji: "📖",
+    inactive:
+      "bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10",
+    active: "bg-primary text-primary-foreground border border-primary",
   },
   {
-    value:    "done",
-    label:    "완독",
-    emoji:    "✅",
-    inactive: "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100",
-    active:   "bg-emerald-500 text-white border border-emerald-500",
+    value: "done",
+    label: "완독",
+    emoji: "✅",
+    inactive:
+      "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100",
+    active: "bg-emerald-500 text-white border border-emerald-500",
   },
 ];
 
@@ -52,7 +52,6 @@ const STATUS_TABS = [
   { value: "done", label: "완독" },
 ];
 
-// Calendar helpers
 function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -61,81 +60,56 @@ function getFirstDayOfMonth(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
-// 읽은 책 수(count) → 색상 레벨 0~4
-function getColorLevel(count) {
-  if (!count || count <= 0) return 0;
-  if (count === 1) return 1;
-  if (count === 2) return 2;
-  if (count === 3) return 3;
-  return 4;
-}
+function calculateStreak(shelf) {
+  const all = new Set();
+  shelf.forEach(b => (b.checkedDates || []).forEach(d => all.add(d)));
+  if (!all.size) return 0;
 
-// 색상 레벨 → Tailwind 클래스 (Warm Library 테마: 아이보리 → 테라코타)
-function getLevelColor(level) {
-  switch (level) {
-    case 1:
-      return "bg-orange-400/20 text-orange-800";
-    case 2:
-      return "bg-orange-400/40 text-orange-800";
-    case 3:
-      return "bg-orange-400/60 text-orange-900";
-    case 4:
-      return "bg-orange-400/80 text-orange-900";
-    default:
-      return "bg-muted/30 text-muted-foreground";
+  const sorted = [...all].sort().reverse();
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  if (sorted[0] !== today && sorted[0] !== yesterday) return 0;
+
+  let count = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = Math.round(
+      (new Date(sorted[i - 1]) - new Date(sorted[i])) / 86_400_000
+    );
+    if (diff === 1) count += 1;
+    else break;
   }
+  return count;
 }
 
-function calculateStreak(checkedDates) {
-  if (!checkedDates || checkedDates.length === 0) return 0;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const sortedDates = checkedDates.map(d => new Date(d)).sort((a, b) => b - a);
-
-  let streak = 0;
-  let currentDate = new Date(today);
-
-  for (const date of sortedDates) {
-    const diff = Math.floor((currentDate - date) / (1000 * 60 * 60 * 24));
-
-    if (diff === 0) {
-      streak++;
-      currentDate.setDate(currentDate.getDate() - 1);
-    } else if (diff === 1) {
-      streak++;
-      currentDate = new Date(date);
-      currentDate.setDate(currentDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  return streak;
-}
-function ReadingBookPopup({ book, onClose }) {
+function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
   const navigate = useNavigate();
-  const { updateStatus, removeBook } = useShelf();
-
   const [selected, setSelected] = useState(book.status ?? null);
-  const [saving, setSaving]     = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const progress = book.totalPage && book.currentPage
-    ? Math.round((book.currentPage / book.totalPage) * 100) : 0;
+  const progress =
+    book.totalPage && book.currentPage
+      ? Math.round((book.currentPage / book.totalPage) * 100)
+      : 0;
 
   const handleSave = async () => {
-    if (selected === book.status) { onClose(); return; }
+    if (selected === book.status) {
+      onClose();
+      return;
+    }
+
     setSaving(true);
     try {
       if (!selected) {
-        await removeBook(book.id);
+        await onDelete(book.id);
       } else {
-        await updateStatus(book.id, selected);
+        await onStatusChange(book.id, selected);
       }
       onClose();
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
     } finally {
       setSaving(false);
     }
@@ -143,45 +117,52 @@ function ReadingBookPopup({ book, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
       style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-sm bg-background rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-300"
+        className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-background shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-300"
         onClick={e => e.stopPropagation()}
       >
-        {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+        <div className="flex items-center justify-between px-5 pb-3 pt-5">
           <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
             독서 상태
           </h3>
           <button
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* 도서 정보 */}
         <div className="flex gap-4 px-5 pb-4">
           <img
             src={book.thumbnail || "/placeholder.png"}
             alt={book.title}
-            className="w-16 h-24 object-cover rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex-shrink-0"
+            className="h-24 w-16 flex-shrink-0 rounded-lg object-cover shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
           />
-          <div className="flex-1 min-w-0 py-1">
-            <h4 className="font-bold text-sm leading-snug line-clamp-2 mb-0.5">{book.title}</h4>
-            <p className="text-xs text-muted-foreground line-clamp-1">{book.author}</p>
+          <div className="min-w-0 flex-1 py-1">
+            <h4 className="mb-0.5 line-clamp-2 text-sm font-bold leading-snug">
+              {book.title}
+            </h4>
+            <p className="line-clamp-1 text-xs text-muted-foreground">
+              {book.author}
+            </p>
             {book.totalPage > 0 && (
               <div className="mt-2 space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">{book.currentPage}p / {book.totalPage}p</span>
+                  <span className="text-muted-foreground">
+                    {book.currentPage}p / {book.totalPage}p
+                  </span>
                   <span className="font-bold text-primary">{progress}%</span>
                 </div>
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${progress}%` }} />
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${progress}%` }}
+                  />
                 </div>
               </div>
             )}
@@ -190,17 +171,18 @@ function ReadingBookPopup({ book, onClose }) {
 
         <div className="border-t border-border/40" />
 
-        {/* 상태 버튼 */}
-        <div className="px-5 py-4 space-y-3">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+        <div className="space-y-3 px-5 py-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             독서 상태 변경
           </p>
           <div className="grid grid-cols-3 gap-2">
             {READING_STATUS_OPTS.map(opt => (
               <button
                 key={opt.value}
-                onClick={() => setSelected(prev => prev === opt.value ? null : opt.value)}
-                className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-bold transition-all ${
+                onClick={() =>
+                  setSelected(prev => (prev === opt.value ? null : opt.value))
+                }
+                className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-bold transition-all ${
                   selected === opt.value ? opt.active : opt.inactive
                 }`}
               >
@@ -212,25 +194,27 @@ function ReadingBookPopup({ book, onClose }) {
           {selected && (
             <button
               onClick={() => setSelected(null)}
-              className="w-full text-xs text-muted-foreground hover:text-destructive transition-colors py-1 font-medium"
+              className="w-full py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-destructive"
             >
               ✕ 선택 취소
             </button>
           )}
         </div>
 
-        {/* 하단 버튼 */}
         <div className="flex gap-3 px-5 pb-6">
           <button
-            onClick={() => { navigate(`/book/${book.id}`); onClose(); }}
-            className="w-28 h-12 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:bg-secondary transition-all flex-shrink-0"
+            onClick={() => {
+              navigate(`/book/${book.id}`);
+              onClose();
+            }}
+            className="h-12 w-28 flex-shrink-0 rounded-xl border border-border text-xs font-bold text-muted-foreground transition-all hover:bg-secondary"
           >
             상세 보기 →
           </button>
           <button
             onClick={handleSave}
             disabled={saving || selected === book.status}
-            className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground text-sm font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-50"
           >
             {saving && <Loader2 size={16} className="animate-spin" />}
             저장하기
@@ -243,375 +227,262 @@ function ReadingBookPopup({ book, onClose }) {
 
 export default function Library() {
   const navigate = useNavigate();
-  const {
-    books,
-    mainBook,
-    loading,
-    error,
-    removeBook,
-    updateStatus,
-    updateBook,
-  } = useShelf();
   const { profile } = useAuth();
+  const { books, mainBook, loading, error, removeBook, updateStatus } =
+    useShelf();
 
-  const [viewMode, setViewMode] = useState("list");
+  const today = new Date();
   const [activeTab, setActiveTab] = useState("all");
-  const [calYear, setCalYear] = useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [viewMode, setViewMode] = useState("list");
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth());
   const [popupBook, setPopupBook] = useState(null);
-  const fetchedPageCountsRef = useRef(new Set());
 
-  // Filter books by status
+  const featured = useMemo(() => {
+    if (mainBook) return mainBook;
+    return (
+      [...books].sort((a, b) => {
+        const aDate = a.lastReadDate ? new Date(a.lastReadDate).getTime() : 0;
+        const bDate = b.lastReadDate ? new Date(b.lastReadDate).getTime() : 0;
+        return bDate - aDate;
+      })[0] || null
+    );
+  }, [books, mainBook]);
+
   const filteredBooks = useMemo(() => {
     if (activeTab === "all") return books;
-    return books.filter(b => b.status === activeTab);
+    return books.filter(book => book.status === activeTab);
   }, [books, activeTab]);
 
-  // 읽는 중 책 — 최근 업데이트(lastReadDate) 순 정렬
-  const readingBooks = useMemo(() => {
-    return books
-      .filter(b => b.status === "reading")
-      .sort((a, b) =>
-        (b.lastReadDate || "").localeCompare(a.lastReadDate || "")
-      );
+  const readingDates = useMemo(() => {
+    const set = new Set();
+    books.forEach(book => {
+      (book.checkedDates || []).forEach(date => set.add(date));
+    });
+    return set;
   }, [books]);
 
-  // 연속 독서일 — 가장 최근 읽은 책 기준
-  const streak = useMemo(() => {
-    if (readingBooks.length === 0) return 0;
-    return calculateStreak(readingBooks[0].checkedDates || []);
-  }, [readingBooks]);
-
-  // 월별 독서 통계 — books의 checkedDates 기반 (목업 데이터 대체)
-  const monthCalendarData = useMemo(() => {
-    const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-    const stats = {};
-    books.forEach(book => {
-      (book.checkedDates || []).forEach(date => {
-        if (date.startsWith(monthStr)) {
-          if (!stats[date]) stats[date] = { count: 0 };
-          stats[date].count += 1;
-          stats[date].pagesRead = stats[date].count;
-        }
-      });
-    });
-    return stats;
-  }, [books, calYear, calMonth]);
-
-  // totalPage가 없는 책을 Aladin API에서 자동으로 보정
-  useEffect(() => {
-    books
-      .filter(b => !b.totalPage && !fetchedPageCountsRef.current.has(b.id))
-      .forEach(book => {
-        fetchedPageCountsRef.current.add(book.id);
-        getBookDetail(book.id)
-          .then(data => {
-            const pc = data.volumeInfo?.pageCount;
-            if (pc > 0) updateBook(book.id, { totalPage: pc });
-          })
-          .catch(() => {});
-      });
-  }, [books]); // eslint-disable-line react-hooks/exhaustive-deps
+  const streak = useMemo(() => calculateStreak(books), [books]);
 
   const daysInMonth = getDaysInMonth(calYear, calMonth);
   const firstDay = getFirstDayOfMonth(calYear, calMonth);
-  const monthName = new Date(calYear, calMonth, 1).toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-  });
+  const monthName = `${calYear}년 ${calMonth + 1}월`;
+  const todayStr = new Date().toISOString().slice(0, 10);
 
-  const handlePrevMonth = () => {
-    if (calMonth === 0) {
-      setCalMonth(11);
-      setCalYear(y => y - 1);
-    } else {
-      setCalMonth(m => m - 1);
-    }
-  };
+  const monthReadCount = useMemo(() => {
+    const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+    return [...readingDates].filter(date => date.startsWith(prefix)).length;
+  }, [readingDates, calYear, calMonth]);
 
-  const handleNextMonth = () => {
-    if (calMonth === 11) {
-      setCalMonth(0);
-      setCalYear(y => y + 1);
-    } else {
-      setCalMonth(m => m + 1);
-    }
-  };
+  const featuredProgress =
+    featured?.totalPage && featured?.currentPage
+      ? Math.round((featured.currentPage / featured.totalPage) * 100)
+      : 0;
 
-  if (error) {
-    return (
-      <div className="px-4 py-8 text-center">
-        <p className="text-sm text-destructive">
-          오류가 발생했습니다: {error.message}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-3"
-          onClick={() => window.location.reload()}
-        >
-          새로고침
-        </Button>
-      </div>
-    );
-  }
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-8 pb-4">
-        <h1
-          className="text-2xl font-bold"
-          style={{ fontFamily: "'Noto Serif KR', serif" }}
-        >
-          나의 서재
-        </h1>
-        <button
-          onClick={() => navigate("/search")}
-          className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
-        >
-          <Plus size={15} />책 추가
-        </button>
-      </div>
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6 lg:px-8">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">내 서재</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {profile?.nickname ? `${profile.nickname}님의` : "나의"} 독서
+              흐름을 한눈에 확인해보세요.
+            </p>
+          </div>
+          <Button
+            onClick={() => navigate("/search")}
+            className="shrink-0 rounded-xl"
+          >
+            <Plus size={16} className="mr-1.5" />책 추가
+          </Button>
+        </div>
 
-      <div className="px-4 stagger-children">
-        {/* Streak Banner */}
-        {readingBooks.length > 0 && (
-          <div className="flex items-center gap-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 rounded-2xl p-4 mb-6">
-            <span className="text-3xl animate-streak">🔥</span>
-            <div>
-              <p className="text-sm font-bold text-amber-800">
-                {streak}일 연속 독서 중!
-              </p>
-              <p className="text-xs text-amber-600">
-                오늘도 독서하면 streak를 유지할 수 있어요
-              </p>
-            </div>
-            <div className="ml-auto text-right">
-              <p className="text-2xl font-bold text-amber-600">{streak}</p>
-              <p className="text-xs text-amber-500">days</p>
-            </div>
+        {error && (
+          <div className="mb-6 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            서재를 불러오는 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.
           </div>
         )}
 
-        {/* Two-column layout: Featured Book + Calendar */}
-        <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-2">
-          {/* Featured Book */}
-          <div className="flex flex-col">
-            <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-              지금 읽고 있어요
-            </h2>
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.25fr_0.95fr]">
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                대표 도서
+              </h2>
+              <div className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                <Flame size={14} className="text-amber-500" />
+                {streak}일 연속 독서
+              </div>
+            </div>
+
             {loading ? (
-              <Skeleton className="flex-1 rounded-lg" />
-            ) : readingBooks.length > 0 ? (
-              <div className="book-card flex flex-col flex-1 min-h-0 overflow-hidden">
-                {/* 읽는 중 책 목록 — 캘린더 높이에 맞춰 고정, 초과 시 스크롤 */}
-                <div className="overflow-y-auto flex-1 min-h-0 scrollbar-hide divide-y divide-border/40 max-h-[416px] lg:max-h-none">
-                  {readingBooks.map(book => {
-                    const progress =
-                      book.totalPage && book.currentPage
-                        ? Math.round((book.currentPage / book.totalPage) * 100)
-                        : 0;
-                    return (
-                      <div
-                        key={book.id}
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-secondary/30 transition-colors"
-                        onClick={() => setPopupBook(book)}
-                      >
-                        <img
-                          src={book.thumbnail || "/placeholder.png"}
-                          alt={book.title}
-                          className="w-14 h-20 object-cover rounded-md shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h3
-                            className="font-bold text-sm leading-snug mb-0.5 line-clamp-2"
-                            style={{ fontFamily: "'Noto Serif KR', serif" }}
-                          >
-                            {book.title}
-                          </h3>
-                          <p className="text-xs text-muted-foreground mb-2 line-clamp-1">
-                            {book.author}
-                          </p>
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">
-                                {book.currentPage}p / {book.totalPage || "?"}p
-                              </span>
-                              <span className="font-bold text-primary">
-                                {progress}%
-                              </span>
-                            </div>
-                            <div className="progress-bar">
-                              <div
-                                className="progress-fill"
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
-                          </div>
-                          {book.memo && (
-                            <p className="text-xs text-muted-foreground mt-1.5 italic line-clamp-1">
-                              "{book.memo}"
-                            </p>
-                          )}
+              <div className="book-card flex min-h-[240px] items-center gap-4 p-6">
+                <Skeleton className="h-40 w-28 rounded-xl" />
+                <Skeleton className="flex-1 rounded-lg" />
+              </div>
+            ) : featured ? (
+              <div
+                className="book-card cursor-pointer p-5 transition-shadow hover:shadow-md"
+                onClick={() => setPopupBook(featured)}
+              >
+                <div className="flex gap-4">
+                  <img
+                    src={featured.thumbnail || "/placeholder.png"}
+                    alt={featured.title}
+                    className="h-40 w-28 rounded-xl object-cover shadow-md"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div>
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary">
+                          {featured.status === "reading"
+                            ? "읽는 중"
+                            : featured.status === "done"
+                              ? "완독"
+                              : "읽고 싶음"}
+                        </p>
+                        <h3 className="line-clamp-2 text-xl font-bold leading-snug">
+                          {featured.title}
+                        </h3>
+                      </div>
+                    </div>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      {featured.author}
+                    </p>
+                    {featured.totalPage > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            {featured.currentPage || 0}p / {featured.totalPage}p
+                          </span>
+                          <span className="font-bold text-primary">
+                            {featuredProgress}%
+                          </span>
+                        </div>
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${featuredProgress}%` }}
+                          />
                         </div>
                       </div>
-                    );
-                  })}
+                    )}
+                    {featured.memo && (
+                      <p className="mt-2 line-clamp-1 text-xs italic text-muted-foreground">
+                        "{featured.memo}"
+                      </p>
+                    )}
+                  </div>
                 </div>
-                {/* 다른 책 추가 — 카드 하단 고정 */}
-                <button
-                  onClick={() => navigate("/search")}
-                  className="flex-shrink-0 border-t border-border/40 w-full py-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
-                >
-                  <Plus size={13} />
-                  다른 책 추가하기
-                </button>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center book-card p-4">
-                <p className="text-sm text-muted-foreground mb-3">
-                  지금 읽고 있는 책이 없어요
+              <div className="book-card flex flex-col items-center justify-center gap-3 p-8 text-center">
+                <BookOpen size={32} className="text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">
+                  아직 서재에 등록된 책이 없어요
                 </p>
                 <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => navigate("/search")}
-                  className="gap-1.5"
                 >
-                  <Plus size={14} />첫 책 추가하기
+                  <Plus size={14} className="mr-1" />책 추가하기
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Reading Calendar */}
-          <div className="flex flex-col">
-            <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+          <div>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               독서 캘린더
             </h2>
-            <div className="book-card p-4 flex-1">
-              {/* Month navigation */}
-              <div className="flex items-center justify-between mb-4">
+            <div className="book-card p-4">
+              <div className="mb-4 flex items-center justify-between">
                 <button
-                  onClick={handlePrevMonth}
-                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
+                  onClick={() => {
+                    if (calMonth === 0) {
+                      setCalMonth(11);
+                      setCalYear(y => y - 1);
+                    } else {
+                      setCalMonth(m => m - 1);
+                    }
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-secondary"
                 >
                   <ChevronLeft size={16} />
                 </button>
                 <span className="text-sm font-semibold">{monthName}</span>
                 <button
-                  onClick={handleNextMonth}
-                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
+                  onClick={() => {
+                    if (calMonth === 11) {
+                      setCalMonth(0);
+                      setCalYear(y => y + 1);
+                    } else {
+                      setCalMonth(m => m + 1);
+                    }
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-secondary"
                 >
                   <ChevronRight size={16} />
                 </button>
               </div>
 
-              {/* Day headers */}
-              <div className="grid grid-cols-7 mb-2">
+              <div className="mb-2 grid grid-cols-7">
                 {["일", "월", "화", "수", "목", "금", "토"].map(d => (
                   <div
                     key={d}
-                    className="text-center text-[11px] text-muted-foreground font-medium py-1"
+                    className="py-1 text-center text-[11px] font-medium text-muted-foreground"
                   >
                     {d}
                   </div>
                 ))}
               </div>
 
-              {/* Calendar grid - Fixed to 6 weeks (42 cells), square cells */}
-              <div className="grid grid-cols-7 gap-1">
-                {Array.from({ length: 42 }).map((_, i) => {
-                  // Calculate which day/week/etc this cell represents
-                  const cellIndex = i;
-                  let day = cellIndex - firstDay + 1;
-                  let displayMonth = calMonth;
-                  let displayYear = calYear;
-                  let isCurrentMonth = day > 0 && day <= daysInMonth;
-
-                  // Handle previous month
-                  if (day <= 0) {
-                    const prevMonthDays = new Date(
-                      calYear,
-                      calMonth,
-                      0
-                    ).getDate();
-                    day = prevMonthDays + day;
-                    displayMonth = calMonth - 1;
-                    if (displayMonth < 0) {
-                      displayMonth = 11;
-                      displayYear = calYear - 1;
-                    }
-                    isCurrentMonth = false;
-                  }
-                  // Handle next month
-                  else if (day > daysInMonth) {
-                    day = day - daysInMonth;
-                    displayMonth = calMonth + 1;
-                    if (displayMonth > 11) {
-                      displayMonth = 0;
-                      displayYear = calYear + 1;
-                    }
-                    isCurrentMonth = false;
-                  }
-
-                  const dateKey = isCurrentMonth
-                    ? `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-                    : null;
-
-                  const hasReading =
-                    isCurrentMonth && !!monthCalendarData[dateKey];
-                  const today = new Date();
-                  const isTodayCell =
-                    isCurrentMonth &&
-                    day === today.getDate() &&
-                    calMonth === today.getMonth() &&
-                    calYear === today.getFullYear();
-
-                  // 히트맵 색상 레벨 계산
-                  const dailyStats = monthCalendarData[dateKey];
-                  const colorLevel = dailyStats
-                    ? getColorLevel(dailyStats.pagesRead)
-                    : 0;
-                  const levelColor = getLevelColor(colorLevel);
+              <div className="grid grid-cols-7 gap-y-1">
+                {Array.from({ length: firstDay }).map((_, i) => (
+                  <div key={`empty-${i}`} />
+                ))}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const day = i + 1;
+                  const dateKey = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                  const hasReading = readingDates.has(dateKey);
+                  const isToday = dateKey === todayStr;
 
                   return (
                     <div
-                      key={`cell-${i}`}
-                      className={`relative aspect-square flex flex-col items-center justify-center rounded-lg text-xs transition-all ${
-                        isCurrentMonth ? levelColor : "text-muted-foreground/40"
+                      key={day}
+                      className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs transition-all ${
+                        hasReading
+                          ? "bg-primary/15 font-semibold text-primary"
+                          : isToday
+                            ? "bg-secondary font-semibold text-foreground ring-1 ring-primary/30"
+                            : "text-muted-foreground"
                       }`}
                     >
                       <span>{day}</span>
-                      {isTodayCell && colorLevel === 0 && (
-                        <span className="absolute bottom-1 w-1 h-1 rounded-full bg-primary" />
+                      {hasReading && (
+                        <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-primary/60" />
+                      )}
+                      {isToday && !hasReading && (
+                        <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />
                       )}
                     </div>
                   );
                 })}
               </div>
 
-              {/* Legend */}
-              <div className="mt-3 pt-3 border-t border-border/40">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground font-medium">
-                    독서량
-                  </span>
+              <div className="mt-3 flex items-center gap-3 border-t border-border/40 pt-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-3 w-3 rounded bg-primary/15" />
                   <span className="text-[11px] text-muted-foreground">
-                    이번 달 {Object.keys(monthCalendarData).length}일 독서
+                    독서한 날
                   </span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-muted-foreground mr-1">
-                    적음
-                  </span>
-                  {[0, 1, 2, 3, 4].map(level => (
-                    <div
-                      key={level}
-                      className={`w-3 h-3 rounded-sm ${getLevelColor(level)}`}
-                    />
-                  ))}
-                  <span className="text-[10px] text-muted-foreground ml-1">
-                    많음
+                <div className="flex items-center gap-1.5">
+                  <Flame size={12} className="text-amber-500" />
+                  <span className="text-[11px] text-muted-foreground">
+                    이번 달 {monthReadCount}일 독서
                   </span>
                 </div>
               </div>
@@ -619,16 +490,12 @@ export default function Library() {
           </div>
         </div>
 
-        {/* Book List by Status */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              책 목록
-            </h2>
+          <div className="mb-3 flex justify-end">
             <div className="flex gap-1">
               <button
                 onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded-lg transition-colors ${
+                className={`rounded-lg p-1.5 transition-colors ${
                   viewMode === "list"
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -638,7 +505,7 @@ export default function Library() {
               </button>
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-lg transition-colors ${
+                className={`rounded-lg p-1.5 transition-colors ${
                   viewMode === "grid"
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -649,13 +516,13 @@ export default function Library() {
             </div>
           </div>
 
-          <Tabs value={activeTab} onValueChange={v => setActiveTab(v)}>
-            <TabsList className="w-full bg-secondary rounded-xl p-1 h-auto mb-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="mb-4 h-auto w-full rounded-xl bg-secondary p-1">
               {STATUS_TABS.map(tab => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="flex-1 text-xs py-2 rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                  className="flex-1 rounded-lg py-2 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm"
                 >
                   {tab.label}
                   <span className="ml-1 text-[10px] text-muted-foreground">
@@ -669,65 +536,74 @@ export default function Library() {
               ))}
             </TabsList>
 
-            {STATUS_TABS.map(tab => (
-              <TabsContent key={tab.value} value={tab.value} className="mt-0">
-                {loading ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    {[1, 2, 3, 4].map(i => (
-                      <Skeleton key={i} className="aspect-[2/3] rounded-lg" />
-                    ))}
-                  </div>
-                ) : filteredBooks.length === 0 ? (
-                  <div className="text-center py-16">
-                    <p className="text-sm text-muted-foreground">
-                      {tab.value === "all"
-                        ? "아직 책이 없어요"
-                        : `${tab.label} 책이 없어요`}
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => navigate("/search")}
-                    >
-                      <Plus size={14} className="mr-1" />책 추가하기
-                    </Button>
-                  </div>
-                ) : viewMode === "list" ? (
-                  <div className="grid grid-cols-2 gap-3 stagger-children">
-                    {filteredBooks.map(book => (
-                      <ShelfCard
-                        key={book.id}
-                        book={book}
-                        variant="compact"
-                        onStatusChange={updateStatus}
-                        onDelete={removeBook}
-                        onClick={() => setPopupBook(book)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 stagger-children">
-                    {filteredBooks.map(book => (
-                      <ShelfCard
-                        key={book.id}
-                        book={book}
-                        variant="grid"
-                        onStatusChange={updateStatus}
-                        onDelete={removeBook}
-                        onClick={() => setPopupBook(book)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-            ))}
+            {STATUS_TABS.map(tab => {
+              const tabBooks =
+                tab.value === "all"
+                  ? books
+                  : books.filter(b => b.status === tab.value);
+              return (
+                <TabsContent key={tab.value} value={tab.value} className="mt-0">
+                  {loading ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {[1, 2, 3, 4].map(i => (
+                        <Skeleton key={i} className="aspect-[2/3] rounded-lg" />
+                      ))}
+                    </div>
+                  ) : tabBooks.length === 0 ? (
+                    <div className="py-16 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        아직 책이 없어요
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => navigate("/search")}
+                      >
+                        <Plus size={14} className="mr-1" />책 추가하기
+                      </Button>
+                    </div>
+                  ) : viewMode === "list" ? (
+                    <div className="grid grid-cols-2 gap-3 stagger-children">
+                      {tabBooks.map(book => (
+                        <ShelfCard
+                          key={book.id}
+                          book={book}
+                          variant="compact"
+                          onStatusChange={updateStatus}
+                          onDelete={removeBook}
+                          onClick={() => setPopupBook(book)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 stagger-children">
+                      {tabBooks.map(book => (
+                        <ShelfCard
+                          key={book.id}
+                          book={book}
+                          variant="grid"
+                          onStatusChange={updateStatus}
+                          onDelete={removeBook}
+                          onClick={() => setPopupBook(book)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              );
+            })}
           </Tabs>
         </div>
       </div>
 
       {popupBook && (
-        <ReadingBookPopup book={popupBook} onClose={() => setPopupBook(null)} />
+        <ReadingBookPopup
+          book={popupBook}
+          onClose={() => setPopupBook(null)}
+          onStatusChange={updateStatus}
+          onDelete={removeBook}
+        />
       )}
     </>
   );
