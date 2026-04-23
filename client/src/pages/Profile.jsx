@@ -384,7 +384,7 @@ export default function Profile() {
               <div className="h-[140px] flex flex-col items-center justify-center gap-2">
                 <p className="text-sm text-muted-foreground">관심 장르가 없어요</p>
                 <button
-                  onClick={() => navigate('/onboarding')}
+                  onClick={() => navigate('/onboarding', { state: { editGenres: true } })}
                   className="text-xs text-primary font-medium hover:underline"
                 >
                   장르 선택하러 가기
