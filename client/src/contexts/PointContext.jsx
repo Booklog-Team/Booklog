@@ -3,12 +3,12 @@
 //
 // 역할
 //   - points/global 실시간 구독 (onSnapshot) → 여러 유저 동시 적립 반영
-//   - addPoint(type) : Firestore 트랜잭션으로 유저 포인트 + 글로벌 집계 원자 업데이트
+//   - addPoint(type)  : 트랜잭션으로 유저 포인트 + 글로벌 집계 원자 업데이트
+//   - donateTo(id)    : 기부처 선택 → points/global.donations 맵 업데이트
 //   - canEarnToday(type) : 하루 1회 제한 체크 (lastPointDates.{type} 기반)
 //
 // 하루 1회 제한 구조
 //   users/{uid}.lastPointDates: { reading_check: "2026-04-22", memo: "2026-04-22", ... }
-//   — 활동 유형별로 독립적으로 추적하여 각자 하루 1회 제한 적용
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
@@ -19,13 +19,19 @@ import { useAuth } from '@/contexts/AuthContext';
 
 // ─── 활동 유형별 포인트 (PRD §9) ──────────────────────────
 export const POINT_VALUES = {
-  reading_check:  10,   // 오늘 독서 체크
-  memo:            5,   // 메모 작성
-  meeting_post:    5,   // 모임 게시글
-  board_post:      3,   // 자유게시판 글
+  reading_check: 10,   // 오늘 독서 체크
+  memo:           5,   // 메모 작성
+  meeting_post:   5,   // 모임 게시글
+  board_post:     3,   // 자유게시판 글
 };
 
-const DEFAULT_GLOBAL = { totalDonated: 0, goalAmount: 100_000, updatedAt: null };
+const DEFAULT_GLOBAL = {
+  totalDonated:     0,
+  goalAmount:       100_000,
+  participantCount: 0,
+  donations:        {},
+  updatedAt:        null,
+};
 
 const PointContext = createContext(undefined);
 
@@ -41,7 +47,7 @@ export function PointProvider({ children }) {
     const unsub = onSnapshot(
       doc(db, 'points', 'global'),
       snap => {
-        setGlobalData(snap.exists() ? snap.data() : DEFAULT_GLOBAL);
+        setGlobalData(snap.exists() ? { ...DEFAULT_GLOBAL, ...snap.data() } : DEFAULT_GLOBAL);
         setGlobalLoading(false);
       },
       err => {
@@ -67,6 +73,7 @@ export function PointProvider({ children }) {
    * 포인트 적립
    * - Firestore 트랜잭션으로 users/{uid} + points/global 원자 업데이트
    * - 하루 1회 제한: lastPointDates.{type} 비교
+   * - 첫 적립 시 participantCount 증가
    * @param {'reading_check'|'memo'|'meeting_post'|'board_post'} type
    * @returns {{ awarded: number, type: string } | { alreadyEarned: true, type: string }}
    */
@@ -76,10 +83,9 @@ export function PointProvider({ children }) {
     const pts = POINT_VALUES[type];
     if (!pts) throw new Error(`알 수 없는 포인트 타입: ${type}`);
 
-    const today      = new Date().toISOString().slice(0, 10);
-    const lastDates  = profile?.lastPointDates || {};
+    const today     = new Date().toISOString().slice(0, 10);
+    const lastDates = profile?.lastPointDates || {};
 
-    // 하루 1회 제한 확인
     if (lastDates[type] === today) {
       return { alreadyEarned: true, type };
     }
@@ -93,48 +99,94 @@ export function PointProvider({ children }) {
         tx.get(globalRef),
       ]);
 
-      const currentPts = userSnap.exists() ? (userSnap.data().totalPoints || 0) : 0;
+      const currentPts  = userSnap.exists() ? (userSnap.data().totalPoints || 0) : 0;
+      const isFirstEarn = currentPts === 0;
 
-      // 유저 포인트 업데이트
       tx.update(userRef, {
-        totalPoints:                      currentPts + pts,
-        lastPointDate:                    today,            // 마지막 적립일 (단순 참조용)
-        [`lastPointDates.${type}`]:       today,            // 활동별 마지막 적립일
+        totalPoints:                currentPts + pts,
+        lastPointDate:              today,
+        [`lastPointDates.${type}`]: today,
       });
 
-      // 글로벌 기부 집계 업서트
       if (gSnap.exists()) {
-        tx.update(globalRef, {
-          totalDonated: (gSnap.data().totalDonated || 0) + pts,
+        const gData = gSnap.data();
+        const update = {
+          totalDonated: (gData.totalDonated || 0) + pts,
           updatedAt:    serverTimestamp(),
-        });
+        };
+        if (isFirstEarn) {
+          update.participantCount = (gData.participantCount || 0) + 1;
+        }
+        tx.update(globalRef, update);
       } else {
         tx.set(globalRef, {
-          totalDonated: pts,
-          goalAmount:   100_000,
-          updatedAt:    serverTimestamp(),
+          totalDonated:     pts,
+          goalAmount:       100_000,
+          participantCount: 1,
+          donations:        {},
+          updatedAt:        serverTimestamp(),
         });
       }
     });
 
-    // AuthContext 프로필 갱신 (totalPoints, lastPointDates 반영)
     await refreshProfile();
-
     return { awarded: pts, type };
   }, [user, profile, refreshProfile]);
 
+  /**
+   * 기부처 선택
+   * - users/{uid}.preferredCharity 업데이트
+   * - points/global.donations 맵에서 이전 기부처 포인트 제거, 새 기부처에 추가
+   * @param {'reading_foundation'|'childrens_foundation'|'disability_library'} charityId
+   */
+  const donateTo = useCallback(async (charityId) => {
+    if (!user) throw new Error('로그인이 필요합니다.');
+
+    const oldCharity = profile?.preferredCharity;
+    if (oldCharity === charityId) return { unchanged: true };
+
+    const myPts   = profile?.totalPoints || 0;
+    const userRef   = doc(db, 'users', user.uid);
+    const globalRef = doc(db, 'points', 'global');
+
+    await runTransaction(db, async (tx) => {
+      const gSnap = await tx.get(globalRef);
+      const gData = gSnap.exists() ? gSnap.data() : {};
+      const donations = { ...(gData.donations || {}) };
+
+      if (oldCharity) {
+        donations[oldCharity] = Math.max(0, (donations[oldCharity] || 0) - myPts);
+      }
+      donations[charityId] = (donations[charityId] || 0) + myPts;
+
+      tx.update(userRef, { preferredCharity: charityId });
+
+      if (gSnap.exists()) {
+        tx.update(globalRef, { donations, updatedAt: serverTimestamp() });
+      } else {
+        tx.set(globalRef, {
+          totalDonated:     0,
+          goalAmount:       100_000,
+          participantCount: 0,
+          donations,
+          updatedAt:        serverTimestamp(),
+        });
+      }
+    });
+
+    await refreshProfile();
+    return { success: true, charityId };
+  }, [user, profile, refreshProfile]);
+
   const value = {
-    /** 내 보유 포인트 */
-    myPoints:       profile?.totalPoints    ?? 0,
-    /** 활동별 마지막 적립일 맵 */
-    lastPointDates: profile?.lastPointDates ?? {},
-    /** points/global 문서 데이터 */
+    myPoints:         profile?.totalPoints     ?? 0,
+    lastPointDates:   profile?.lastPointDates  ?? {},
+    preferredCharity: profile?.preferredCharity ?? null,
     globalData,
     globalLoading,
-    /** 오늘 해당 활동 포인트 적립 가능 여부 */
     canEarnToday,
-    /** 포인트 적립 함수 */
     addPoint,
+    donateTo,
   };
 
   return <PointContext.Provider value={value}>{children}</PointContext.Provider>;
