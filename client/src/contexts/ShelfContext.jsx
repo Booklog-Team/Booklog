@@ -251,6 +251,76 @@ export function ShelfProvider({ children }) {
   };
 
   /**
+   * 일일 독서 기록 저장 (Firestore users/{uid}/readingStats/{date})
+   * @param {string} date - YYYY-MM-DD
+   * @param {number} pagesRead - 읽은 페이지 수
+   * @param {number} count - 체크한 책 수
+   */
+  const recordDailyReading = async (date, pagesRead, count) => {
+    if (!user) return;
+    try {
+      const statRef = doc(db, "users", user.uid, "readingStats", date);
+      const snap = await getDoc(statRef);
+      if (snap.exists()) {
+        const existing = snap.data();
+        await updateDoc(statRef, {
+          pagesRead: Math.max(existing.pagesRead || 0, pagesRead),
+          count: (existing.count || 0) + count,
+        });
+      } else {
+        await setDoc(statRef, { date, pagesRead, count });
+      }
+    } catch (err) {
+      console.error("[ShelfContext] 일일 독서 기록 실패:", err);
+    }
+  };
+
+  /**
+   * 월별 일일 독서 통계 조회
+   * @param {number} year
+   * @param {number} month - 0-based
+   * @returns {Promise<Object>} { 'YYYY-MM-DD': { pagesRead, count } }
+   */
+  const getDailyReadingStats = async (year, month) => {
+    if (!user) return {};
+    try {
+      const startDate = new Date(year, month, 1);
+      const endDate = new Date(year, month + 1, 0);
+      const stats = {};
+
+      // Firestore에서 해당 월의 모든 readingStats 문서 가져오기
+      const statsRef = collection(db, "users", user.uid, "readingStats");
+      const q = query(statsRef);
+      const snapshot = await getDoc(
+        collection(db, "users", user.uid, "readingStats")
+      );
+
+      // 실제로는 날짜 범위 쿼리가 필요하지만, 간단히 모든 문서를 가져와 필터링
+      const allStats = await Promise.all(
+        Array.from({ length: endDate.getDate() }, (_, i) => {
+          const date = new Date(year, month, i + 1).toISOString().split("T")[0];
+          const statRef = doc(db, "users", user.uid, "readingStats", date);
+          return getDoc(statRef).then(snap =>
+            snap.exists() ? { date, ...snap.data() } : null
+          );
+        })
+      );
+
+      allStats.filter(Boolean).forEach(stat => {
+        stats[stat.date] = {
+          pagesRead: stat.pagesRead || 0,
+          count: stat.count || 0,
+        };
+      });
+
+      return stats;
+    } catch (err) {
+      console.error("[ShelfContext] 월별 통계 조회 실패:", err);
+      return {};
+    }
+  };
+
+  /**
    * 상태별 도서 조회
    * @param {string} status - 'want' | 'reading' | 'done' 또는 null (전체)
    * @returns {BookShelf[]}
@@ -289,6 +359,8 @@ export function ShelfProvider({ children }) {
     updateMemo,
     updateProgress,
     getBooksByStatus,
+    recordDailyReading,
+    getDailyReadingStats,
   };
 
   return (
