@@ -198,7 +198,6 @@ export const searchBooks = (query, options = {}) => {
 
 /**
  * 카테고리/장르별 도서 목록
-<<<<<<< HEAD
  * @param {string} genre   GENRE_MAP 키 (e.g. "소설", "IT")
  * @param {number} maxResults
  * @param {number} start   1-based page number
