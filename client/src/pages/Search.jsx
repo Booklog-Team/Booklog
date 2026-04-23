@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   Search as SearchIcon,
   X,
@@ -9,8 +10,48 @@ import {
   Trash2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import BookCard from "@/components/BookCard";
 import { searchBooks, getBooksByGenre, GENRE_MAP } from "@/utils/api";
+
+
+function SearchBookCard({ book }) {
+  const info      = book.volumeInfo || {};
+  const title     = info.title || "";
+  const author    = info.authors?.join(", ") || "";
+  const publisher = info.publisher || "";
+  const genre     = info.categories?.[0] || "";
+  const cover     = book._cover || "";
+
+  return (
+    <Link
+      to={`/book/${book.id}`}
+      className="book-card flex gap-4 p-4 hover:bg-secondary/20 transition-colors"
+    >
+      {cover ? (
+        <img
+          src={cover}
+          alt={title}
+          className="w-16 h-24 object-cover rounded-lg shadow-sm flex-shrink-0"
+        />
+      ) : (
+        <div className="w-16 h-24 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+          <BookOpen size={20} className="text-muted-foreground/30" />
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-semibold text-sm leading-snug line-clamp-2 mb-1">{title}</h3>
+        <p className="text-xs text-muted-foreground line-clamp-1">{author}</p>
+        {publisher && (
+          <p className="text-xs text-muted-foreground/60 line-clamp-1 mt-0.5">{publisher}</p>
+        )}
+        {genre && (
+          <span className="inline-block mt-2 px-2 py-0.5 bg-secondary text-secondary-foreground text-[10px] font-bold rounded-md">
+            {genre}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
 
 function getInitialQuery() {
   try {
@@ -71,6 +112,16 @@ export default function Search() {
   const clearRecentSearches = () => {
     setRecentSearches([]);
     localStorage.removeItem("booklog_recent_searches");
+  };
+
+  const removeRecentSearch = term => {
+    const updated = recentSearches.filter(s => s !== term);
+    setRecentSearches(updated);
+    if (updated.length === 0) {
+      localStorage.removeItem("booklog_recent_searches");
+    } else {
+      localStorage.setItem("booklog_recent_searches", JSON.stringify(updated));
+    }
   };
 
   useEffect(() => {
@@ -328,13 +379,24 @@ export default function Search() {
 
                 <div className="flex flex-wrap gap-2">
                   {recentSearches.map(term => (
-                    <button
+                    <div
                       key={term}
-                      onClick={() => handleRecentSearch(term)}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-secondary/60 rounded-full text-sm font-medium hover:bg-primary/10 hover:text-primary transition-all border border-transparent hover:border-primary/20"
+                      className="flex items-center bg-secondary/60 rounded-full text-sm font-medium border border-transparent hover:border-primary/20 transition-all"
                     >
-                      {term}
-                    </button>
+                      <button
+                        onClick={() => handleRecentSearch(term)}
+                        className="pl-4 pr-2 py-2 hover:text-primary transition-colors"
+                      >
+                        {term}
+                      </button>
+                      <button
+                        onClick={() => removeRecentSearch(term)}
+                        className="pr-3 py-2 text-muted-foreground/30 hover:text-destructive transition-colors"
+                        title="검색어 삭제"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -379,7 +441,7 @@ export default function Search() {
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {initialBooks.map(book => (
-                    <BookCard key={book.id} book={book} variant="full" />
+                    <SearchBookCard key={book.id} book={book} />
                   ))}
                 </div>
               )}
@@ -441,7 +503,7 @@ export default function Search() {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {results.map(book => (
-                <BookCard key={book.id} book={book} variant="full" />
+                <SearchBookCard key={book.id} book={book} />
               ))}
             </div>
 

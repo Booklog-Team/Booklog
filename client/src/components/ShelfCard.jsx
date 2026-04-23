@@ -79,7 +79,52 @@ export default function ShelfCard({
     }
   };
 
-  // Grid variant (compact)
+  // Compact variant (2-column list: image + status + title + author + progress)
+  if (variant === "compact") {
+    return (
+      <div
+        className="p-3 rounded-xl bg-card border border-border/50 hover:border-border transition-colors cursor-pointer"
+        onClick={onClick}
+      >
+        <div className="flex gap-2.5 items-start">
+          <img
+            src={book.thumbnail || "/placeholder.png"}
+            alt={book.title}
+            className="w-12 h-[68px] object-cover rounded-md shadow-sm flex-shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <span className={`text-[10px] font-bold uppercase tracking-wide ${statusStyle.text}`}>
+              {statusStyle.label}
+            </span>
+            <h3 className="font-bold text-xs leading-snug line-clamp-2 mt-0.5 mb-0.5">
+              {book.title}
+            </h3>
+            <p className="text-[10px] text-muted-foreground line-clamp-1">
+              {book.author}
+            </p>
+          </div>
+        </div>
+        {book.totalPage > 0 && (
+          <div className="mt-2 space-y-1">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-muted-foreground">
+                {book.currentPage}p / {book.totalPage}p
+              </span>
+              <span className="font-bold text-primary">{progress}%</span>
+            </div>
+            <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Grid variant (cover only with hover overlay)
   if (variant === "grid") {
     return (
       <div className="relative group cursor-pointer" onClick={onClick}>
@@ -89,25 +134,17 @@ export default function ShelfCard({
             alt={book.title}
             className="w-full aspect-[2/3] object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          {/* Overlay on hover */}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             {book.status === "done" ? (
               <Check size={32} className="text-white" />
             ) : (
               <div className="text-center">
-                <p className="text-white text-xs font-semibold mb-1">
-                  {progress}%
-                </p>
-                <p className="text-white/80 text-[10px]">
-                  {book.currentPage}p / {book.totalPage}p
-                </p>
+                <p className="text-white text-xs font-semibold mb-1">{progress}%</p>
+                <p className="text-white/80 text-[10px]">{book.currentPage}p / {book.totalPage}p</p>
               </div>
             )}
           </div>
-          {/* Status badge */}
-          <div
-            className={`absolute top-2 right-2 ${statusStyle.bg} ${statusStyle.text} text-[10px] font-semibold px-2 py-1 rounded-md`}
-          >
+          <div className={`absolute top-2 right-2 ${statusStyle.bg} ${statusStyle.text} text-[10px] font-semibold px-2 py-1 rounded-md`}>
             {statusStyle.label}
           </div>
         </div>

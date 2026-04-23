@@ -32,9 +32,9 @@ const STATUS_OPTIONS = [
 ];
 
 const STATUS_CLASS = {
+  want:    "bg-amber-100 text-amber-700 border-amber-300",
   reading: "bg-primary/10 text-primary border-primary/30",
-  want: "bg-accent text-accent-foreground border-accent-foreground/20",
-  done: "bg-secondary text-secondary-foreground border-border",
+  done:    "bg-emerald-100 text-emerald-700 border-emerald-300",
 };
 
 function DetailCover({ src, alt }) {
@@ -374,7 +374,7 @@ export default function BookDetail() {
                         <button
                           key={opt.value}
                           onClick={() => {
-                            setStatus(opt.value);
+                            setStatus(prev => prev === opt.value ? null : opt.value);
                             setShowStatusMenu(false);
                           }}
                           className="w-full flex items-center justify-between px-4 py-4 text-sm font-medium hover:bg-secondary transition-colors border-b border-border/30 last:border-0"
@@ -388,6 +388,18 @@ export default function BookDetail() {
                           )}
                         </button>
                       ))}
+                      {status && (
+                        <button
+                          onClick={() => {
+                            setStatus(null);
+                            setShowStatusMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-4 text-sm font-medium text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors"
+                        >
+                          <span className="text-lg">✕</span>
+                          선택 안함
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
