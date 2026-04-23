@@ -389,7 +389,10 @@ export default function Board() {
           </h1>
         </div>
         <button
-          onClick={() => setView('create')}
+          onClick={() => {
+            setNewPost(p => ({ ...p, category: filterCat !== '전체' ? filterCat : '자유' }));
+            setView('create');
+          }}
           className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-full text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
           <Plus size={15} /> 글쓰기
@@ -425,7 +428,13 @@ export default function Board() {
               {filterCat === '전체' ? '아직 게시글이 없어요' : `${filterCat} 글이 없어요`}
             </p>
             <p className="text-sm text-muted-foreground mb-6">첫 글을 작성해보세요!</p>
-            <Button onClick={() => setView('create')} className="rounded-xl px-6">
+            <Button
+              onClick={() => {
+                setNewPost(p => ({ ...p, category: filterCat !== '전체' ? filterCat : '자유' }));
+                setView('create');
+              }}
+              className="rounded-xl px-6"
+            >
               글쓰기
             </Button>
           </div>
