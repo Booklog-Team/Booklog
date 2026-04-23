@@ -17,11 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { auth, db } from '@/firebase/config';
 import { logout } from '@/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useShelf } from '@/contexts/ShelfContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const PROFILE_BG =
@@ -81,22 +82,13 @@ export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
 
+  const { books, loading: shelfLoading } = useShelf();
+
   const [view, setView]               = useState('main'); // 'main' | 'edit'
-  const [shelf, setShelf]             = useState([]);
-  const [shelfLoading, setShelfLoading] = useState(true);
   const [editNickname, setEditNickname] = useState('');
   const [saving, setSaving]           = useState(false);
   const [loggingOut, setLoggingOut]   = useState(false);
   const [bgErr, setBgErr]             = useState(false);
-
-  // ── Firestore 서재 로드 ───────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    getDocs(collection(db, 'users', user.uid, 'shelf'))
-      .then(snap => setShelf(snap.docs.map(d => d.data())))
-      .catch(err => console.error('[Profile] shelf 로드 실패:', err))
-      .finally(() => setShelfLoading(false));
-  }, [user]);
 
   // 편집 폼 동기화
   useEffect(() => {
@@ -104,26 +96,37 @@ export default function Profile() {
   }, [profile, user]);
 
   // ── 파생 통계 ─────────────────────────────────────────
-  const doneCount    = shelf.filter(b => b.status === 'done').length;
-  const readingCount = shelf.filter(b => b.status === 'reading').length;
-  const wantCount    = shelf.filter(b => b.status === 'want').length;
-  const totalBooks   = shelf.length;
-  const totalPages   = shelf.reduce((s, b) => s + (b.currentPage || 0), 0);
-  const streak       = calculateStreak(shelf);
+  const doneCount    = books.filter(b => b.status === 'done').length;
+  const readingCount = books.filter(b => b.status === 'reading').length;
+  const wantCount    = books.filter(b => b.status === 'want').length;
+  const totalBooks   = books.length;
+  const totalPages   = books.reduce((s, b) => s + (b.currentPage || 0), 0);
+  const streak       = calculateStreak(books);
 
   // 독서 현황 바 차트 데이터
   const statusChartData = [
-    { label: '완독',     count: doneCount    },
-    { label: '읽는 중', count: readingCount  },
-    { label: '읽고 싶음', count: wantCount   },
+    { label: '완독',      count: doneCount    },
+    { label: '읽는 중',  count: readingCount  },
+    { label: '읽고 싶음', count: wantCount    },
   ];
   const CHART_COLORS = [
     'var(--color-primary)',
-    'oklch(0.72 0.1 80)',  // amber
+    'oklch(0.72 0.1 80)',
     'var(--color-accent-foreground)',
   ];
 
-  // 관심 장르 (온보딩 선택)
+  // 완독 도서 장르 집계 (volumeInfo.categories 또는 category 필드 활용)
+  const doneBooks = books.filter(b => b.status === 'done');
+  const genreMap  = {};
+  doneBooks.forEach(b => {
+    const cat = b.volumeInfo?.categories?.[0] ?? b.category ?? null;
+    if (cat) genreMap[cat] = (genreMap[cat] || 0) + 1;
+  });
+  const genreEntries   = Object.entries(genreMap).sort(([, a], [, b]) => b - a).slice(0, 5);
+  const totalWithGenre = genreEntries.reduce((s, [, c]) => s + c, 0);
+  const hasGenreData   = genreEntries.length > 0;
+
+  // 관심 장르 (온보딩 선택 — 완독 장르 없을 때 폴백)
   const genres = profile?.genres || [];
 
   // 표시 값
@@ -377,34 +380,25 @@ export default function Profile() {
             )}
           </div>
 
-          {/* 관심 장르 분포 */}
+          {/* 장르별 독서 비율 */}
           <div className="book-card p-4">
             <h3 className="text-sm font-semibold mb-4">장르별 독서 비율</h3>
-            {genres.length === 0 ? (
-              <div className="h-[140px] flex flex-col items-center justify-center gap-2">
-                <p className="text-sm text-muted-foreground">관심 장르가 없어요</p>
-                <button
-                  onClick={() => navigate('/onboarding')}
-                  className="text-xs text-primary font-medium hover:underline"
-                >
-                  장르 선택하러 가기
-                </button>
+            {shelfLoading ? (
+              <div className="h-[140px] flex items-center justify-center">
+                <Loader2 size={24} className="animate-spin text-muted-foreground" />
               </div>
-            ) : (
+            ) : hasGenreData ? (
+              // 완독 도서 장르 실제 집계
               <div className="space-y-3">
-                {genres.map((g, i) => {
-                  // 관심도 비율: 첫 번째 선택 장르가 가장 높게 표시
-                  const pct = Math.max(30, 100 - i * 22);
+                {genreEntries.map(([genre, count]) => {
+                  const pct = Math.round((count / totalWithGenre) * 100);
                   return (
-                    <div key={g} className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-14 flex-shrink-0 truncate">
-                        {g}
+                    <div key={genre} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-16 flex-shrink-0 truncate">
+                        {genre}
                       </span>
                       <div className="flex-1 progress-bar">
-                        <div
-                          className="progress-fill"
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className="progress-fill" style={{ width: `${pct}%` }} />
                       </div>
                       <span className="text-xs font-medium text-primary w-8 text-right">
                         {pct}%
@@ -413,8 +407,41 @@ export default function Profile() {
                   );
                 })}
                 <p className="text-[10px] text-muted-foreground pt-1">
-                  * 온보딩에서 선택한 관심 장르 기준
+                  * 완독한 {doneCount}권 기준
                 </p>
+              </div>
+            ) : genres.length > 0 ? (
+              // 완독 장르 없을 때 관심 장르 폴백
+              <div className="space-y-3">
+                {genres.map((g, i) => {
+                  const pct = Math.max(30, 100 - i * 22);
+                  return (
+                    <div key={g} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-14 flex-shrink-0 truncate">
+                        {g}
+                      </span>
+                      <div className="flex-1 progress-bar">
+                        <div className="progress-fill" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs font-medium text-primary w-8 text-right">
+                        {pct}%
+                      </span>
+                    </div>
+                  );
+                })}
+                <p className="text-[10px] text-muted-foreground pt-1">
+                  * 관심 장르 기준 (완독 후 자동 업데이트)
+                </p>
+              </div>
+            ) : (
+              <div className="h-[140px] flex flex-col items-center justify-center gap-2">
+                <p className="text-sm text-muted-foreground">장르 정보가 없어요</p>
+                <button
+                  onClick={() => navigate('/onboarding')}
+                  className="text-xs text-primary font-medium hover:underline"
+                >
+                  장르 선택하러 가기
+                </button>
               </div>
             )}
           </div>
