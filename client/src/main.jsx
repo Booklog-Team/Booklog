@@ -8,7 +8,6 @@ import './index.css';
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>
     <AuthProvider>
-      {/* PointProvider는 AuthProvider 안에 위치 — useAuth() 의존 */}
       <PointProvider>
         <App />
       </PointProvider>

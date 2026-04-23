@@ -1,20 +1,13 @@
 // Booklog Points — 「따뜻한 라이브러리」
-// PRD.md §8 10. Points / §9 포인트 & 기부 시스템
-//
-// 섹션
-//   1. 독서 레벨 카드   — 현재 레벨 + 다음 레벨 진행률
-//   2. 내 포인트 카드   — 보유 포인트, 오늘 활동 여부
-//   3. 전체 기부 캠페인 — 누적 포인트, 참여자 수, 진행률 바
-//   4. 기부처 선택      — 책읽는사회/어린이/국립장애인 (Firestore donations)
-//   5. 포인트 적립 방법 — 활동별 카드 (오늘 완료 표시)
-//   6. 기부 시스템 안내
-
+// PRD.md §9 포인트 & 기부 시스템 — 모든 데이터 Firestore 연동
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Gift, BookOpen, PenLine, Users, MessageSquare,
-  Info, TrendingUp, Loader2, Trophy,
-  CheckCircle2, Circle, Heart, ChevronRight,
+  ArrowLeft, Gift, BookOpen, PenLine, Users, MessageSquare,
+  Info, TrendingUp, Loader2, Trophy, CheckCircle2, Heart,
+  ChevronRight,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { usePoint, POINT_VALUES } from '@/contexts/PointContext';
 
 // ─── 독서 레벨 시스템 ──────────────────────────────────────
@@ -37,12 +30,11 @@ function getLevelInfo(pts) {
     }
   }
   const range       = next ? next.minPts - current.minPts : 1;
-  const earned      = pts - current.minPts;
-  const progressPct = next ? Math.min(100, Math.round((earned / range) * 100)) : 100;
+  const progressPct = next ? Math.min(100, Math.round(((pts - current.minPts) / range) * 100)) : 100;
   return { current, next, progressPct, ptsToNext: next ? next.minPts - pts : 0 };
 }
 
-// ─── 기부처 ───────────────────────────────────────────────
+// ─── 기부처 (PRD §9) ──────────────────────────────────────
 const CHARITIES = [
   {
     id:   'reading_foundation',
@@ -70,50 +62,19 @@ const CHARITIES = [
   },
 ];
 
-// ─── 적립 규칙 메타 (PRD §9) ──────────────────────────────
+// ─── 오늘 활동 적립 규칙 ──────────────────────────────────
 const EARN_RULES = [
-  {
-    type:  'reading_check',
-    label: '오늘 독서 체크',
-    pts:   POINT_VALUES.reading_check,
-    icon:  BookOpen,
-    desc:  '하루 1회',
-    bg:    'bg-primary/10',
-    fg:    'text-primary',
-  },
-  {
-    type:  'memo',
-    label: '메모 작성',
-    pts:   POINT_VALUES.memo,
-    icon:  PenLine,
-    desc:  '하루 1회',
-    bg:    'bg-amber-500/10',
-    fg:    'text-amber-600',
-  },
-  {
-    type:  'meeting_post',
-    label: '모임 게시글',
-    pts:   POINT_VALUES.meeting_post,
-    icon:  Users,
-    desc:  '하루 1회',
-    bg:    'bg-accent',
-    fg:    'text-accent-foreground',
-  },
-  {
-    type:  'board_post',
-    label: '자유게시판 글',
-    pts:   POINT_VALUES.board_post,
-    icon:  MessageSquare,
-    desc:  '하루 1회',
-    bg:    'bg-secondary',
-    fg:    'text-secondary-foreground',
-  },
+  { type: 'reading_check', label: '오늘 독서 체크', pts: POINT_VALUES.reading_check, icon: BookOpen,     bg: 'bg-primary/10',    fg: 'text-primary' },
+  { type: 'memo',          label: '메모 작성',      pts: POINT_VALUES.memo,          icon: PenLine,      bg: 'bg-amber-500/10',  fg: 'text-amber-600' },
+  { type: 'meeting_post',  label: '모임 게시글',    pts: POINT_VALUES.meeting_post,  icon: Users,        bg: 'bg-accent',        fg: 'text-accent-foreground' },
+  { type: 'board_post',    label: '자유게시판 글',  pts: POINT_VALUES.board_post,    icon: MessageSquare, bg: 'bg-secondary',    fg: 'text-secondary-foreground' },
 ];
 
 const POINTS_PER_BOOK = 1_000;
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────
 export default function Points() {
+  const navigate = useNavigate();
   const {
     myPoints,
     lastPointDates,
@@ -126,26 +87,33 @@ export default function Points() {
 
   const [donating, setDonating] = useState(null);
 
-  const today        = new Date().toISOString().slice(0, 10);
-  const earnedToday  = Object.values(lastPointDates).some(d => d === today);
-
+  // 파생 값
   const totalDonated     = globalData?.totalDonated     ?? 0;
   const goalAmount       = globalData?.goalAmount       ?? 100_000;
   const participantCount = globalData?.participantCount ?? 0;
   const donations        = globalData?.donations        ?? {};
   const progressPct      = Math.min(100, Math.round((totalDonated / goalAmount) * 100));
   const booksEquiv       = Math.floor(totalDonated / POINTS_PER_BOOK);
-  const myBookEquiv      = Math.floor(myPoints / POINTS_PER_BOOK);
 
   const levelInfo = getLevelInfo(myPoints);
+
+  const selectedCharity = CHARITIES.find(c => c.id === preferredCharity);
+
+  // 오늘 완료한 활동
+  const today       = new Date().toISOString().slice(0, 10);
+  const earnedToday = EARN_RULES.filter(r => lastPointDates[r.type] === today);
+  const totalEarned = earnedToday.reduce((sum, r) => sum + r.pts, 0);
 
   async function handleDonate(charityId) {
     if (donating || preferredCharity === charityId) return;
     setDonating(charityId);
     try {
       await donateTo(charityId);
+      const name = CHARITIES.find(c => c.id === charityId)?.name ?? '';
+      toast.success(`${name}을 선택했어요 ❤️`);
     } catch (e) {
       console.error('[Points] donateTo 실패:', e);
+      toast.error('기부처 선택에 실패했어요. 다시 시도해주세요.');
     } finally {
       setDonating(null);
     }
@@ -155,50 +123,71 @@ export default function Points() {
     <>
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 pt-8 pb-4">
-        <h1
-          className="text-2xl font-bold"
-          style={{ fontFamily: "'Noto Serif KR', serif" }}
-        >
-          포인트 &amp; 기부
-        </h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-xl font-bold">포인트 &amp; 기부</h1>
+        </div>
         <Gift size={22} className="text-primary" />
       </div>
 
       <div className="px-4 pb-10 stagger-children">
 
-        {/* ── 독서 레벨 카드 ───────────────────────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-700 to-green-900 p-6 mb-4 text-white shadow-lg">
-          {/* 장식 */}
+        {/* ── 내 포인트 카드 ───────────────────────────── */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 mb-4 text-white shadow-lg">
           <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute right-4 bottom-3 text-6xl opacity-15 pointer-events-none select-none leading-none">
+          <div className="absolute -right-2 bottom-0 w-20 h-20 rounded-full bg-white/5 pointer-events-none" />
+
+          <p className="text-sm text-white/80 mb-1">나의 포인트</p>
+          <div className="flex items-baseline gap-1 mb-2">
+            <span className="text-5xl font-bold">{myPoints.toLocaleString()}</span>
+            <span className="text-2xl font-semibold">P</span>
+          </div>
+
+          <p className="text-sm text-white/80 mb-3">
+            {selectedCharity
+              ? <><span className="font-bold text-white">{selectedCharity.name}</span>을 응원하고 있어요 ❤️</>
+              : '기부처를 선택해 포인트를 나눠요'}
+          </p>
+
+          <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
+            <Info size={14} className="text-white/70 flex-shrink-0" />
+            <p className="text-xs text-white/80">
+              포인트는 하루 1회, 활동당 1회만 적립됩니다
+            </p>
+          </div>
+        </div>
+
+        {/* ── 독서 레벨 카드 ───────────────────────────── */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-700 to-green-900 p-5 mb-6 text-white shadow-lg">
+          <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
+          <div className="absolute right-4 bottom-3 text-5xl opacity-15 pointer-events-none select-none leading-none">
             {levelInfo.current.emoji}
           </div>
 
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start justify-between mb-3">
             <div>
-              <p className="text-xs text-white/70 mb-1.5">현재 독서 레벨</p>
-              <div className="flex items-center gap-2.5">
-                <span className="text-3xl leading-none">{levelInfo.current.emoji}</span>
+              <p className="text-[11px] text-white/60 mb-1">현재 독서 레벨</p>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl leading-none">{levelInfo.current.emoji}</span>
                 <div>
-                  <p className="text-[11px] text-white/60 leading-none mb-0.5">
-                    Lv.{levelInfo.current.level}
-                  </p>
-                  <p
-                    className="text-xl font-bold leading-tight"
-                    style={{ fontFamily: "'Noto Serif KR', serif" }}
-                  >
+                  <p className="text-[10px] text-white/50 leading-none mb-0.5">Lv.{levelInfo.current.level}</p>
+                  <p className="text-lg font-bold leading-tight" style={{ fontFamily: "'Noto Serif KR', serif" }}>
                     {levelInfo.current.label}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-[11px] text-white/60 mb-0.5">보유 포인트</p>
-              <p className="text-3xl font-bold leading-none">
-                {myPoints.toLocaleString()}
-                <span className="text-sm ml-0.5 font-semibold">P</span>
-              </p>
-            </div>
+            {earnedToday.length > 0 && (
+              <div className="text-right">
+                <p className="text-[10px] text-white/60 mb-0.5">오늘 적립</p>
+                <p className="text-xl font-bold">+{totalEarned}<span className="text-sm ml-0.5">P</span></p>
+              </div>
+            )}
           </div>
 
           {levelInfo.next ? (
@@ -207,23 +196,15 @@ export default function Points() {
                 <span>{levelInfo.current.label}</span>
                 <span>
                   {levelInfo.next.emoji} {levelInfo.next.label}까지
-                  <span className="font-bold text-white ml-1">
-                    {levelInfo.ptsToNext}P
-                  </span>
+                  <span className="font-bold text-white ml-1">{levelInfo.ptsToNext}P</span>
                 </span>
               </div>
-              <div className="h-2 rounded-full bg-white/20 overflow-hidden mb-1.5">
+              <div className="h-2 rounded-full bg-white/20 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-white transition-all duration-700"
                   style={{ width: `${levelInfo.progressPct}%` }}
                 />
               </div>
-              <p className="text-[11px] text-white/60">
-                {levelInfo.progressPct}% 달성 — 다음 레벨:
-                <span className="text-white font-semibold ml-1">
-                  {levelInfo.next.emoji} {levelInfo.next.label}
-                </span>
-              </p>
             </>
           ) : (
             <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
@@ -233,43 +214,91 @@ export default function Points() {
           )}
         </div>
 
-        {/* ── 내 포인트 카드 ───────────────────────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 mb-6 text-white shadow-lg">
-          <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute -right-2 bottom-0 w-20 h-20 rounded-full bg-white/5 pointer-events-none" />
-
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-xs text-white/80 mb-0.5">나의 포인트</p>
-              <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-bold">{myPoints.toLocaleString()}</span>
-                <span className="text-xl font-semibold">P</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-white/70 mb-0.5">책 기부 환산</p>
-              <p className="text-xl font-bold">{myBookEquiv}권</p>
-            </div>
+        {/* ── 오늘의 포인트 활동 ───────────────────────── */}
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold mb-3">오늘의 포인트 활동</h2>
+          <div className="space-y-2">
+            {EARN_RULES.map(({ type, label, pts, icon: Icon, bg, fg }) => {
+              const earned = lastPointDates[type] === today;
+              return (
+                <div
+                  key={type}
+                  className={`book-card p-3.5 flex items-center gap-3 ${earned ? 'opacity-60' : ''}`}
+                >
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      earned ? 'bg-secondary' : bg
+                    }`}
+                  >
+                    <Icon size={18} className={earned ? 'text-muted-foreground' : fg} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {earned ? '오늘 완료' : '하루 1회 적립 가능'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-bold ${earned ? 'text-muted-foreground line-through' : 'text-amber-600'}`}>
+                      +{pts}P
+                    </p>
+                    {earned && <CheckCircle2 size={14} className="text-green-500 ml-auto mt-0.5" />}
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 mb-3">
-            <span
-              className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
-                earnedToday ? 'bg-green-300' : 'bg-white/40'
-              }`}
-            />
-            <p className="text-xs text-white/90">
-              {earnedToday
-                ? '오늘 독서 활동 완료! 포인트가 적립됐어요 🎉'
-                : '오늘 아직 활동 포인트를 받지 않았어요'}
-            </p>
+        {/* ── 기부처 선택 ──────────────────────────────── */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Heart size={16} className="text-primary" />
+            <h2 className="text-sm font-semibold">기부처 선택</h2>
           </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            내 포인트를 기부할 곳을 선택해요. 언제든 변경할 수 있어요.
+          </p>
 
-          <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
-            <Info size={14} className="text-white/70 flex-shrink-0" />
-            <p className="text-xs text-white/80">
-              포인트는 하루 1회, 활동당 1회만 적립됩니다
-            </p>
+          <div className="grid grid-cols-1 gap-3">
+            {CHARITIES.map(({ id, name, desc, icon, bg, fg }) => {
+              const selected   = preferredCharity === id;
+              const isLoading  = donating === id;
+              const charityPts = donations[id] ?? 0;
+
+              return (
+                <button
+                  key={id}
+                  onClick={() => handleDonate(id)}
+                  disabled={!!donating}
+                  className={`relative overflow-hidden w-full text-left book-card p-4 flex items-center gap-4 transition-all duration-200 ${
+                    selected ? 'bg-primary/5' : 'hover:bg-secondary/60 active:bg-secondary'
+                  } ${donating && !isLoading ? 'opacity-60' : ''}`}
+                >
+                  {selected && (
+                    <div className="absolute left-0 inset-y-0 w-1 bg-primary rounded-l-xl" />
+                  )}
+                  <div className={`w-12 h-12 rounded-xl ${bg} ${fg} flex items-center justify-center text-2xl flex-shrink-0`}>
+                    {isLoading ? <Loader2 size={20} className="animate-spin" /> : icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold truncate">{name}</p>
+                      {selected && (
+                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                          <CheckCircle2 size={10} /> 선택됨
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                    <p className="text-xs font-semibold text-primary mt-1">
+                      {charityPts.toLocaleString()}P 모임
+                    </p>
+                  </div>
+                  {!selected && <ChevronRight size={16} className="text-muted-foreground flex-shrink-0" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -292,22 +321,16 @@ export default function Points() {
                     {totalDonated.toLocaleString()}
                     <span className="text-base ml-1 font-semibold">P</span>
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    전체 독서인이 모은 누적 포인트
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">전체 독서인이 모은 누적 포인트</p>
                 </div>
                 <div className="text-right space-y-1">
                   <div className="flex items-center gap-1.5 justify-end">
                     <Trophy size={14} className="text-amber-500" />
-                    <span className="text-lg font-bold text-amber-600">
-                      {booksEquiv}권
-                    </span>
+                    <span className="text-lg font-bold text-amber-600">{booksEquiv}권</span>
                   </div>
                   <div className="flex items-center gap-1.5 justify-end">
                     <Users size={12} className="text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">
-                      {participantCount.toLocaleString()}명 참여
-                    </span>
+                    <span className="text-xs text-muted-foreground">{participantCount.toLocaleString()}명 참여</span>
                   </div>
                 </div>
               </div>
@@ -333,116 +356,14 @@ export default function Points() {
           )}
         </div>
 
-        {/* ── 기부처 선택 ──────────────────────────────── */}
+        {/* ── 포인트 내역 ──────────────────────────────── */}
         <div className="mb-6">
-          <div className="flex items-center gap-2 mb-1">
-            <Heart size={16} className="text-primary" />
-            <h2 className="text-sm font-semibold">기부처 선택</h2>
-          </div>
-          <p className="text-xs text-muted-foreground mb-3">
-            내 포인트를 기부할 곳을 선택해요. 변경할 수 있어요.
-          </p>
-
-          <div className="grid grid-cols-1 gap-3">
-            {CHARITIES.map(({ id, name, desc, icon, bg, fg }) => {
-              const selected    = preferredCharity === id;
-              const isLoading   = donating === id;
-              const charityPts  = donations[id] ?? 0;
-
-              return (
-                <button
-                  key={id}
-                  onClick={() => handleDonate(id)}
-                  disabled={!!donating}
-                  className={`relative overflow-hidden w-full text-left book-card p-4 flex items-center gap-4 transition-all duration-200 ${
-                    selected
-                      ? 'bg-primary/5'
-                      : 'hover:bg-secondary/60 active:bg-secondary'
-                  } ${donating && !isLoading ? 'opacity-60' : ''}`}
-                >
-                  {/* 선택 인디케이터 */}
-                  {selected && (
-                    <div className="absolute left-0 inset-y-0 w-1 bg-primary rounded-l-xl" />
-                  )}
-
-                  {/* 아이콘 */}
-                  <div
-                    className={`w-12 h-12 rounded-xl ${bg} ${fg} flex items-center justify-center text-2xl flex-shrink-0`}
-                  >
-                    {isLoading
-                      ? <Loader2 size={20} className="animate-spin" />
-                      : icon}
-                  </div>
-
-                  {/* 텍스트 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-semibold truncate">{name}</p>
-                      {selected && (
-                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                          <CheckCircle2 size={10} /> 선택됨
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
-                    <p className="text-xs font-semibold text-primary mt-1">
-                      {charityPts.toLocaleString()}P 모임
-                    </p>
-                  </div>
-
-                  {!selected && (
-                    <ChevronRight size={16} className="text-muted-foreground flex-shrink-0" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── 포인트 적립 방법 ─────────────────────────── */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold mb-3">포인트 적립 방법</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {EARN_RULES.map(({ type, label, pts, icon: Icon, desc, bg, fg }) => {
-              const earned = !canEarnToday(type);
-              return (
-                <div
-                  key={type}
-                  className={`book-card p-4 text-center transition-opacity ${
-                    earned ? 'opacity-60' : ''
-                  }`}
-                >
-                  <div
-                    className={`w-10 h-10 rounded-xl ${bg} ${fg} flex items-center justify-center mx-auto mb-2 relative`}
-                  >
-                    <Icon size={18} />
-                    {earned && (
-                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                        <CheckCircle2 size={10} className="text-white" />
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs font-semibold mb-1 leading-tight">{label}</p>
-                  <p
-                    className={`text-lg font-bold ${
-                      earned ? 'text-muted-foreground line-through' : 'text-amber-600'
-                    }`}
-                  >
-                    +{pts}P
-                  </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {earned ? '오늘 완료 ✓' : desc}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2 mt-3 px-3 py-2.5 bg-secondary/60 rounded-xl">
-            <Circle size={14} className="text-muted-foreground flex-shrink-0" />
-            <p className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">완독</span>은 포인트가 적립되지 않아요
-              — 독서 자체가 보상입니다 📖
+          <h2 className="text-sm font-semibold mb-3">포인트 내역</h2>
+          <div className="book-card p-8 flex flex-col items-center justify-center text-center">
+            <p className="text-4xl mb-3">📋</p>
+            <p className="text-sm font-semibold mb-1">아직 포인트 내역이 없어요</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              독서 체크, 메모, 게시글 작성으로<br />첫 포인트를 적립해보세요
             </p>
           </div>
         </div>
@@ -471,6 +392,7 @@ export default function Points() {
             </div>
           </div>
         </div>
+
       </div>
     </>
   );
