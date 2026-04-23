@@ -42,7 +42,7 @@ export default function Library() {
     return (<>
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-8 pb-4">
-        <h1 className="text-2xl font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>나의 서재</h1>
+        <h1 className="text-2xl font-bold">나의 서재</h1>
         <button onClick={() => navigate("/search")} className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
           <Plus size={15}/>
           책 추가
@@ -78,7 +78,7 @@ export default function Library() {
                 </div>
                 <div className="flex-1">
                   <span className="tag-pill status-reading text-[11px] mb-2 inline-block">읽는 중</span>
-                  <h3 className="font-bold text-base leading-snug mb-0.5" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+                  <h3 className="font-bold text-base leading-snug mb-0.5">
                     {featuredBook.title}
                   </h3>
                   <p className="text-xs text-muted-foreground mb-3">{featuredBook.author}</p>
