@@ -15,6 +15,8 @@ import Search from './pages/Search';
 import BookDetail from './pages/BookDetail';
 import Library from './pages/Library';
 import Community from './pages/Community';
+import Meeting from './pages/Meeting';
+import Board from './pages/Board';
 import Profile from './pages/Profile';
 import Points from './pages/Points';
 import NotFound from './pages/NotFound';
@@ -40,6 +42,8 @@ function App() {
                 <Route path="/library" element={<Library />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/community" element={<Community />} />
+                <Route path="/community/meeting" element={<Meeting />} />
+                <Route path="/community/board" element={<Board />} />
                 <Route path="/points" element={<Points />} />
               </Route>
             </Route>
