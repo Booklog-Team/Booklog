@@ -64,6 +64,7 @@ export default function Search() {
   };
 
   // 랜덤 추천 도서 — 마운트 시 항상 로드 (검색 후 돌아와도 표시)
+
   useEffect(() => {
     let cancelled = false;
     const categories = Object.keys(GENRE_MAP);
@@ -71,9 +72,15 @@ export default function Search() {
 
     setInitialLoading(true);
     getBooksByGenre(randomGenre, 6)
-      .then(({ items }) => { if (!cancelled) setInitialBooks(items); })
-      .catch(() => { if (!cancelled) setInitialBooks([]); })
-      .finally(() => { if (!cancelled) setInitialLoading(false); });
+      .then(({ items }) => {
+        if (!cancelled) setInitialBooks(items);
+      })
+      .catch(() => {
+        if (!cancelled) setInitialBooks([]);
+      })
+      .finally(() => {
+        if (!cancelled) setInitialLoading(false);
+      });
 
     return () => { cancelled = true; };
   }, []);

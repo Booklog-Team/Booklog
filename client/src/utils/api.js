@@ -5,6 +5,8 @@ const ALADIN_API_KEY = import.meta.env.VITE_ALADIN_API_KEY;
 const PROXY_BASE = "/api/aladin";
 
 // ── 알라딘 카테고리 ID 매핑 ─────────────────────────────────────────────────
+// 인기 장르 버튼에 표시됨 (Search 화면 grid)
+// 아래 목록은 ItemList.aspx Bestseller/ItemNewAll 호출 정상 확인된 ID만 포함
 export const GENRE_MAP = {
   소설:      { id: 1,     label: "소설/시/희곡",  queryType: "Bestseller" },
   에세이:    { id: 55890, label: "에세이",         queryType: "Bestseller" },
@@ -196,6 +198,7 @@ export const searchBooks = (query, options = {}) => {
 
 /**
  * 카테고리/장르별 도서 목록
+<<<<<<< HEAD
  * @param {string} genre   GENRE_MAP 키 (e.g. "소설", "IT")
  * @param {number} maxResults
  * @param {number} start   1-based page number
