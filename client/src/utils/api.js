@@ -49,10 +49,11 @@ export function normalizeBook(item) {
   if (!item) return null;
   return {
     id: String(item.itemId),
-    _cover: upgradeCoverUrl(item.cover),  // coversum → cover200 for list cards
+    _cover: upgradeCoverUrl(item.cover),
     _link: item.link || null,
     _price: item.priceSales || 0,
     _rating: item.customerReviewRank || 0,
+    _previewImages: item.subInfo?.previewImgList?.map((p) => p.url || p).filter(Boolean) || [],
     volumeInfo: {
       title: item.title || "제목 없음",
       authors: parseAuthors(item.author),
