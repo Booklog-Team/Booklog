@@ -22,9 +22,9 @@ const STATUS_OPTIONS = [
 ];
 
 const STATUS_CLASS = {
+  want:    "bg-amber-100 text-amber-700 border-amber-300",
   reading: "bg-primary/10 text-primary border-primary/30",
-  want:    "bg-accent text-accent-foreground border-accent-foreground/20",
-  done:    "bg-secondary text-secondary-foreground border-border",
+  done:    "bg-emerald-100 text-emerald-700 border-emerald-300",
 };
 
 // ── 최근 본 도서 localStorage 헬퍼 ───────────────────────────
@@ -304,7 +304,7 @@ export default function BookDetail() {
     <div>
       {/* ── 헤더 ── */}
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/20">
-        <button onClick={() => window.history.back()} className="p-2 hover:bg-secondary rounded-full transition-colors">
+        <button onClick={() => navigate(-1)} className="p-2 hover:bg-secondary rounded-full transition-colors">
           <ArrowLeft size={22} />
         </button>
         <span className="text-sm font-black tracking-widest uppercase opacity-40">Detail</span>
