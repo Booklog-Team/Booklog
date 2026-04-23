@@ -38,9 +38,11 @@ export default function ShelfCard({
   const [isDeleting, setIsDeleting] = useState(false);
 
   const progress =
-    book.totalPage && book.currentPage
-      ? Math.round((book.currentPage / book.totalPage) * 100)
-      : 0;
+    book.status === "done"
+      ? 100
+      : book.totalPage && book.currentPage
+        ? Math.round((book.currentPage / book.totalPage) * 100)
+        : 0;
 
   const statusColors = {
     reading: { bg: "bg-blue-50", text: "text-blue-700", label: "읽는 중" },
@@ -108,7 +110,7 @@ export default function ShelfCard({
           <div className="mt-2 space-y-1">
             <div className="flex justify-between text-[10px]">
               <span className="text-muted-foreground">
-                {book.currentPage}p / {book.totalPage}p
+                {book.status === "done" ? book.totalPage : book.currentPage}p / {book.totalPage}p
               </span>
               <span className="font-bold text-primary">{progress}%</span>
             </div>
@@ -140,7 +142,7 @@ export default function ShelfCard({
             ) : (
               <div className="text-center">
                 <p className="text-white text-xs font-semibold mb-1">{progress}%</p>
-                <p className="text-white/80 text-[10px]">{book.currentPage}p / {book.totalPage}p</p>
+                <p className="text-white/80 text-[10px]">{book.status === "done" ? book.totalPage : book.currentPage}p / {book.totalPage}p</p>
               </div>
             )}
           </div>
@@ -202,7 +204,7 @@ export default function ShelfCard({
               <div className="space-y-1.5 mb-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">
-                    {book.currentPage}p / {book.totalPage}p
+                    {book.status === "done" ? book.totalPage : book.currentPage}p / {book.totalPage}p
                   </span>
                   <span className="font-bold text-primary">{progress}%</span>
                 </div>

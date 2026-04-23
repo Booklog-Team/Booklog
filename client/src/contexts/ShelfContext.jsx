@@ -170,7 +170,12 @@ export function ShelfProvider({ children }) {
 
     try {
       const bookRef = doc(db, "users", user.uid, "shelf", bookId);
-      await updateDoc(bookRef, { status });
+      const currentBook = books.find(b => b.id === bookId);
+      const updates = { status };
+      if (currentBook?.status === "done" && status !== "done") {
+        updates.currentPage = 0;
+      }
+      await updateDoc(bookRef, updates);
     } catch (err) {
       console.error("[ShelfContext] 상태 변경 실패:", err);
       setError(err);

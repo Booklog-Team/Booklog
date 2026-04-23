@@ -63,10 +63,10 @@ function getColorLevel(count) {
 
 function getLevelColor(level) {
   switch (level) {
-    case 1: return "bg-primary/20";
-    case 2: return "bg-primary/40";
-    case 3: return "bg-primary/60";
-    case 4: return "bg-primary/80";
+    case 1: return "bg-orange-400/20";
+    case 2: return "bg-orange-400/40";
+    case 3: return "bg-orange-400/60";
+    case 4: return "bg-orange-400/80";
     default: return "";
   }
 }
@@ -109,9 +109,11 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
   const [saving, setSaving] = useState(false);
 
   const progress =
-    book.totalPage && book.currentPage
-      ? Math.round((book.currentPage / book.totalPage) * 100)
-      : 0;
+    book.status === "done"
+      ? 100
+      : book.totalPage && book.currentPage
+        ? Math.round((book.currentPage / book.totalPage) * 100)
+        : 0;
 
   const handleSave = async () => {
     if (selected === book.status) {
@@ -173,7 +175,7 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
               <div className="mt-2 space-y-1">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">
-                    {book.currentPage}p / {book.totalPage}p
+                    {book.status === "done" ? book.totalPage : book.currentPage}p / {book.totalPage}p
                   </span>
                   <span className="font-bold text-primary">{progress}%</span>
                 </div>
@@ -300,10 +302,30 @@ export default function Library() {
     );
   }, [calYear, calMonth]);
 
+  const calendarCells = useMemo(() => {
+    const cells = [];
+    const prevMonth = calMonth === 0 ? 11 : calMonth - 1;
+    const prevYear = calMonth === 0 ? calYear - 1 : calYear;
+    const daysInPrev = getDaysInMonth(prevYear, prevMonth);
+    for (let i = firstDay - 1; i >= 0; i--) {
+      cells.push({ type: "prev", day: daysInPrev - i });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      cells.push({ type: "current", day });
+    }
+    const remaining = 42 - cells.length;
+    for (let day = 1; day <= remaining; day++) {
+      cells.push({ type: "next", day });
+    }
+    return cells;
+  }, [calYear, calMonth, daysInMonth, firstDay]);
+
   const featuredProgress =
-    featured?.totalPage && featured?.currentPage
-      ? Math.round((featured.currentPage / featured.totalPage) * 100)
-      : 0;
+    featured?.status === "done"
+      ? 100
+      : featured?.totalPage && featured?.currentPage
+        ? Math.round((featured.currentPage / featured.totalPage) * 100)
+        : 0;
 
   return (
     <>
@@ -380,7 +402,7 @@ export default function Library() {
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">
-                            {featured.currentPage || 0}p / {featured.totalPage}p
+                            {featured.status === "done" ? featured.totalPage : (featured.currentPage || 0)}p / {featured.totalPage}p
                           </span>
                           <span className="font-bold text-primary">
                             {featuredProgress}%
@@ -466,12 +488,19 @@ export default function Library() {
               </div>
 
               <div className="grid grid-cols-7 gap-y-1">
-                {Array.from({ length: firstDay }).map((_, i) => (
-                  <div key={`empty-${i}`} />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const dateKey = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                {calendarCells.map((cell, idx) => {
+                  if (cell.type !== "current") {
+                    return (
+                      <div
+                        key={`${cell.type}-${idx}`}
+                        className="relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs text-muted-foreground/30"
+                      >
+                        {cell.day}
+                      </div>
+                    );
+                  }
+
+                  const dateKey = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(cell.day).padStart(2, "0")}`;
                   const count = monthCalendarData[dateKey] || 0;
                   const level = getColorLevel(count);
                   const levelColor = getLevelColor(level);
@@ -479,18 +508,18 @@ export default function Library() {
 
                   return (
                     <div
-                      key={day}
+                      key={dateKey}
                       className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs transition-all ${
                         level > 0
-                          ? `${levelColor} font-semibold ${level >= 3 ? "text-primary-foreground" : "text-primary"}`
+                          ? `${levelColor} font-semibold ${level >= 3 ? "text-white" : "text-orange-600"}`
                           : isToday
                             ? "bg-secondary font-semibold text-foreground ring-1 ring-primary/30"
                             : "text-muted-foreground"
                       }`}
                     >
-                      <span>{day}</span>
+                      <span>{cell.day}</span>
                       {level > 0 && (
-                        <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-primary/60" />
+                        <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-orange-400/60" />
                       )}
                       {isToday && level === 0 && (
                         <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />
