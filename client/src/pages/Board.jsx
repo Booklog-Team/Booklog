@@ -2,13 +2,13 @@
 // PRD.md §8 09. Board
 // Firestore: board/{id}, board/{id}/comments/{id}
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Heart, MessageSquare,
-  Send, Loader2, ChevronRight,
+  Send, Loader2, ChevronRight, Trash2,
 } from 'lucide-react';
 import {
-  collection, doc, addDoc, updateDoc, onSnapshot,
+  collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, orderBy, serverTimestamp, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 import { db } from '@/firebase/config';
@@ -52,6 +52,7 @@ const CAT_STYLE = {
 // ─── 메인 컴포넌트 ────────────────────────────────────────
 export default function Board() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuth();
   const myName = profile?.nickname || user?.email?.split('@')[0] || '독서인';
 
@@ -67,6 +68,18 @@ export default function Board() {
   const [filterCat, setFilterCat]     = useState('전체');
   const [commentText, setCommentText] = useState('');
   const [newPost, setNewPost]         = useState({ title: '', content: '', category: '자유' });
+
+  // Community.jsx에서 navigation state로 넘어온 경우 처리
+  useEffect(() => {
+    const state = location.state;
+    if (!state) return;
+    if (state.view === 'create') {
+      setView('create');
+    } else if (state.view === 'detail' && state.postId) {
+      setSelectedPostId(state.postId);
+      setView('detail');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 게시글 실시간 구독
   useEffect(() => {
@@ -134,6 +147,29 @@ export default function Board() {
       toast.error('게시글 작성에 실패했어요.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // 게시글 삭제
+  async function handleDeletePost() {
+    if (!window.confirm('게시글을 삭제할까요?')) return;
+    try {
+      await deleteDoc(doc(db, 'board', selectedPostId));
+      toast.success('게시글이 삭제됐어요.');
+      setSelectedPostId(null);
+      setView('list');
+    } catch {
+      toast.error('삭제 중 오류가 발생했어요.');
+    }
+  }
+
+  // 댓글 삭제
+  async function handleDeleteComment(commentId) {
+    try {
+      await deleteDoc(doc(db, 'board', selectedPostId, 'comments', commentId));
+      toast.success('댓글이 삭제됐어요.');
+    } catch {
+      toast.error('삭제 중 오류가 발생했어요.');
     }
   }
 
@@ -217,6 +253,7 @@ export default function Board() {
     const isLiked     = selectedPost.likes?.includes(user?.uid);
     const likeCount   = selectedPost.likes?.length ?? 0;
     const catStyle    = CAT_STYLE[selectedPost.category] ?? CAT_STYLE['자유'];
+    const isAuthor    = selectedPost.authorUid === user?.uid;
 
     return (
       <>
@@ -228,6 +265,14 @@ export default function Board() {
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-lg font-bold flex-1 line-clamp-1">게시글</h1>
+          {isAuthor && (
+            <button
+              onClick={handleDeletePost}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
 
         <div className="px-4 pb-10 max-w-2xl">
@@ -286,7 +331,17 @@ export default function Board() {
                     <div className="flex-1 bg-secondary/60 rounded-xl px-3 py-2.5">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-semibold">{c.authorName}</span>
-                        <span className="text-[11px] text-muted-foreground">{formatTs(c.createdAt)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-muted-foreground">{formatTs(c.createdAt)}</span>
+                          {c.authorUid === user?.uid && (
+                            <button
+                              onClick={() => handleDeleteComment(c.id)}
+                              className="text-muted-foreground/40 hover:text-destructive transition-colors"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-foreground/80 leading-relaxed">{c.content}</p>
                     </div>
@@ -335,7 +390,7 @@ export default function Board() {
         </div>
         <button
           onClick={() => setView('create')}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-full text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
           <Plus size={15} /> 글쓰기
         </button>
@@ -377,9 +432,10 @@ export default function Board() {
         ) : (
           <div className="space-y-3 stagger-children">
             {filteredPosts.map(post => {
-              const isLiked   = post.likes?.includes(user?.uid);
-              const likeCount = post.likes?.length ?? 0;
-              const catStyle  = CAT_STYLE[post.category] ?? CAT_STYLE['자유'];
+              const isLiked      = post.likes?.includes(user?.uid);
+              const likeCount    = post.likes?.length ?? 0;
+              const commentCount = post.commentCount ?? 0;
+              const catStyle     = CAT_STYLE[post.category] ?? CAT_STYLE['자유'];
               return (
                 <div
                   key={post.id}
@@ -414,6 +470,7 @@ export default function Board() {
                         </button>
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
                           <MessageSquare size={12} />
+                          <span>{commentCount}</span>
                         </span>
                         <ChevronRight size={14} className="text-muted-foreground ml-auto" />
                       </div>
