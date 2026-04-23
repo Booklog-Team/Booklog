@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Flame, BookOpen, TrendingUp, ChevronRight, Loader2, AlertCircle } from "lucide-react";
+import { Search, Flame, BookOpen, TrendingUp, ChevronRight, Loader2, AlertCircle, Award } from "lucide-react";
 import BookCard from "@/components/BookCard";
 import { getBooksByGenre } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -89,10 +89,11 @@ export default function Home() {
   }, [profile]);
 
   // ── 파생값 ────────────────────────────────────────────────
-  const readingBooks = shelf.filter((b) => b.status === "reading");
-  const doneCount    = shelf.filter((b) => b.status === "done").length;
-  const totalPages   = shelf.reduce((s, b) => s + (b.currentPage || 0), 0);
-  const streak       = calculateStreak(shelf);
+  const readingBooks  = shelf.filter((b) => b.status === "reading");
+  const readingCount  = readingBooks.length;
+  const doneCount     = shelf.filter((b) => b.status === "done").length;
+  const totalPages    = shelf.reduce((s, b) => s + (b.currentPage || 0), 0);
+  const streak        = calculateStreak(shelf);
   const displayName  = profile?.nickname || user?.displayName || user?.email?.split("@")[0] || "독자";
 
   // BookCard가 읽을 수 있는 형태로 서재 도서 정규화
@@ -153,24 +154,25 @@ export default function Home() {
 
       {/* 활동 요약 */}
       <div className="px-4 mb-8">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-2">
           {shelfLoading ? (
-            Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="book-card p-4 text-center">
-                <Loader2 size={22} className="animate-spin text-muted-foreground/30 mx-auto mb-1.5" />
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="book-card p-3 text-center">
+                <Loader2 size={18} className="animate-spin text-muted-foreground/30 mx-auto mb-1.5" />
                 <p className="text-xs text-muted-foreground">로딩 중</p>
               </div>
             ))
           ) : (
             [
-              { label: "읽은 책",  value: `${doneCount}권`,               icon: BookOpen,   color: "text-primary" },
-              { label: "연속 독서", value: `${streak}일`,                  icon: Flame,      color: "text-amber-500" },
-              { label: "총 페이지", value: `${totalPages.toLocaleString()}p`, icon: TrendingUp, color: "text-accent-foreground" },
+              { label: "총 도서",  value: `${shelf.length}권`,                                                      icon: BookOpen,   color: "text-primary" },
+              { label: "완독",     value: `${doneCount}권`,                                                          icon: Award,      color: "text-amber-500" },
+              { label: "연속 독서", value: `${streak}일`,                                                            icon: Flame,      color: "text-orange-500" },
+              { label: "총 페이지", value: totalPages > 999 ? `${(totalPages / 1000).toFixed(1)}k` : `${totalPages}p`, icon: TrendingUp, color: "text-accent-foreground" },
             ].map(({ label, value, icon: Icon, color }) => (
-              <div key={label} className="book-card p-4 text-center">
-                <Icon size={22} className={`${color} mx-auto mb-1.5`} />
-                <p className="text-lg font-bold text-foreground">{value}</p>
-                <p className="text-xs text-muted-foreground">{label}</p>
+              <div key={label} className="book-card p-3 text-center">
+                <Icon size={18} className={`${color} mx-auto mb-1.5`} />
+                <p className="text-base font-bold text-foreground">{value}</p>
+                <p className="text-[11px] text-muted-foreground">{label}</p>
               </div>
             ))
           )}
