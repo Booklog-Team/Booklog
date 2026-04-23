@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { READING_CALENDAR } from "@/lib/mockData";
 import {
   Plus,
   Flame,
@@ -51,6 +52,24 @@ const STATUS_TABS = [
   { value: "want", label: "읽고 싶음" },
   { value: "done", label: "완독" },
 ];
+
+function getColorLevel(count) {
+  if (!count || count <= 0) return 0;
+  if (count === 1) return 1;
+  if (count === 2) return 2;
+  if (count === 3) return 3;
+  return 4;
+}
+
+function getLevelColor(level) {
+  switch (level) {
+    case 1: return "bg-primary/20";
+    case 2: return "bg-primary/40";
+    case 3: return "bg-primary/60";
+    case 4: return "bg-primary/80";
+    default: return "";
+  }
+}
 
 function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
@@ -274,6 +293,13 @@ export default function Library() {
     return [...readingDates].filter(date => date.startsWith(prefix)).length;
   }, [readingDates, calYear, calMonth]);
 
+  const monthCalendarData = useMemo(() => {
+    const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+    return Object.fromEntries(
+      Object.entries(READING_CALENDAR).filter(([date]) => date.startsWith(prefix))
+    );
+  }, [calYear, calMonth]);
+
   const featuredProgress =
     featured?.totalPage && featured?.currentPage
       ? Math.round((featured.currentPage / featured.totalPage) * 100)
@@ -446,25 +472,27 @@ export default function Library() {
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                   const day = i + 1;
                   const dateKey = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  const hasReading = readingDates.has(dateKey);
+                  const count = monthCalendarData[dateKey] || 0;
+                  const level = getColorLevel(count);
+                  const levelColor = getLevelColor(level);
                   const isToday = dateKey === todayStr;
 
                   return (
                     <div
                       key={day}
                       className={`relative flex aspect-square flex-col items-center justify-center rounded-lg text-xs transition-all ${
-                        hasReading
-                          ? "bg-primary/15 font-semibold text-primary"
+                        level > 0
+                          ? `${levelColor} font-semibold ${level >= 3 ? "text-primary-foreground" : "text-primary"}`
                           : isToday
                             ? "bg-secondary font-semibold text-foreground ring-1 ring-primary/30"
                             : "text-muted-foreground"
                       }`}
                     >
                       <span>{day}</span>
-                      {hasReading && (
+                      {level > 0 && (
                         <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-primary/60" />
                       )}
-                      {isToday && !hasReading && (
+                      {isToday && level === 0 && (
                         <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />
                       )}
                     </div>
@@ -472,17 +500,18 @@ export default function Library() {
                 })}
               </div>
 
-              <div className="mt-3 flex items-center gap-3 border-t border-border/40 pt-3">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-3 w-3 rounded bg-primary/15" />
-                  <span className="text-[11px] text-muted-foreground">
-                    독서한 날
-                  </span>
+              <div className="mt-3 flex items-center justify-between border-t border-border/40 pt-3">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-muted-foreground mr-0.5">적음</span>
+                  {[1, 2, 3, 4].map(l => (
+                    <div key={l} className={`h-3 w-3 rounded ${getLevelColor(l)}`} />
+                  ))}
+                  <span className="text-[10px] text-muted-foreground ml-0.5">많음</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Flame size={12} className="text-amber-500" />
                   <span className="text-[11px] text-muted-foreground">
-                    이번 달 {monthReadCount}일 독서
+                    이번 달 {monthReadCount}일
                   </span>
                 </div>
               </div>
