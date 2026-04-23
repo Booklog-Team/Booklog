@@ -41,7 +41,7 @@ export default function SideNav() {
         <aside className="w-60 bg-card border-r border-border/60 h-screen sticky top-0 flex flex-col flex-shrink-0 z-50" style={{ paddingTop: "28px", paddingBottom: "28px" }}>
             {/* Logo */}
             <div className="px-6 pb-7 border-b border-border/60 mb-5">
-                <Link href="/" className="block">
+                <Link to="/" className="block">
                     <span className="block font-bold text-lg text-primary leading-tight" style={{ fontFamily: "'DM Mono', monospace" }}>
                         Booklog
                     </span>
