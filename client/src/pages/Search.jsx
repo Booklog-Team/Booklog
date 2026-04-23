@@ -1,160 +1,285 @@
-// Booklog Search — 「따뜻한 라이브러리」
-// Book search with results list and empty state
-// FR-14~16: 도서 검색, 결과 리스트, 결과 없음 UI
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Search as SearchIcon, X, BookOpen } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect, useRef } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { useShelf } from "@/contexts/ShelfContext";
-import { MOCK_BOOKS } from "@/lib/mockData";
+  Search as SearchIcon,
+  X,
+  BookOpen,
+  Loader2,
+  AlertCircle,
+  Clock,
+  Trash2,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import BookCard from "@/components/BookCard";
+import { searchBooks, getBooksByGenre, GENRE_MAP } from "@/utils/api";
 
-const STATUS_LABELS = { reading: "읽는 중", want: "읽고 싶음", done: "완독" };
-const STATUS_CLASSES = { reading: "status-reading", want: "status-want", done: "status-done" };
-
-function SearchBookCard({ book, inShelf, onAdd }) {
-  const progress =
-    book.currentPage && book.totalPages
-      ? Math.round((book.currentPage / book.totalPages) * 100)
-      : null;
-
-  return (
-    <div className="book-card overflow-hidden">
-      <Link to={`/book/${book.id}`} className="flex gap-4 p-4 hover:bg-secondary/20 transition-colors">
-        <img
-          src={book.cover}
-          alt={book.title}
-          className="w-16 h-24 object-cover rounded-lg shadow-sm flex-shrink-0"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="font-semibold text-sm leading-snug line-clamp-2">
-              {book.title}
-            </h3>
-            {book.status && (
-              <span className={`tag-pill ${STATUS_CLASSES[book.status]} flex-shrink-0 text-[10px]`}>
-                {STATUS_LABELS[book.status]}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mb-2">{book.author}</p>
-          {progress !== null && (
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{book.currentPage}p / {book.totalPages}p</span>
-                <span className="text-primary font-medium">{progress}%</span>
-              </div>
-              <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progress}%` }} />
-              </div>
-            </div>
-          )}
-        </div>
-      </Link>
-      {inShelf ? (
-        <div className="border-t border-border/40 bg-secondary/40 px-4 py-2.5 text-xs text-center text-muted-foreground">
-          이미 서재에 있어요
-        </div>
-      ) : (
-        <button
-          onClick={onAdd}
-          className="w-full border-t border-border/40 px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors"
-        >
-          서재에 추가하고 읽기 시작하기
-        </button>
-      )}
-    </div>
-  );
+function getInitialQuery() {
+  try {
+    return new URLSearchParams(window.location.search).get("q") || "";
+  } catch {
+    return "";
+  }
 }
-const RECENT_SEARCHES = ["한강", "채식주의자", "SF 소설", "자기계발"];
-const POPULAR_KEYWORDS = ["소설", "에세이", "인문학", "철학", "심리학", "역사"];
+
+function getInitialGenre() {
+  try {
+    return new URLSearchParams(window.location.search).get("genre") || "";
+  } catch {
+    return "";
+  }
+}
+
 export default function Search() {
-  const { addBook, books } = useShelf();
-  const [query, setQuery] = useState("");
+  const initialQuery = getInitialQuery();
+  const initialGenre = getInitialGenre();
+
+  const [query, setQuery] = useState(initialQuery);
+  const [results, setResults] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const results = hasSearched
-    ? MOCK_BOOKS.filter(
-        b =>
-          b.title.includes(query) ||
-          b.author.includes(query) ||
-          b.genre.some(g => g.includes(query))
-      )
-    : [];
+  const [error, setError] = useState(null);
+  const [isGenreSearch, setIsGenreSearch] = useState(false);
+  const [activeGenre, setActiveGenre] = useState(null);
 
-  const [confirmBook, setConfirmBook] = useState(null);
+  const [recentSearches, setRecentSearches] = useState([]);
+  const [initialBooks, setInitialBooks] = useState([]);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  const isInShelf = bookId => books.some(b => b.id === bookId);
+  const startIndexRef = useRef(0);
+  const activeQueryRef = useRef(initialQuery);
 
-  const handleSearch = q => {
-    if (!q.trim()) return;
-    setQuery(q);
-    setHasSearched(true);
+  useEffect(() => {
+    const saved = localStorage.getItem("booklog_recent_searches");
+    if (saved) {
+      try {
+        setRecentSearches(JSON.parse(saved));
+      } catch {
+        setRecentSearches([]);
+      }
+    }
+  }, []);
+
+  const addRecentSearch = term => {
+    if (!term.trim()) return;
+    const filtered = recentSearches.filter(s => s !== term);
+    const updated = [term, ...filtered].slice(0, 10);
+    setRecentSearches(updated);
+    localStorage.setItem("booklog_recent_searches", JSON.stringify(updated));
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    localStorage.removeItem("booklog_recent_searches");
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const categories = Object.keys(GENRE_MAP);
+    const randomGenre =
+      categories[Math.floor(Math.random() * categories.length)];
+
+    setInitialLoading(true);
+
+    getBooksByGenre(randomGenre, 6)
+      .then(({ items }) => {
+        if (!cancelled) setInitialBooks(items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setInitialBooks([]);
+      })
+      .finally(() => {
+        if (!cancelled) setInitialLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialQuery) {
+      performTextSearch(initialQuery, true);
+    } else if (initialGenre) {
+      performGenreSearch(initialGenre, true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (isGenreSearch) return;
+
+    const timer = setTimeout(() => {
+      const trimmed = query.trim();
+      if (trimmed.length >= 2) {
+        performTextSearch(trimmed, true);
+      } else if (!trimmed && hasSearched) {
+        resetSearch();
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const resetSearch = () => {
+    setResults([]);
+    setTotalItems(0);
+    setHasSearched(false);
+    setError(null);
+    setIsGenreSearch(false);
+    setActiveGenre(null);
+    startIndexRef.current = 0;
+    activeQueryRef.current = "";
+  };
+
+  const performTextSearch = async (searchQuery, isNew = true) => {
+    if (!searchQuery.trim()) return;
+
+    if (isNew) {
+      setIsLoading(true);
+      setHasSearched(true);
+      setError(null);
+      setResults([]);
+      setTotalItems(0);
+      startIndexRef.current = 0;
+      activeQueryRef.current = searchQuery;
+      addRecentSearch(searchQuery);
+    } else {
+      setIsLoadingMore(true);
+    }
+
+    try {
+      const { items, totalResults: total } = await searchBooks(searchQuery, {
+        start: isNew ? 1 : Math.floor(startIndexRef.current / 20) + 1,
+      });
+
+      if (activeQueryRef.current !== searchQuery) return;
+
+      if (isNew) {
+        setResults(items || []);
+      } else {
+        setResults(prev => [...prev, ...(items || [])]);
+      }
+
+      setTotalItems(total || 0);
+      startIndexRef.current =
+        (isNew ? 0 : startIndexRef.current) + (items?.length || 0);
+    } catch (err) {
+      if (activeQueryRef.current !== searchQuery) return;
+      setError(err.message || "도서 검색 중 오류가 발생했습니다.");
+      if (isNew) setResults([]);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const performGenreSearch = async (genre, isNew = true) => {
+    setIsGenreSearch(true);
+    setActiveGenre(genre);
+    setError(null);
+
+    if (isNew) {
+      setIsLoading(true);
+      setHasSearched(true);
+      setResults([]);
+      setTotalItems(0);
+      startIndexRef.current = 0;
+      setQuery("");
+    } else {
+      setIsLoadingMore(true);
+    }
+
+    try {
+      const page = isNew ? 1 : Math.floor(startIndexRef.current / 20) + 1;
+      const { items, totalResults: total } = await getBooksByGenre(
+        genre,
+        20,
+        page
+      );
+
+      if (isNew) {
+        setResults(items || []);
+      } else {
+        setResults(prev => [...prev, ...(items || [])]);
+      }
+
+      setTotalItems(total || 0);
+      startIndexRef.current =
+        (isNew ? 0 : startIndexRef.current) + (items?.length || 0);
+    } catch (err) {
+      setError(err.message || "장르 검색 중 오류가 발생했습니다.");
+      if (isNew) setResults([]);
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const handleRecentSearch = term => {
+    setIsGenreSearch(false);
+    setActiveGenre(null);
+    setQuery(term);
+    performTextSearch(term, true);
   };
 
   const handleClear = () => {
     setQuery("");
-    setHasSearched(false);
+    resetSearch();
   };
 
-  const handleAddToShelf = async book => {
-    try {
-      await addBook({
-        id: book.id,
-        title: book.title,
-        author: book.author,
-        thumbnail: book.cover || book.thumbnail || "",
-        status: "reading",
-        currentPage: 0,
-        totalPage: book.totalPages || book.totalPage || 0,
-        lastReadDate: null,
-        checkedDates: [],
-        memo: "",
-      });
-      toast.success("서재에 추가됐어요! 지금 읽고 있어요에서 확인해보세요.");
-    } catch (error) {
-      console.error(error);
-      toast.error("서재에 추가하지 못했습니다.");
+  const handleLoadMore = () => {
+    if (!isLoadingMore && startIndexRef.current < totalItems) {
+      if (isGenreSearch && activeGenre) {
+        performGenreSearch(activeGenre, false);
+      } else {
+        performTextSearch(activeQueryRef.current, false);
+      }
     }
   };
 
-  const handleConfirm = async () => {
-    if (!confirmBook) return;
-    const book = confirmBook;
-    setConfirmBook(null);
-    await handleAddToShelf(book);
-  };
+  const hasMore = startIndexRef.current < totalItems;
 
   return (
-    <>
-      {/* Search Header */}
+    <div>
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-4 pb-3 border-b border-border/40">
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
-            <SearchIcon
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            />
+            {isLoading ? (
+              <Loader2
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-primary animate-spin"
+              />
+            ) : (
+              <SearchIcon
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+            )}
+
             <Input
-              type="search"
-              placeholder="책 제목, 저자, 장르 검색..."
+              type="text"
+              placeholder="책 제목, 저자 검색..."
               value={query}
               onChange={e => {
+                setIsGenreSearch(false);
+                setActiveGenre(null);
                 setQuery(e.target.value);
-                if (!e.target.value) setHasSearched(false);
               }}
-              onKeyDown={e => e.key === "Enter" && handleSearch(query)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && query.trim().length >= 2) {
+                  performTextSearch(query.trim(), true);
+                }
+              }}
               className="pl-9 pr-9 h-11 bg-secondary border-none rounded-xl text-sm"
               autoFocus
             />
-            {query && (
+
+            {(query || hasSearched) && (
               <button
                 onClick={handleClear}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
@@ -164,31 +289,50 @@ export default function Search() {
             )}
           </div>
         </div>
+
+        {isGenreSearch && activeGenre && (
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-muted-foreground font-bold">
+              장르:
+            </span>
+            <span className="px-2.5 py-1 bg-primary/10 text-primary text-[11px] font-bold rounded-full uppercase">
+              {activeGenre}
+            </span>
+            <button
+              onClick={handleClear}
+              className="text-xs text-muted-foreground hover:text-primary font-medium"
+            >
+              초기화
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="px-4 py-6">
-        {/* Initial state — no search */}
-        {!hasSearched && (
-          <div className="stagger-children">
-            {/* Recent searches */}
-            {RECENT_SEARCHES.length > 0 && (
-              <section className="mb-8">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-foreground">
+        {!hasSearched && !isLoading && (
+          <div className="stagger-children space-y-10">
+            {recentSearches.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold flex items-center gap-2">
+                    <Clock size={16} className="text-muted-foreground/60" />
                     최근 검색어
                   </h3>
-                  <button className="text-xs text-muted-foreground hover:text-primary">
-                    전체 삭제
+                  <button
+                    onClick={clearRecentSearches}
+                    className="text-[11px] text-muted-foreground hover:text-destructive flex items-center gap-1 font-bold uppercase tracking-wider"
+                  >
+                    <Trash2 size={12} /> 전체 삭제
                   </button>
                 </div>
+
                 <div className="flex flex-wrap gap-2">
-                  {RECENT_SEARCHES.map(term => (
+                  {recentSearches.map(term => (
                     <button
                       key={term}
-                      onClick={() => handleSearch(term)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary rounded-full text-sm text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                      onClick={() => handleRecentSearch(term)}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-secondary/60 rounded-full text-sm font-medium hover:bg-primary/10 hover:text-primary transition-all border border-transparent hover:border-primary/20"
                     >
-                      <SearchIcon size={12} className="text-muted-foreground" />
                       {term}
                     </button>
                   ))}
@@ -196,122 +340,154 @@ export default function Search() {
               </section>
             )}
 
-            {/* Popular keywords */}
-            <section className="mb-8">
-              <h3 className="text-sm font-semibold mb-3">인기 장르</h3>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {POPULAR_KEYWORDS.map((kw, i) => (
+            <section>
+              <h3 className="text-sm font-bold mb-4">인기 장르</h3>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {Object.keys(GENRE_MAP).map(genre => (
                   <button
-                    key={kw}
-                    onClick={() => handleSearch(kw)}
-                    className="flex items-center gap-2 p-3 bg-card border border-border/60 rounded-xl hover:border-primary/40 hover:bg-primary/5 transition-all"
+                    key={genre}
+                    onClick={() => performGenreSearch(genre, true)}
+                    className="flex flex-col items-center justify-center p-3 bg-card border border-border/50 rounded-2xl hover:border-primary/40 hover:bg-primary/5 transition-all"
                   >
-                    <span className="text-lg font-bold text-primary/30">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-medium">{kw}</span>
+                    <span className="text-[13px] font-bold">{genre}</span>
                   </button>
                 ))}
               </div>
             </section>
 
-            {/* Recommended books */}
             <section>
-              <h3 className="text-sm font-semibold mb-3">이 책은 어떠세요?</h3>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {MOCK_BOOKS.slice(0, 4).map(book => (
-                  <SearchBookCard
-                    key={book.id}
-                    book={book}
-                    inShelf={isInShelf(book.id)}
-                    onAdd={() => setConfirmBook(book)}
+              <h3 className="text-sm font-bold mb-4 flex items-center justify-between">
+                이 책은 어떠세요?
+                <button
+                  onClick={() => window.location.reload()}
+                  className="text-[10px] text-primary/60 font-bold hover:text-primary"
+                >
+                  새로고침
+                </button>
+              </h3>
+
+              {initialLoading ? (
+                <div className="flex flex-col items-center py-12 bg-secondary/20 rounded-2xl border border-dashed border-border/50">
+                  <Loader2
+                    size={20}
+                    className="text-primary animate-spin mb-2 opacity-50"
                   />
-                ))}
-              </div>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    새로운 책을 찾고 있습니다...
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {initialBooks.map(book => (
+                    <BookCard key={book.id} book={book} variant="full" />
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         )}
 
-        {/* Search results */}
-        {hasSearched && results.length > 0 && (
-          <div>
-            <p className="text-sm text-muted-foreground mb-5">
-              <span className="text-primary font-semibold">"{query}"</span> 검색
-              결과 {results.length}건
+        {isLoading && (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Loader2 size={32} className="text-primary animate-spin mb-4" />
+            <p className="text-sm text-muted-foreground font-medium">
+              책을 찾고 있습니다...
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 stagger-children">
-              {results.map(book => (
-                <SearchBookCard
-                  key={book.id}
-                  book={book}
-                  inShelf={isInShelf(book.id)}
-                  onAdd={() => setConfirmBook(book)}
-                />
-              ))}
-            </div>
           </div>
         )}
 
-        {/* Empty state */}
-        {hasSearched && results.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in-up">
-            <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center mb-4">
-              <BookOpen size={32} className="text-muted-foreground" />
-            </div>
-            <h3
-              className="text-base font-semibold mb-2"
-              style={{ fontFamily: "'Noto Serif KR', serif" }}
+        {error && !isLoading && (
+          <div className="flex flex-col items-center justify-center py-12 text-center px-6 bg-amber-50 rounded-2xl border border-amber-100">
+            <AlertCircle size={32} className="text-amber-500 mb-3" />
+            <h3 className="text-sm font-bold text-amber-900 mb-1">검색 오류</h3>
+            <p className="text-xs text-amber-700 mb-4">{error}</p>
+            <button
+              onClick={() =>
+                isGenreSearch && activeGenre
+                  ? performGenreSearch(activeGenre, true)
+                  : performTextSearch(activeQueryRef.current, true)
+              }
+              className="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium"
             >
-              검색 결과가 없어요
-            </h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              <span className="font-medium">"{query}"</span>에 대한 결과를 찾지
-              못했습니다.
-              <br />
-              다른 검색어를 시도해보세요.
+              다시 시도
+            </button>
+          </div>
+        )}
+
+        {hasSearched && !isLoading && !error && results.length > 0 && (
+          <div className="animate-fade-in">
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm text-muted-foreground font-medium">
+                {isGenreSearch ? (
+                  <>
+                    <span className="text-primary font-bold">
+                      {activeGenre}
+                    </span>{" "}
+                    장르 도서
+                  </>
+                ) : (
+                  <>
+                    <span className="text-primary font-bold">
+                      "{activeQueryRef.current}"
+                    </span>{" "}
+                    검색 결과
+                  </>
+                )}
+              </p>
+              <span className="text-xs text-muted-foreground font-bold">
+                {totalItems.toLocaleString()}건
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {results.map(book => (
+                <BookCard key={book.id} book={book} variant="full" />
+              ))}
+            </div>
+
+            {hasMore && (
+              <div className="mt-8 flex flex-col items-center gap-2">
+                <p className="text-xs text-muted-foreground font-medium">
+                  {Math.ceil(results.length / 20)} /{" "}
+                  {Math.ceil(totalItems / 20)} 페이지
+                  <span className="ml-2 opacity-60">
+                    ({results.length.toLocaleString()}건 표시 중)
+                  </span>
+                </p>
+                <button
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="flex items-center gap-2 px-8 py-3 bg-secondary hover:bg-secondary/80 text-sm font-bold rounded-xl transition-all disabled:opacity-50"
+                >
+                  {isLoadingMore ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    "결과 더 보기"
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasSearched && !isLoading && !error && results.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center mb-4">
+              <BookOpen size={32} className="text-muted-foreground/30" />
+            </div>
+            <h3 className="text-base font-bold mb-2">검색 결과가 없어요</h3>
+            <p className="text-sm text-muted-foreground mb-8">
+              다른 검색어나 장르를 시도해 보세요.
             </p>
             <button
               onClick={handleClear}
-              className="px-5 py-2.5 bg-primary/10 text-primary rounded-xl text-sm font-medium hover:bg-primary/20 transition-colors"
+              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 transition-all"
             >
-              다시 검색하기
+              검색 초기화
             </button>
           </div>
         )}
       </div>
-
-      {/* 서재 추가 확인 Dialog */}
-      <Dialog open={!!confirmBook} onOpenChange={open => !open && setConfirmBook(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>서재에 추가할까요?</DialogTitle>
-          </DialogHeader>
-          {confirmBook && (
-            <div className="flex gap-4 py-2">
-              <img
-                src={confirmBook.cover || confirmBook.thumbnail}
-                alt={confirmBook.title}
-                className="w-16 h-22 object-cover rounded-lg shadow-sm flex-shrink-0"
-              />
-              <div className="flex flex-col justify-center">
-                <p className="font-semibold text-sm leading-snug line-clamp-2" style={{ fontFamily: "'Noto Serif KR', serif" }}>
-                  {confirmBook.title}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">{confirmBook.author}</p>
-                <span className="tag-pill status-reading text-[11px] mt-2 self-start">읽는 중</span>
-              </div>
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setConfirmBook(null)}>
-              취소
-            </Button>
-            <Button onClick={handleConfirm}>
-              추가하기
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   );
 }

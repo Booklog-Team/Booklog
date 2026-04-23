@@ -47,11 +47,16 @@ function getColorLevel(count) {
 // 색상 레벨 → Tailwind 클래스 (Warm Library 테마: 아이보리 → 테라코타)
 function getLevelColor(level) {
   switch (level) {
-    case 1: return "bg-orange-400/20 text-orange-800";
-    case 2: return "bg-orange-400/40 text-orange-800";
-    case 3: return "bg-orange-400/60 text-orange-900";
-    case 4: return "bg-orange-400/80 text-orange-900";
-    default: return "bg-muted/30 text-muted-foreground";
+    case 1:
+      return "bg-orange-400/20 text-orange-800";
+    case 2:
+      return "bg-orange-400/40 text-orange-800";
+    case 3:
+      return "bg-orange-400/60 text-orange-900";
+    case 4:
+      return "bg-orange-400/80 text-orange-900";
+    default:
+      return "bg-muted/30 text-muted-foreground";
   }
 }
 
@@ -112,7 +117,9 @@ export default function Library() {
   const readingBooks = useMemo(() => {
     return books
       .filter(b => b.status === "reading")
-      .sort((a, b) => (b.lastReadDate || "").localeCompare(a.lastReadDate || ""));
+      .sort((a, b) =>
+        (b.lastReadDate || "").localeCompare(a.lastReadDate || "")
+      );
   }, [books]);
 
   // 연속 독서일 — 가장 최근 읽은 책 기준
@@ -140,7 +147,6 @@ export default function Library() {
     year: "numeric",
     month: "long",
   });
-
 
   const handlePrevMonth = () => {
     if (calMonth === 0) {
@@ -291,7 +297,8 @@ export default function Library() {
                   onClick={() => navigate("/search")}
                   className="flex-shrink-0 border-t border-border/40 w-full py-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all"
                 >
-                  <Plus size={13} />다른 책 추가하기
+                  <Plus size={13} />
+                  다른 책 추가하기
                 </button>
               </div>
             ) : (

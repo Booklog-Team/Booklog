@@ -42,7 +42,7 @@ export default function Community() {
             <div className="flex flex-wrap gap-1.5 mb-3">
               {selectedClub.tags.map(t => (<span key={t} className="tag-pill bg-secondary text-secondary-foreground text-xs">{t}</span>))}
             </div>
-            <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: "'Noto Serif KR', serif" }}>{selectedClub.name}</h2>
+            <h2 className="text-2xl font-bold mb-2">{selectedClub.name}</h2>
             <p className="text-sm text-muted-foreground mb-5">{selectedClub.description}</p>
 
             <div className="grid grid-cols-2 gap-3 mb-5 sm:grid-cols-4">
@@ -99,7 +99,7 @@ export default function Community() {
             <span className={`tag-pill ${CATEGORY_CLASS[selectedPost.category]} text-xs mb-2 inline-block`}>
               {CATEGORY_LABELS[selectedPost.category]}
             </span>
-            <h2 className="text-xl font-bold mb-3" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+            <h2 className="text-xl font-bold mb-3">
               {selectedPost.title}
             </h2>
             <div className="flex items-center gap-2 mb-4">
@@ -179,7 +179,7 @@ export default function Community() {
     return (<>
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-8 pb-4">
-        <h1 className="text-2xl font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>커뮤니티</h1>
+        <h1 className="text-2xl font-bold">커뮤니티</h1>
         <button onClick={() => setView("create-post")} className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
           <Plus size={15}/>
           글쓰기
@@ -219,7 +219,7 @@ export default function Community() {
                   </div>
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="font-bold text-sm leading-snug" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+                      <h3 className="font-bold text-sm leading-snug">
                         {club.name}
                       </h3>
                       <ChevronRight size={16} className="text-muted-foreground flex-shrink-0 mt-0.5"/>

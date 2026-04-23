@@ -12,7 +12,7 @@ export default function NotFound() {
         <div className="w-32 h-40 bg-secondary rounded-xl shadow-lg flex items-center justify-center mx-auto relative">
           <div className="absolute left-0 top-0 bottom-0 w-2 bg-primary/20 rounded-l-xl"/>
           <div className="text-center px-4">
-            <p className="text-5xl font-bold text-primary/20" style={{ fontFamily: "'Noto Serif KR', serif" }}>404</p>
+            <p className="text-5xl font-bold text-primary/20">404</p>
           </div>
         </div>
         <div className="absolute -left-4 top-4 w-10 h-14 bg-accent rounded-md shadow-md rotate-[-15deg]"/>
@@ -20,7 +20,7 @@ export default function NotFound() {
       </div>
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-3" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+        <h1 className="text-2xl font-bold mb-3">
           페이지를 찾을 수 없어요
         </h1>
         <p className="text-sm text-muted-foreground leading-relaxed">

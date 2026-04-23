@@ -19,7 +19,7 @@ export default function TopNav() {
                 {/* Logo */}
                 <Link to="/" className="flex items-center gap-2 flex-shrink-0">
                     <BookOpen size={20} className="text-primary" />
-                    <span className="font-bold text-xl" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+                    <span className="font-bold text-xl">
                         Booklog
                     </span>
                 </Link>
