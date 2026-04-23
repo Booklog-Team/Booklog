@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Flame, BookOpen, TrendingUp, ChevronRight, Loader2, AlertCircle, Award } from "lucide-react";
 import BookCard from "@/components/BookCard";
@@ -19,8 +19,10 @@ const ONBOARDING_TO_GENRE = {
   아동: "어린이",
 };
 
-const HERO_IMAGE =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663584969128/K9LDMhfUcVKdtMjF2S9GdE/booklog-hero-FbzG9jogJPcArmEM9bJ2RD.webp";
+const HERO_IMAGES = [
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663584969128/K9LDMhfUcVKdtMjF2S9GdE/booklog-hero-FbzG9jogJPcArmEM9bJ2RD.webp",
+  //사진 링크 추가
+];
 
 const KEYWORDS = ["소설", "자기계발", "한국문학", "SF", "철학", "에세이"];
 
@@ -47,6 +49,11 @@ function calculateStreak(shelf) {
 export default function Home() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+
+  const heroImage = useMemo(
+    () => HERO_IMAGES[Math.floor(Math.random() * HERO_IMAGES.length)],
+    []
+  );
 
   const [shelf, setShelf]               = useState([]);
   const [shelfLoading, setShelfLoading] = useState(true);
@@ -119,7 +126,7 @@ export default function Home() {
     <div className="stagger-children pb-10">
       {/* 히어로 */}
       <div className="relative overflow-hidden rounded-2xl mb-8 mt-8 mx-4">
-        <img src={HERO_IMAGE} alt="독서 공간" className="w-full h-80 object-cover" />
+        <img src={heroImage} alt="독서 공간" className="w-full h-80 object-cover" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/65" />
         <div className="absolute inset-0 flex flex-col justify-end p-6">
           <p className="text-white/80 text-sm mb-1">안녕하세요, {displayName}님 👋</p>
