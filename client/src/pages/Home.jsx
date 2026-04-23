@@ -90,7 +90,6 @@ export default function Home() {
 
   // ── 파생값 ────────────────────────────────────────────────
   const readingBooks  = shelf.filter((b) => b.status === "reading");
-  const readingCount  = readingBooks.length;
   const doneCount     = shelf.filter((b) => b.status === "done").length;
   const totalPages    = shelf.reduce((s, b) => s + (b.currentPage || 0), 0);
   const streak        = calculateStreak(shelf);
