@@ -55,10 +55,13 @@ export default function Board() {
   const { user, profile } = useAuth();
   const myName = profile?.nickname || user?.email?.split('@')[0] || '독서인';
 
-  const [view, setView]               = useState('list');
-  const [posts, setPosts]             = useState([]);
-  const [selectedPost, setSelectedPost] = useState(null);
-  const [comments, setComments]       = useState([]);
+  const [view, setView]                 = useState('list');
+  const [posts, setPosts]               = useState([]);
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [comments, setComments]         = useState([]);
+
+  // onSnapshot이 posts를 갱신할 때 selectedPost도 자동 최신화
+  const selectedPost = posts.find(p => p.id === selectedPostId) ?? null;
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [submitting, setSubmitting]   = useState(false);
   const [filterCat, setFilterCat]     = useState('전체');
@@ -80,16 +83,16 @@ export default function Board() {
 
   // 댓글 실시간 구독
   useEffect(() => {
-    if (!selectedPost?.id) return;
+    if (!selectedPostId) return;
     const q = query(
-      collection(db, 'board', selectedPost.id, 'comments'),
+      collection(db, 'board', selectedPostId, 'comments'),
       orderBy('createdAt', 'asc')
     );
     const unsub = onSnapshot(q, snap => {
       setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return unsub;
-  }, [selectedPost?.id]);
+  }, [selectedPostId]);
 
   const filteredPosts = filterCat === '전체'
     ? posts
@@ -136,11 +139,11 @@ export default function Board() {
 
   // 댓글 작성
   async function handleAddComment() {
-    if (!commentText.trim() || !selectedPost) return;
+    if (!commentText.trim() || !selectedPostId) return;
     const text = commentText.trim();
     setCommentText('');
     try {
-      await addDoc(collection(db, 'board', selectedPost.id, 'comments'), {
+      await addDoc(collection(db, 'board', selectedPostId, 'comments'), {
         content:    text,
         authorUid:  user.uid,
         authorName: myName,
@@ -380,7 +383,7 @@ export default function Board() {
               return (
                 <div
                   key={post.id}
-                  onClick={() => { setSelectedPost(post); setView('detail'); }}
+                  onClick={() => { setSelectedPostId(post.id); setView('detail'); }}
                   className="book-card p-4 cursor-pointer hover:shadow-md transition-all"
                 >
                   <div className="flex items-start gap-3">
