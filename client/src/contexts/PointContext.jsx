@@ -1,310 +1,226 @@
 // Booklog — PointContext
 // 포인트 시스템 전역 관리 (적립, 기부, 조회)
 // PRD.md §9 포인트 & 기부 시스템 상세, §12 팀원 역할 분담 참조
-import React, { createContext, useContext, useEffect, useState } from "react";
+//
+// 역할
+//   - points/global 실시간 구독 (onSnapshot) → 여러 유저 동시 적립 반영
+//   - addPoint(type)     : 트랜잭션으로 유저 포인트 + 글로벌 집계 원자 업데이트
+//   - donateTo(id)       : 기부처 선택 → points/global.donations 맵 업데이트
+//   - canEarnToday(type) : 하루 1회 제한 체크 (lastPointDates.{type} 기반)
+
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 import {
   doc,
-  getDoc,
-  updateDoc,
-  setDoc,
-  collection,
   onSnapshot,
-  increment,
+  runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "../firebase/config";
-import { useAuth } from "./AuthContext";
+import { db } from "@/firebase/config"; // 경로 확인 필요 (프로젝트 환경에 맞게 조정: '../firebase/config' 등)
+import { useAuth } from "@/contexts/AuthContext";
 
-/**
- * @typedef {Object} PointRecord
- * @property {string}   action      - 'read' | 'memo' | 'meeting-post' | 'board-post'
- * @property {number}   points      - 적립된 포인트
- * @property {string}   date        - YYYY-MM-DD
- * @property {string}   bookId      - (선택) 관련 도서 ID
- */
+// ─── 활동 유형별 포인트 (PRD §9) ──────────────────────────
+export const POINT_VALUES = {
+  reading_check: 10, // 오늘 독서 체크
+  memo: 5, // 메모 작성
+  meeting_post: 5, // 모임 게시글
+  board_post: 3, // 자유게시판 글
+};
 
-/**
- * @typedef {Object} PointContextValue
- * @property {number}           userPoints      - 사용자 보유 포인트
- * @property {number}           globalDonated   - 전체 누적 기부 포인트
- * @property {number}           goalAmount      - 기부 목표 포인트
- * @property {PointRecord[]}    history         - 포인트 적립 내역
- * @property {boolean}          loading         - 로딩 상태
- * @property {Error|null}       error           - 에러 상태
- * @property {Function}         addPoints       - 포인트 추가 (일일 제한 체크)
- * @property {Function}         donate          - 포인트 기부 (포인트 차감)
- * @property {Function}         canEarnToday    - 오늘 특정 행동으로 포인트 얻을 수 있는지 확인
- * @property {Function}         refreshPoints   - 포인트 데이터 재로드
- */
+const DEFAULT_GLOBAL = {
+  totalDonated: 0,
+  goalAmount: 100_000,
+  participantCount: 0,
+  donations: {},
+  updatedAt: null,
+};
 
 const PointContext = createContext(undefined);
 
-// 포인트 규칙 (일일 제한)
-const POINT_RULES = {
-  read: { points: 10, maxPerDay: 1 }, // 독서 체크
-  memo: { points: 5, maxPerDay: 1 }, // 메모 작성
-  "meeting-post": { points: 5, maxPerDay: 1 }, // 모임 게시글
-  "board-post": { points: 3, maxPerDay: 1 }, // 자유 게시판
-};
-
-/**
- * PointProvider
- * - 사용자 포인트와 전역 기부 포인트를 실시간으로 구독
- */
+// ─── PointProvider ────────────────────────────────────────
 export function PointProvider({ children }) {
-  const { user } = useAuth();
-  const [userPoints, setUserPoints] = useState(0);
-  const [globalDonated, setGlobalDonated] = useState(0);
-  const [goalAmount, setGoalAmount] = useState(100000); // 기본 목표액
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { user, profile, refreshProfile } = useAuth();
 
-  // 사용자 포인트 구독
+  const [globalData, setGlobalData] = useState(DEFAULT_GLOBAL);
+  const [globalLoading, setGlobalLoading] = useState(true);
+
+  // points/global 실시간 구독
   useEffect(() => {
-    if (!user) {
-      setUserPoints(0);
-      setHistory([]);
-      return;
-    }
-
-    setLoading(true);
-
-    // 사용자 포인트 구독
-    const userRef = doc(db, "users", user.uid);
-    const unsubscribeUser = onSnapshot(
-      userRef,
-      snapshot => {
-        try {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            setUserPoints(data.totalPoints || 0);
-          }
-          setError(null);
-        } catch (err) {
-          console.error("[PointContext] 사용자 포인트 로드 실패:", err);
-          setError(err);
-        } finally {
-          setLoading(false);
-        }
+    const unsub = onSnapshot(
+      doc(db, "points", "global"),
+      snap => {
+        setGlobalData(
+          snap.exists() ? { ...DEFAULT_GLOBAL, ...snap.data() } : DEFAULT_GLOBAL
+        );
+        setGlobalLoading(false);
       },
       err => {
-        console.error("[PointContext] 사용자 포인트 구독 에러:", err);
-        setError(err);
-        setLoading(false);
+        console.error("[PointContext] points/global 구독 실패:", err);
+        setGlobalLoading(false);
       }
     );
-
-    return () => unsubscribeUser();
-  }, [user]);
-
-  // 전역 기부 포인트 구독
-  useEffect(() => {
-    const globalRef = doc(db, "points", "global");
-
-    const unsubscribeGlobal = onSnapshot(
-      globalRef,
-      snapshot => {
-        try {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            setGlobalDonated(data.totalDonated || 0);
-            setGoalAmount(data.goalAmount || 100000);
-          }
-          setError(null);
-        } catch (err) {
-          console.error("[PointContext] 전역 포인트 로드 실패:", err);
-          setError(err);
-        }
-      },
-      err => {
-        console.error("[PointContext] 전역 포인트 구독 에러:", err);
-        setError(err);
-      }
-    );
-
-    return () => unsubscribeGlobal();
+    return () => unsub();
   }, []);
 
   /**
-   * 오늘 해당 행동으로 포인트를 얻을 수 있는지 확인
-   * @param {string} action - 'read' | 'memo' | 'meeting-post' | 'board-post'
+   * 오늘 해당 활동 포인트를 받을 수 있는지 확인
+   * @param {'reading_check'|'memo'|'meeting_post'|'board_post'} type
    * @returns {boolean}
    */
-  const canEarnToday = async action => {
-    if (!user || !POINT_RULES[action]) return false;
-
-    try {
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) return true; // 신규 사용자
-
-      const today = new Date().toISOString().split("T")[0];
-      const lastPointDate = userSnap.data().lastPointDate;
-
-      // lastPointDate가 다른 날이면 포인트 재설정
-      if (lastPointDate !== today) {
-        return true;
-      }
-
-      // 같은 날이면, 해당 action의 일일 제한 확인 (여기서는 단순화: 1회만 가능)
-      // 실제로는 pointHistory를 더 자세히 관리해야 함
-      return false;
-    } catch (err) {
-      console.error("[PointContext] canEarnToday 실패:", err);
-      return false;
-    }
-  };
+  const canEarnToday = useCallback(
+    type => {
+      if (!profile) return false;
+      const today = new Date().toISOString().slice(0, 10);
+      const lastDates = profile.lastPointDates || {};
+      return lastDates[type] !== today;
+    },
+    [profile]
+  );
 
   /**
-   * 포인트 추가 (일일 제한 체크 포함)
-   * @param {string} action - 'read' | 'memo' | 'meeting-post' | 'board-post'
-   * @param {string} bookId - (선택) 관련 도서 ID
-   * @returns {boolean} 포인트 추가 성공 여부
+   * 포인트 적립
+   * - Firestore 트랜잭션으로 users/{uid} + points/global 원자 업데이트
+   * - 하루 1회 제한: lastPointDates.{type} 비교
+   * - 첫 적립 시 participantCount 증가
+   * @param {'reading_check'|'memo'|'meeting_post'|'board_post'} type
    */
-  const addPoints = async (action, bookId = null) => {
-    if (!user) {
-      throw new Error("사용자가 로그인하지 않았습니다.");
-    }
+  const addPoint = useCallback(
+    async type => {
+      if (!user) throw new Error("로그인이 필요합니다.");
 
-    if (!POINT_RULES[action]) {
-      throw new Error("유효하지 않은 행동입니다.");
-    }
+      const pts = POINT_VALUES[type];
+      if (!pts) throw new Error(`알 수 없는 포인트 타입: ${type}`);
 
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const { points } = POINT_RULES[action];
+      const today = new Date().toISOString().slice(0, 10);
+      const lastDates = profile?.lastPointDates || {};
+
+      // 이미 오늘 해당 타입의 포인트를 획득한 경우
+      if (lastDates[type] === today) {
+        return { alreadyEarned: true, type };
+      }
 
       const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
+      const globalRef = doc(db, "points", "global");
 
-      // 사용자 첫 생성 시 기초 데이터 설정
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          totalPoints: points,
-          lastPointDate: today,
-          nickname: user.displayName || user.email?.split("@")[0] || "User",
-          email: user.email,
-          isOnboarded: false,
-          genres: [],
+      await runTransaction(db, async tx => {
+        const [userSnap, gSnap] = await Promise.all([
+          tx.get(userRef),
+          tx.get(globalRef),
+        ]);
+
+        const currentPts = userSnap.exists()
+          ? userSnap.data().totalPoints || 0
+          : 0;
+        const isFirstEarn = currentPts === 0;
+
+        // 1. 유저 데이터 업데이트
+        tx.update(userRef, {
+          totalPoints: currentPts + pts,
+          lastPointDate: today, // 전체 기준 최신 포인트 획득일
+          [`lastPointDates.${type}`]: today, // 타입별 최신 획득일
         });
-      } else {
-        const data = userSnap.data();
-        const lastPointDate = data.lastPointDate;
 
-        // 다른 날짜이면 포인트 추가 가능
-        if (lastPointDate !== today) {
-          await updateDoc(userRef, {
-            totalPoints: increment(points),
-            lastPointDate: today,
-          });
+        // 2. 글로벌 데이터 업데이트
+        if (gSnap.exists()) {
+          const gData = gSnap.data();
+          const update = {
+            totalDonated: (gData.totalDonated || 0) + pts,
+            updatedAt: serverTimestamp(),
+          };
+          if (isFirstEarn) {
+            update.participantCount = (gData.participantCount || 0) + 1;
+          }
+          tx.update(globalRef, update);
         } else {
-          // 같은 날이면 추가 불가 (간단한 구현, 실제로는 더 정교한 히스토리 필요)
-          return false;
+          tx.set(globalRef, {
+            totalDonated: pts,
+            goalAmount: 100_000,
+            participantCount: 1,
+            donations: {},
+            updatedAt: serverTimestamp(),
+          });
         }
-      }
-
-      // 전역 기부 포인트 업데이트
-      const globalRef = doc(db, "points", "global");
-      const globalSnap = await getDoc(globalRef);
-
-      if (globalSnap.exists()) {
-        await updateDoc(globalRef, {
-          totalDonated: increment(points),
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        await setDoc(globalRef, {
-          totalDonated: points,
-          goalAmount: 100000,
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      return true;
-    } catch (err) {
-      console.error("[PointContext] 포인트 추가 실패:", err);
-      setError(err);
-      throw err;
-    }
-  };
-
-  /**
-   * 포인트 기부 (사용자 포인트 차감 및 기부액 증가)
-   * @param {number} amount - 기부 포인트
-   */
-  const donate = async amount => {
-    if (!user) {
-      throw new Error("사용자가 로그인하지 않았습니다.");
-    }
-
-    if (amount <= 0) {
-      throw new Error("0 이상의 포인트를 입력하세요.");
-    }
-
-    if (userPoints < amount) {
-      throw new Error("포인트가 부족합니다.");
-    }
-
-    try {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        totalPoints: increment(-amount),
       });
 
-      const globalRef = doc(db, "points", "global");
-      await updateDoc(globalRef, {
-        totalDonated: increment(amount),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.error("[PointContext] 기부 실패:", err);
-      setError(err);
-      throw err;
-    }
-  };
+      // 트랜잭션 성공 후 AuthContext의 프로필 정보 최신화
+      if (typeof refreshProfile === "function") {
+        await refreshProfile();
+      }
+
+      return { awarded: pts, type };
+    },
+    [user, profile, refreshProfile]
+  );
 
   /**
-   * 포인트 데이터 재로드
+   * 기부처 선택
+   * - users/{uid}.preferredCharity 업데이트
+   * - points/global.donations 맵에서 이전 기부처 포인트 제거, 새 기부처에 추가
+   * @param {'reading_foundation'|'childrens_foundation'|'disability_library'} charityId
    */
-  const refreshPoints = async () => {
-    if (!user) return;
+  const donateTo = useCallback(
+    async charityId => {
+      if (!user) throw new Error("로그인이 필요합니다.");
 
-    try {
+      const oldCharity = profile?.preferredCharity;
+      if (oldCharity === charityId) return { unchanged: true };
+
+      const myPts = profile?.totalPoints || 0;
       const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        setUserPoints(userSnap.data().totalPoints || 0);
-      }
-
       const globalRef = doc(db, "points", "global");
-      const globalSnap = await getDoc(globalRef);
 
-      if (globalSnap.exists()) {
-        setGlobalDonated(globalSnap.data().totalDonated || 0);
-        setGoalAmount(globalSnap.data().goalAmount || 100000);
+      await runTransaction(db, async tx => {
+        const gSnap = await tx.get(globalRef);
+        const gData = gSnap.exists() ? gSnap.data() : {};
+        const donations = { ...(gData.donations || {}) };
+
+        // 이전 기부처에서 내 포인트만큼 차감하고 새 기부처에 가산
+        if (oldCharity) {
+          donations[oldCharity] = Math.max(
+            0,
+            (donations[oldCharity] || 0) - myPts
+          );
+        }
+        donations[charityId] = (donations[charityId] || 0) + myPts;
+
+        tx.update(userRef, { preferredCharity: charityId });
+
+        if (gSnap.exists()) {
+          tx.update(globalRef, { donations, updatedAt: serverTimestamp() });
+        } else {
+          tx.set(globalRef, {
+            totalDonated: 0,
+            goalAmount: 100_000,
+            participantCount: 0,
+            donations,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      });
+
+      if (typeof refreshProfile === "function") {
+        await refreshProfile();
       }
 
-      setError(null);
-    } catch (err) {
-      console.error("[PointContext] 포인트 재로드 실패:", err);
-      setError(err);
-    }
-  };
+      return { success: true, charityId };
+    },
+    [user, profile, refreshProfile]
+  );
 
   const value = {
-    userPoints,
-    globalDonated,
-    goalAmount,
-    history,
-    loading,
-    error,
-    addPoints,
-    donate,
+    myPoints: profile?.totalPoints ?? 0,
+    lastPointDates: profile?.lastPointDates ?? {},
+    preferredCharity: profile?.preferredCharity ?? null,
+    globalData,
+    globalLoading,
     canEarnToday,
-    refreshPoints,
+    addPoint,
+    donateTo,
   };
 
   return (
@@ -314,13 +230,14 @@ export function PointProvider({ children }) {
 
 /**
  * usePoint 커스텀 훅
+ * PointProvider 하위에서만 사용 가능
  */
 export function usePoint() {
-  const context = useContext(PointContext);
-  if (context === undefined) {
+  const ctx = useContext(PointContext);
+  if (ctx === undefined) {
     throw new Error("usePoint는 PointProvider 하위에서 사용해야 합니다.");
   }
-  return context;
+  return ctx;
 }
 
 export default PointContext;
