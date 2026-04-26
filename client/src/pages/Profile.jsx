@@ -1,60 +1,132 @@
 // Booklog Profile — 「따뜻한 라이브러리」
-// PRD.md §8 07. Profile (예진 담당 → 민서 구현)
-// - Firebase Auth 유저 정보 (닉네임, 이메일)
-// - Firestore users/{uid} 기반 데이터
-// - 독서 현황 통계 (완독 / 읽는중 / 연속일 / 페이지)
-// - 장르별 독서 비율 바 차트 (profile.genres 기반)
-// - 프로필 수정 (닉네임 → Firestore + Firebase Auth 동기화)
-// - 로그아웃 (signOut → /auth 리다이렉트)
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LogOut, Edit3, BookOpen, Flame, TrendingUp, Award,
-  ChevronRight, ArrowLeft, Camera, Loader2,
+  ArrowLeft, Camera, Loader2, X, Star, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { updateProfile } from 'firebase/auth';
+import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/firebase/config';
 import { logout } from '@/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { MOCK_BOOKS, MOCK_POINT_HISTORY } from '@/lib/mockData';
 
 const PROFILE_BG =
   'https://d2xsxph8kpxj0f.cloudfront.net/310519663584969128/K9LDMhfUcVKdtMjF2S9GdE/booklog-profile-bg-Sfmo955ETw2dHjqsmMB9Wh.webp';
 
-// ─── 연속 독서일 계산 ─────────────────────────────────────
+const CHART_COLORS = [
+  'var(--color-primary)',
+  'oklch(0.72 0.1 80)',
+  'var(--color-accent-foreground)',
+];
+
+const MONTH_BAR_COLORS = {
+  current: 'var(--color-primary)',
+  previous: 'oklch(0.74 0.08 72)',
+  empty: 'var(--color-secondary)',
+};
+
+const GENRE_COLORS = [
+  'oklch(0.68 0.12 38)',
+  'oklch(0.72 0.09 145)',
+  'oklch(0.82 0.11 82)',
+  'oklch(0.78 0.10 55)',
+  'oklch(0.76 0.08 190)',
+];
+
+const GENRE_LIST = [
+  { id: '소설',    emoji: '📖', label: '소설'    },
+  { id: '인문',    emoji: '🏛️', label: '인문'    },
+  { id: '과학',    emoji: '🔬', label: '과학'    },
+  { id: '경제',    emoji: '📈', label: '경제'    },
+  { id: '자기계발', emoji: '🚀', label: '자기계발' },
+  { id: '예술',    emoji: '🎨', label: '예술'    },
+  { id: '역사',    emoji: '🏺', label: '역사'    },
+  { id: '아동',    emoji: '🎠', label: '아동'    },
+];
+
+const POINT_CAT_STYLE = {
+  '출석 체크':        { color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
+  '연속 독서 보너스': { color: 'text-orange-500',  bg: 'bg-orange-500/10'  },
+  '감상 글 작성':     { color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+  '완독 보상':        { color: 'text-amber-500',   bg: 'bg-amber-500/10'   },
+  '독서 모임 참여':   { color: 'text-violet-600',  bg: 'bg-violet-500/10'  },
+  '댓글 작성':        { color: 'text-teal-500',    bg: 'bg-teal-500/10'    },
+  '책 등록':          { color: 'text-primary',     bg: 'bg-primary/10'     },
+};
+
+const monthKeyFromDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
+const getBookMonthKeys = (book) => {
+  const keys = new Set();
+  (book.checkedDates || []).forEach(date => {
+    if (typeof date === 'string' && date.length >= 7) keys.add(date.slice(0, 7));
+  });
+  [book.endDate, book.lastReadDate].forEach(date => {
+    if (typeof date === 'string' && date.length >= 7) keys.add(date.slice(0, 7));
+  });
+  return keys;
+};
+
+// ─── 헬퍼 함수 ────────────────────────────────────────────────────────────
 function calculateStreak(shelf) {
+  const todayStr = new Date().toISOString().slice(0, 10);
   const all = new Set();
-  shelf.forEach(b => (b.checkedDates || []).forEach(d => all.add(d)));
+  shelf.forEach(b => (b.checkedDates || []).forEach(d => { if (d <= todayStr) all.add(d); }));
   if (!all.size) return 0;
-
-  const sorted = [...all].sort().reverse(); // newest first
-  const today = new Date().toISOString().slice(0, 10);
+  const sorted = [...all].sort().reverse();
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  if (sorted[0] !== today && sorted[0] !== yesterday) return 0;
-
+  if (sorted[0] !== todayStr && sorted[0] !== yesterday) return 0;
   let count = 1;
   for (let i = 1; i < sorted.length; i++) {
-    const diff = Math.round(
-      (new Date(sorted[i - 1]) - new Date(sorted[i])) / 86_400_000
-    );
+    const diff = Math.round((new Date(sorted[i - 1]) - new Date(sorted[i])) / 86_400_000);
     if (diff === 1) count++;
     else break;
   }
   return count;
 }
 
-// ─── 아바타 컴포넌트 (이미지 오류 시 이니셜 폴백) ──────────
-function Avatar({ src, name, size = 80, className = '' }) {
+function calculateLongestStreak(shelf) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const all = new Set();
+  shelf.forEach(b => (b.checkedDates || []).forEach(d => { if (d <= todayStr) all.add(d); }));
+  if (!all.size) return 0;
+  const sorted = [...all].sort();
+  let longest = 1, current = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = Math.round((new Date(sorted[i]) - new Date(sorted[i - 1])) / 86_400_000);
+    if (diff === 1) { current++; if (current > longest) longest = current; }
+    else current = 1;
+  }
+  return longest;
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+}
+
+function fmtMonth(yyyyMM) {
+  const [y, m] = yyyyMM.split('-');
+  return `${y}년 ${Number(m)}월`;
+}
+
+// ─── 서브 컴포넌트 ─────────────────────────────────────────────────────────
+function AvatarImg({ src, name, size = 80, className = '' }) {
   const [err, setErr] = useState(false);
   const initials = (name || '?')[0].toUpperCase();
   const style = { width: size, height: size, fontSize: size * 0.38 };
-
   if (!src || err) {
     return (
       <div
@@ -67,8 +139,7 @@ function Avatar({ src, name, size = 80, className = '' }) {
   }
   return (
     <img
-      src={src}
-      alt={name}
+      src={src} alt={name}
       className={`rounded-full object-cover border-4 border-background shadow-lg flex-shrink-0 ${className}`}
       style={style}
       onError={() => setErr(true)}
@@ -76,22 +147,97 @@ function Avatar({ src, name, size = 80, className = '' }) {
   );
 }
 
-// ─── 메인 컴포넌트 ────────────────────────────────────────
+function StarRow({ count }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star
+          key={i} size={11}
+          fill={i <= (count || 0) ? 'currentColor' : 'none'}
+          className={i <= (count || 0) ? 'text-amber-400' : 'text-muted-foreground/30'}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BookThumb({ src, title }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) {
+    return (
+      <div className="w-10 h-14 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+        <BookOpen size={14} className="text-primary/50" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src} alt={title}
+      className="w-10 h-14 object-cover rounded-md flex-shrink-0"
+      onError={() => setErr(true)}
+    />
+  );
+}
+
+function CenterModal({ open, onClose, title, children }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
+      {/* 반투명 배경 */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      {/* 다이얼로그 */}
+      <div className="relative bg-card rounded-2xl w-full max-w-sm max-h-[78vh] flex flex-col shadow-2xl scale-in">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border/40 flex-shrink-0">
+          <h2
+            className="text-base font-bold"
+            style={{ fontFamily: "'Noto Serif KR', serif" }}
+          >
+            {title}
+          </h2>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        {/* 스크롤 가능한 콘텐츠 */}
+        <div className="overflow-y-auto scrollbar-booklist flex-1 px-5 py-4 overscroll-contain">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
 
-  const [view, setView]               = useState('main'); // 'main' | 'edit'
-  const [shelf, setShelf]             = useState([]);
+  const [view, setView]                 = useState('main');
+  const [shelf, setShelf]               = useState([]);
   const [shelfLoading, setShelfLoading] = useState(true);
   const [editNickname, setEditNickname] = useState('');
-  const [saving, setSaving]           = useState(false);
-  const [loggingOut, setLoggingOut]   = useState(false);
-  const [bgErr, setBgErr]             = useState(false);
+  const [saving, setSaving]             = useState(false);
+  const [loggingOut, setLoggingOut]     = useState(false);
+  const [bgErr, setBgErr]               = useState(false);
+  const [activeModal, setActiveModal]   = useState(null); // null | 'books' | 'done' | 'streak' | 'pages' | 'points'
+  const [activeBar, setActiveBar]       = useState(null); // null | '완독' | '읽는 중' | '읽고 싶음'
+  const [genreEditOpen, setGenreEditOpen] = useState(false);
+  const [tempGenres, setTempGenres]       = useState([]);
+  const [savingGenres, setSavingGenres]   = useState(false);
+  const [pwResetSent, setPwResetSent]     = useState(false);
+  const [sendingReset, setSendingReset]   = useState(false);
+  const [activeGenre, setActiveGenre]     = useState(null);
 
-  // ── Firestore 서재 로드 ───────────────────────────────
+  // Firestore 서재 로드
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setShelfLoading(false); return; }
     getDocs(collection(db, 'users', user.uid, 'shelf'))
       .then(snap => setShelf(snap.docs.map(d => d.data())))
       .catch(err => console.error('[Profile] shelf 로드 실패:', err))
@@ -103,30 +249,118 @@ export default function Profile() {
     setEditNickname(profile?.nickname || user?.displayName || '');
   }, [profile, user]);
 
-  // ── 파생 통계 ─────────────────────────────────────────
-  const doneCount    = shelf.filter(b => b.status === 'done').length;
-  const readingCount = shelf.filter(b => b.status === 'reading').length;
-  const wantCount    = shelf.filter(b => b.status === 'want').length;
-  const totalBooks   = shelf.length;
-  const totalPages   = shelf.reduce((s, b) => s + (b.currentPage || 0), 0);
-  const streak       = calculateStreak(shelf);
+  // 서재 데이터 — 실제 데이터 없으면 mock 폴백
+  const effectiveShelf = shelfLoading ? [] : (shelf.length > 0 ? shelf : MOCK_BOOKS);
 
-  // 독서 현황 바 차트 데이터
+  // 파생 통계
+  const doneCount     = effectiveShelf.filter(b => b.status === 'done').length;
+  const readingCount  = effectiveShelf.filter(b => b.status === 'reading').length;
+  const wantCount     = effectiveShelf.filter(b => b.status === 'want').length;
+  const totalBooks    = effectiveShelf.length;
+  const totalPages    = effectiveShelf.reduce((s, b) => s + (b.currentPage || 0), 0);
+
+  // 실제 서재에 checkedDates / genre 가 없으면 MOCK_BOOKS 로 대체
+  const hasCheckedDates = !shelfLoading && shelf.some(b => b.checkedDates?.length > 0);
+  const hasGenreData    = !shelfLoading && shelf.some(b => b.genre?.length > 0);
+  const streakShelf     = hasCheckedDates ? effectiveShelf : MOCK_BOOKS;
+  const genreShelf      = hasGenreData    ? effectiveShelf : MOCK_BOOKS;
+
+  const streak        = calculateStreak(streakShelf);
+  const longestStreak = calculateLongestStreak(streakShelf);
+
+  // 독서 날짜 집합 (미래 날짜 제외, streakShelf 기준)
+  const allReadDates = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const s = new Set();
+    streakShelf.forEach(b => (b.checkedDates || []).forEach(d => { if (d <= todayStr) s.add(d); }));
+    return s;
+  }, [streakShelf]);
+
+  // 이번 달 독서한 날
+  const thisMonth     = new Date().toISOString().slice(0, 7);
+  const thisMonthDays = [...allReadDates].filter(d => d.startsWith(thisMonth)).length;
+
+  const recentMonthKeys = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const date = new Date(today.getFullYear(), today.getMonth() - (5 - i), 1);
+      return monthKeyFromDate(date);
+    });
+  }, []);
+
+  const monthlyShelf = useMemo(() => {
+    if (shelfLoading) return [];
+    if (shelf.length === 0) return MOCK_BOOKS;
+
+    const realMonthKeys = new Set();
+    shelf.forEach(book => {
+      getBookMonthKeys(book).forEach(key => realMonthKeys.add(key));
+    });
+
+    const supplementMonthKeys = new Set(
+      recentMonthKeys.filter(key => !realMonthKeys.has(key))
+    );
+    const supplementBooks = MOCK_BOOKS.filter(book =>
+      [...getBookMonthKeys(book)].some(key => supplementMonthKeys.has(key))
+    );
+
+    return [...shelf, ...supplementBooks];
+  }, [recentMonthKeys, shelf, shelfLoading]);
+
+  // 장르 분포 (genreShelf 기준 — 실제 데이터 없으면 MOCK_BOOKS)
+  const genreData = useMemo(() => {
+    const counts = {};
+    genreShelf.forEach(b => {
+      (b.genre || []).forEach(g => { counts[g] = (counts[g] || 0) + 1; });
+    });
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5);
+  }, [genreShelf]);
+
+  // 최근 28일 (4주) 날짜 배열
+  const last28Days = Array.from({ length: 28 }, (_, i) => {
+    const d = new Date(Date.now() - (27 - i) * 86_400_000);
+    return d.toISOString().slice(0, 10);
+  });
+
+  // 바 차트 데이터
   const statusChartData = [
-    { label: '완독',     count: doneCount    },
-    { label: '읽는 중', count: readingCount  },
-    { label: '읽고 싶음', count: wantCount   },
-  ];
-  const CHART_COLORS = [
-    'var(--color-primary)',
-    'oklch(0.72 0.1 80)',  // amber
-    'var(--color-accent-foreground)',
+    { label: '완독',    count: doneCount    },
+    { label: '읽는 중', count: readingCount },
+    { label: '읽고 싶음', count: wantCount  },
   ];
 
-  // 관심 장르 (온보딩 선택)
-  const genres = profile?.genres || [];
+  const monthlyReadingData = useMemo(() => {
+    const today = new Date();
+    const currentMonthKey = monthKeyFromDate(today);
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const date = new Date(today.getFullYear(), today.getMonth() - (5 - i), 1);
+      const key = monthKeyFromDate(date);
+      return {
+        key,
+        label: `${date.getMonth() + 1}월`,
+        count: 0,
+        books: [],
+        isCurrent: key === currentMonthKey,
+      };
+    });
+    const monthMap = new Map(months.map(month => [month.key, month]));
 
-  // 표시 값
+    monthlyShelf.forEach(book => {
+      getBookMonthKeys(book).forEach(key => {
+        const month = monthMap.get(key);
+        if (!month) return;
+        month.count += 1;
+        month.books.push(book);
+      });
+    });
+
+    return months;
+  }, [monthlyShelf]);
+
+  const genres      = profile?.genres || [];
   const displayName = profile?.nickname || user?.displayName || user?.email?.split('@')[0] || '독서인';
   const email       = user?.email || '';
   const joinDate    = profile?.createdAt?.toDate
@@ -135,13 +369,32 @@ export default function Profile() {
       })
     : '';
 
-  // ── 프로필 저장 ──────────────────────────────────────
+  // 포인트 (실제 데이터 없으면 mock 합계)
+  const mockPointTotal = MOCK_POINT_HISTORY.reduce((s, p) => s + p.points, 0);
+  const displayPoints  = (profile?.totalPoints ?? 0) > 0 ? profile.totalPoints : mockPointTotal;
+
+  // 바 차트 클릭 — 선택된 카테고리 책 목록
+  const activeMonthData = activeBar ? monthlyReadingData.find(month => month.key === activeBar) : null;
+  const activeBarBooks  = activeMonthData?.books || [];
+  const activeGenreBooks = activeGenre ? genreShelf.filter(b => (b.genre || []).includes(activeGenre)) : [];
+
+  // 포인트 내역 월별 그룹
+  const pointsByMonth = useMemo(() => {
+    const map = {};
+    MOCK_POINT_HISTORY.forEach(p => {
+      const month = p.date.slice(0, 7);
+      if (!map[month]) map[month] = [];
+      map[month].push(p);
+    });
+    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
+  }, []);
+
+  // ── 프로필 저장 ────────────────────────────────────────────────────────
   const handleSave = async () => {
     const trimmed = editNickname.trim();
-    if (!trimmed)         { toast.error('닉네임을 입력해주세요.'); return; }
+    if (!trimmed)            { toast.error('닉네임을 입력해주세요.'); return; }
     if (trimmed.length < 2)  { toast.error('닉네임은 2자 이상이어야 합니다.'); return; }
     if (trimmed.length > 12) { toast.error('닉네임은 12자 이하로 입력해주세요.'); return; }
-
     setSaving(true);
     try {
       await updateProfile(auth.currentUser, { displayName: trimmed });
@@ -157,21 +410,76 @@ export default function Profile() {
     }
   };
 
-  // ── 로그아웃 ─────────────────────────────────────────
+  // ── 선호 장르 저장 ─────────────────────────────────────────────────────
+  const handleSaveGenres = async () => {
+    if (tempGenres.length === 0) { toast.error('최소 1개 이상의 장르를 선택해주세요.'); return; }
+    setSavingGenres(true);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { genres: tempGenres });
+      await refreshProfile();
+      toast.success('선호 장르가 수정되었습니다!');
+      setGenreEditOpen(false);
+    } catch (err) {
+      console.error('[Profile] 장르 저장 실패:', err);
+      toast.error('저장에 실패했어요. 다시 시도해주세요.');
+    } finally {
+      setSavingGenres(false);
+    }
+  };
+
+  // ── 비밀번호 재설정 ────────────────────────────────────────────────────
+  const handlePasswordReset = async () => {
+    if (!user?.email) return;
+    setSendingReset(true);
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      setPwResetSent(true);
+      toast.success('비밀번호 재설정 이메일을 보냈어요!');
+    } catch (err) {
+      console.error('[Profile] 비밀번호 재설정 실패:', err);
+      toast.error('이메일 발송에 실패했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSendingReset(false);
+    }
+  };
+
+  // ── 로그아웃 ───────────────────────────────────────────────────────────
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
       await logout();
       navigate('/auth', { replace: true });
-    } catch (err) {
+    } catch {
       toast.error('로그아웃에 실패했어요.');
       setLoggingOut(false);
     }
   };
 
-  // ════════════════════════════════════════════════════
-  // 편집 화면
-  // ════════════════════════════════════════════════════
+  // ── 통계 카드 설정 ─────────────────────────────────────────────────────
+  const STAT_CARDS = [
+    {
+      key: 'books', label: '총 도서',
+      value: shelfLoading ? '…' : `${totalBooks}권`,
+      icon: BookOpen, color: 'text-primary',
+    },
+    {
+      key: 'done', label: '완독',
+      value: shelfLoading ? '…' : `${doneCount}권`,
+      icon: Award, color: 'text-amber-500',
+    },
+    {
+      key: 'streak', label: '연속',
+      value: shelfLoading ? '…' : `${streak}일`,
+      icon: Flame, color: 'text-orange-500',
+    },
+    {
+      key: 'pages', label: '기록 페이지',
+      value: shelfLoading ? '…' : (totalPages > 999 ? `${(totalPages / 1000).toFixed(1)}k` : `${totalPages}p`),
+      icon: TrendingUp, color: 'text-accent-foreground',
+    },
+  ];
+
+  // ── 편집 화면 ──────────────────────────────────────────────────────────
   if (view === 'edit') {
     return (
       <>
@@ -183,15 +491,15 @@ export default function Profile() {
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-lg font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>
-            프로필 수정
+            개인정보 수정
           </h1>
         </div>
 
-        <div className="px-4 pt-6 animate-fade-in-up space-y-5 max-w-lg pb-8">
-          {/* 아바타 */}
-          <div className="flex flex-col items-center py-4">
+        <div className="px-4 pt-6 animate-fade-in-up max-w-lg pb-10 space-y-8">
+          {/* ── 프로필 사진 ─────────────────────────────────── */}
+          <div className="flex flex-col items-center py-2">
             <div className="relative">
-              <Avatar src={user?.photoURL} name={displayName} size={88} />
+              <AvatarImg src={user?.photoURL} name={displayName} size={88} />
               <button
                 disabled
                 title="사진 변경 기능은 준비 중입니다"
@@ -200,47 +508,339 @@ export default function Profile() {
                 <Camera size={14} />
               </button>
             </div>
+            <p className="text-[11px] text-muted-foreground mt-2">프로필 사진 변경은 준비 중이에요</p>
           </div>
 
-          {/* 닉네임 */}
-          <div className="space-y-1.5">
-            <Label className="text-sm font-medium">닉네임</Label>
-            <Input
-              value={editNickname}
-              onChange={e => setEditNickname(e.target.value)}
-              placeholder="2~12자 입력"
-              maxLength={12}
-              className="h-11 bg-secondary border-none rounded-xl"
-            />
-            <p className="text-xs text-muted-foreground text-right">
-              {editNickname.length} / 12
-            </p>
-          </div>
+          {/* ── 기본 정보 ───────────────────────────────────── */}
+          <section>
+            <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-1.5">
+              <span className="w-1 h-4 rounded-full bg-primary inline-block" />
+              기본 정보
+            </h2>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">닉네임</Label>
+                <Input
+                  value={editNickname}
+                  onChange={e => setEditNickname(e.target.value)}
+                  placeholder="2~12자 입력"
+                  maxLength={12}
+                  className="h-11 bg-secondary border-none rounded-xl"
+                />
+                <p className="text-xs text-muted-foreground text-right">{editNickname.length} / 12</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">이메일</Label>
+                <Input
+                  value={email} disabled
+                  className="h-11 bg-secondary border-none rounded-xl opacity-60"
+                />
+                <p className="text-xs text-muted-foreground">이메일은 변경할 수 없습니다.</p>
+              </div>
+              <Button onClick={handleSave} disabled={saving} className="w-full h-11 rounded-xl font-semibold">
+                {saving ? <><Loader2 size={16} className="animate-spin mr-2" />저장 중...</> : '저장하기'}
+              </Button>
+            </div>
+          </section>
 
-          {/* 이메일 (읽기 전용) */}
-          <div className="space-y-1.5">
-            <Label className="text-sm font-medium">이메일</Label>
-            <Input
-              value={email}
-              disabled
-              className="h-11 bg-secondary border-none rounded-xl opacity-60"
-            />
-            <p className="text-xs text-muted-foreground">이메일은 변경할 수 없습니다.</p>
-          </div>
+          {/* ── 보안 설정 ───────────────────────────────────── */}
+          <section>
+            <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-1.5">
+              <span className="w-1 h-4 rounded-full bg-primary inline-block" />
+              보안 설정
+            </h2>
+            <div className="book-card p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">비밀번호 변경</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {pwResetSent
+                      ? `${email}로 재설정 링크를 보냈어요. 이메일을 확인해주세요.`
+                      : '가입 이메일로 비밀번호 재설정 링크를 보내드려요.'}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePasswordReset}
+                  disabled={sendingReset || pwResetSent}
+                  className="flex-shrink-0 rounded-lg text-xs h-9"
+                >
+                  {sendingReset
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : pwResetSent ? '전송됨 ✓' : '이메일 전송'}
+                </Button>
+              </div>
+            </div>
+          </section>
 
-          <Button onClick={handleSave} disabled={saving} className="w-full h-11 rounded-xl font-semibold">
-            {saving ? (
-              <><Loader2 size={16} className="animate-spin mr-2" />저장 중...</>
-            ) : '저장하기'}
-          </Button>
+          {/* ── 계정 관리 ───────────────────────────────────── */}
+          <section>
+            <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-1.5">
+              <span className="w-1 h-4 rounded-full bg-destructive inline-block" />
+              계정 관리
+            </h2>
+            <div className="book-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">로그아웃</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">현재 기기에서 로그아웃해요.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="flex-shrink-0 rounded-lg text-xs h-9 text-destructive border-destructive/30 hover:bg-destructive/5"
+                >
+                  {loggingOut ? <Loader2 size={13} className="animate-spin" /> : '로그아웃'}
+                </Button>
+              </div>
+            </div>
+          </section>
         </div>
       </>
     );
   }
 
-  // ════════════════════════════════════════════════════
-  // 메인 화면
-  // ════════════════════════════════════════════════════
+  // ── 모달 콘텐츠 정의 ───────────────────────────────────────────────────
+  const today = new Date().toISOString().slice(0, 10);
+
+  const MODAL_CONFIG = {
+    // ── 총 도서 ──────────────────────────────────────────────────────────
+    books: {
+      title: `내 서재 전체 (${totalBooks}권)`,
+      content: (
+        <div className="space-y-6">
+          {[
+            { status: 'reading', label: '읽는 중',   color: 'text-primary'          },
+            { status: 'done',    label: '완독',       color: 'text-amber-500'        },
+            { status: 'want',    label: '읽고 싶음',  color: 'text-muted-foreground' },
+          ].map(({ status, label, color }) => {
+            const books = effectiveShelf.filter(b => b.status === status);
+            if (books.length === 0) return null;
+            return (
+              <div key={status}>
+                <p className={`text-xs font-semibold mb-2 ${color}`}>{label} ({books.length})</p>
+                <div>
+                  {books.map(b => {
+                    const pct = b.totalPage ? Math.round((b.currentPage / b.totalPage) * 100) : 0;
+                    return (
+                      <div key={b.id} className="flex items-center gap-3 py-2.5 border-b border-border/30 last:border-0">
+                        <BookThumb src={b.thumbnail} title={b.title} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold line-clamp-1">{b.title}</p>
+                          <p className="text-xs text-muted-foreground">{b.author}</p>
+                          {status === 'reading' && b.totalPage > 0 && (
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-[10px] text-muted-foreground w-8 text-right">{pct}%</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ),
+    },
+
+    // ── 완독 ─────────────────────────────────────────────────────────────
+    done: {
+      title: `완독한 책 (${doneCount}권)`,
+      content: effectiveShelf.filter(b => b.status === 'done').length === 0 ? (
+        <div className="flex flex-col items-center py-14 gap-3 text-center">
+          <Award size={36} className="text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground">아직 완독한 책이 없어요</p>
+        </div>
+      ) : (
+        <div>
+          {effectiveShelf
+            .filter(b => b.status === 'done')
+            .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''))
+            .map(b => (
+              <div key={b.id} className="flex items-start gap-3 py-3 border-b border-border/30 last:border-0">
+                <BookThumb src={b.thumbnail} title={b.title} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold line-clamp-1">{b.title}</p>
+                  <p className="text-xs text-muted-foreground mb-1.5">{b.author}</p>
+                  <StarRow count={b.rating} />
+                  {b.endDate && (
+                    <p className="text-[11px] text-muted-foreground mt-1">{fmtDate(b.endDate)} 완독</p>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-amber-500 flex-shrink-0 pt-1">
+                  {b.totalPage}p
+                </span>
+              </div>
+            ))}
+        </div>
+      ),
+    },
+
+    // ── 연속 독서 ─────────────────────────────────────────────────────────
+    streak: {
+      title: '연속 독서 기록',
+      content: (
+        <div>
+          {/* 요약 3가지 */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {[
+              { label: '현재 연속', value: `${streak}일`,        color: 'text-primary' },
+              { label: '최장 연속', value: `${longestStreak}일`, color: 'text-accent-foreground' },
+              { label: '이번달 독서일', value: `${thisMonthDays}일`, color: 'text-amber-600' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-secondary/60 rounded-xl p-3 text-center">
+                <p className={`text-lg font-bold ${color}`}>{value}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* 최근 4주 미니 캘린더 */}
+          <p className="text-xs font-semibold text-muted-foreground mb-2">최근 4주</p>
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {['일', '월', '화', '수', '목', '금', '토'].map(d => (
+              <div key={d} className="text-center text-[10px] text-muted-foreground">{d}</div>
+            ))}
+          </div>
+          {(() => {
+            const firstDay = new Date(last28Days[0]).getDay();
+            const cells = [...Array(firstDay).fill(null), ...last28Days];
+            return (
+              <div className="grid grid-cols-7 gap-1">
+                {cells.map((date, i) => {
+                  if (!date) return <div key={`pad-${i}`} />;
+                  const read    = allReadDates.has(date);
+                  const isToday = date === today;
+                  const day     = new Date(date).getDate();
+                  return (
+                    <div
+                      key={date}
+                      title={date}
+                      className={[
+                        'aspect-square rounded-full flex items-center justify-center text-[10px] font-medium transition-colors',
+                        read && isToday  ? 'bg-primary/75 text-primary-foreground font-bold border border-primary/45 shadow-sm ring-2 ring-primary/45 ring-offset-1'
+                        : read           ? 'bg-primary/18 text-primary font-semibold border border-primary/25 shadow-[0_1px_4px_rgba(184,92,56,0.18)]'
+                        : isToday        ? 'bg-primary/15 text-primary font-bold ring-2 ring-primary/40 ring-offset-1'
+                        :                  'bg-secondary/50 text-muted-foreground/50',
+                      ].join(' ')}
+                    >
+                      {day}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <p className="text-[10px] text-muted-foreground mt-3 text-center">
+            채워진 날은 독서 기록이 있는 날이에요
+          </p>
+        </div>
+      ),
+    },
+
+    // ── 기록 페이지 ───────────────────────────────────────────────────────
+    pages: {
+      title: `기록한 페이지 (${totalPages.toLocaleString()}p)`,
+      content: (
+        <div>
+          <div className="flex items-baseline gap-1.5 mb-5">
+            <p className="text-3xl font-bold text-primary">{totalPages.toLocaleString()}</p>
+            <span className="text-base font-semibold text-primary">p</span>
+            <span className="text-xs text-muted-foreground ml-1">지금까지 읽은 총 페이지</span>
+          </div>
+          <div>
+            {effectiveShelf
+              .filter(b => (b.currentPage || 0) > 0)
+              .sort((a, b) => (b.currentPage || 0) - (a.currentPage || 0))
+              .map(b => {
+                const pct = b.totalPage
+                  ? Math.min(100, Math.round((b.currentPage / b.totalPage) * 100))
+                  : 0;
+                return (
+                  <div key={b.id} className="py-3 border-b border-border/30 last:border-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-sm font-semibold line-clamp-1 flex-1 mr-3">{b.title}</p>
+                      <span className="text-xs font-semibold text-primary flex-shrink-0">
+                        {(b.currentPage || 0).toLocaleString()}p
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0 w-16 text-right">
+                        {b.currentPage}/{b.totalPage}p
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      ),
+    },
+
+    // ── 포인트 내역 ───────────────────────────────────────────────────────
+    points: {
+      title: '포인트 내역',
+      content: (
+        <div>
+          {/* 합계 */}
+          <div className="flex items-baseline gap-1.5 mb-6">
+            <p className="text-3xl font-bold text-amber-500">{displayPoints.toLocaleString()}</p>
+            <span className="text-base font-semibold text-amber-600">P</span>
+            <span className="text-xs text-muted-foreground ml-1">누적 포인트</span>
+          </div>
+
+          {/* 월별 내역 */}
+          <div className="space-y-6">
+            {pointsByMonth.map(([month, entries]) => (
+              <div key={month}>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">{fmtMonth(month)}</p>
+                <div>
+                  {entries.map(entry => {
+                    const catStyle = POINT_CAT_STYLE[entry.category] ?? { color: 'text-primary', bg: 'bg-primary/10' };
+                    return (
+                      <div key={entry.id} className="py-2.5 border-b border-border/30 last:border-0 space-y-1">
+                        {/* 1행: 카테고리 태그 + 포인트 */}
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap ${catStyle.bg} ${catStyle.color}`}>
+                            {entry.category}
+                          </span>
+                          <span className="text-sm font-bold text-amber-500">+{entry.points}P</span>
+                        </div>
+                        {/* 2행: 상세 내역 + 날짜 — 태그 좌측 패딩만큼 들여쓰기 */}
+                        <div className="flex items-center justify-between gap-3 pl-2.5">
+                          <p className="text-xs text-foreground/75 line-clamp-1 flex-1">{entry.detail}</p>
+                          <p className="text-[11px] text-muted-foreground flex-shrink-0">{fmtDate(entry.date)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground text-center mt-5">
+            포인트는 독서 활동을 통해 적립돼요
+          </p>
+        </div>
+      ),
+    },
+  };
+
+  // ── 메인 화면 ──────────────────────────────────────────────────────────
   return (
     <>
       {/* 프로필 배경 헤더 */}
@@ -256,89 +856,101 @@ export default function Profile() {
           <div className="w-full h-44" />
         ) : (
           <img
-            src={PROFILE_BG}
-            alt="프로필 배경"
+            src={PROFILE_BG} alt="프로필 배경"
             className="w-full h-44 object-cover"
             onError={() => setBgErr(true)}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/90" />
-
-        {/* 수정 버튼 */}
-        <div className="absolute top-4 right-4">
-          <button
-            onClick={() => setView('edit')}
-            className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-colors"
-            aria-label="프로필 수정"
-          >
-            <Edit3 size={16} />
-          </button>
-        </div>
       </div>
 
-      {/* 아바타 + 이름 */}
-      <div className="px-4 -mt-10 mb-6 animate-fade-in-up">
-        <div className="flex items-end gap-4 mb-3">
-          <Avatar src={user?.photoURL} name={displayName} size={80} />
-          <div className="pb-1 min-w-0">
-            <h1
-              className="text-2xl font-bold truncate"
-              style={{ fontFamily: "'Noto Serif KR', serif" }}
+      {/* 아바타 + 이름 + 장르 */}
+      <div className="px-4 -mt-10 mb-5 animate-fade-in-up">
+        {/* 아바타 · 이름 · 수정 버튼 행 */}
+        <div className="flex items-end gap-3 mb-3">
+          <AvatarImg src={user?.photoURL} name={displayName} size={76} />
+          <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h1
+                className="text-xl font-bold leading-tight truncate"
+                style={{ fontFamily: "'Noto Serif KR', serif" }}
+              >
+                {displayName}
+              </h1>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{email}</p>
+              {joinDate && (
+                <p className="text-xs text-muted-foreground">{joinDate} 가입</p>
+              )}
+            </div>
+            <button
+              onClick={() => setView('edit')}
+              className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary border border-border/70 rounded-full px-2.5 py-1 transition-colors mt-0.5"
+              aria-label="개인정보 수정"
             >
-              {displayName}
-            </h1>
-            <p className="text-xs text-muted-foreground truncate">{email}</p>
-            {joinDate && (
-              <p className="text-xs text-muted-foreground">{joinDate} 가입</p>
+              <Edit3 size={11} />
+              수정
+            </button>
+          </div>
+        </div>
+
+        {/* 선호 장르 박스 */}
+        <div className="bg-secondary/50 rounded-xl px-3 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold text-muted-foreground">선호 장르</p>
+            <button
+              onClick={() => { setTempGenres(genres); setGenreEditOpen(true); }}
+              className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:text-primary/80 font-medium transition-colors"
+            >
+              <Edit3 size={10} />
+              수정
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {genres.length > 0 ? (
+              genres.map(g => (
+                <span key={g} className="tag-pill bg-primary/10 text-primary text-xs border border-primary/20">
+                  {g}
+                </span>
+              ))
+            ) : (
+              <button
+                onClick={() => { setTempGenres([]); setGenreEditOpen(true); }}
+                className="text-xs text-primary/70 hover:text-primary font-medium transition-colors"
+              >
+                + 장르 선택하기
+              </button>
             )}
           </div>
         </div>
-
-        {/* 관심 장르 뱃지 (온보딩 선택) */}
-        {genres.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            {genres.map(g => (
-              <span key={g} className="tag-pill bg-primary/10 text-primary text-xs border border-primary/20">
-                {g}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="px-4 stagger-children pb-8">
-        {/* 독서 통계 그리드 */}
+        {/* 통계 카드 4개 — 클릭 가능 */}
         <div className="grid grid-cols-4 gap-3 mb-6">
-          {[
-            { label: '총 도서', value: shelfLoading ? '…' : `${totalBooks}권`,   icon: BookOpen,   color: 'text-primary' },
-            { label: '완독',   value: shelfLoading ? '…' : `${doneCount}권`,    icon: Award,      color: 'text-amber-500' },
-            { label: '연속',   value: shelfLoading ? '…' : `${streak}일`,       icon: Flame,      color: 'text-orange-500' },
-            {
-              label: '기록 페이지',
-              value: shelfLoading ? '…' : (totalPages > 999 ? `${(totalPages / 1000).toFixed(1)}k` : `${totalPages}p`),
-              icon: TrendingUp,
-              color: 'text-accent-foreground',
-            },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="book-card p-4 text-center">
+          {STAT_CARDS.map(({ key, label, value, icon: Icon, color }) => (
+            <button
+              key={key}
+              onClick={() => !shelfLoading && setActiveModal(key)}
+              className="book-card p-4 text-center cursor-pointer hover:shadow-md hover:scale-[1.04] transition-all active:scale-[0.97]"
+            >
               <Icon size={20} className={`${color} mx-auto mb-1.5`} />
               <p className="text-base font-bold">{value}</p>
               <p className="text-[11px] text-muted-foreground">{label}</p>
-            </div>
+            </button>
           ))}
         </div>
 
         {/* 독서 현황 바 차트 + 장르 분포 */}
-        <div className="grid grid-cols-1 gap-5 mb-5 lg:grid-cols-2">
-          {/* 독서 현황 바 차트 */}
-          <div className="book-card p-4">
-            <h3 className="text-sm font-semibold mb-4">독서 현황</h3>
+        <div className="grid grid-cols-2 gap-4 mb-5">
+          {/* ── 독서 현황 ── */}
+          <div className="book-card p-4 flex flex-col h-full overflow-hidden">
+            <h3 className="text-sm font-semibold mb-3">월별 독서량</h3>
             {shelfLoading ? (
-              <div className="h-[140px] flex items-center justify-center">
+              <div className="flex-1 flex items-center justify-center min-h-[220px]">
                 <Loader2 size={24} className="animate-spin text-muted-foreground" />
               </div>
             ) : totalBooks === 0 ? (
-              <div className="h-[140px] flex flex-col items-center justify-center gap-2">
+              <div className="flex-1 flex flex-col items-center justify-center min-h-[220px] gap-2">
                 <BookOpen size={28} className="text-muted-foreground/40" />
                 <p className="text-xs text-muted-foreground">서재가 비어있어요</p>
                 <button
@@ -349,78 +961,209 @@ export default function Profile() {
                 </button>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={140}>
-                <BarChart data={statusChartData} barSize={36}>
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: 'oklch(0.55 0.025 60)' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{
-                      background: 'var(--card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      fontSize: 12,
+              <div className="flex flex-col flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height={120}>
+                  <BarChart
+                    data={monthlyReadingData}
+                    barSize={28}
+                    onClick={data => {
+                      if (data?.activePayload?.[0]?.payload?.key) {
+                        const monthKey = data.activePayload[0].payload.key;
+                        setActiveBar(prev => prev === monthKey ? null : monthKey);
+                      }
                     }}
-                    formatter={v => [`${v}권`, '도서 수']}
-                  />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {statusChartData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                  >
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: 'oklch(0.55 0.025 60)' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis hide />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      formatter={v => [`${v}권`, '독서량']}
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]} cursor="pointer" minPointSize={6}>
+                      {monthlyReadingData.map((entry) => (
+                        <Cell
+                          key={entry.key}
+                          fill={
+                            entry.count === 0
+                              ? MONTH_BAR_COLORS.empty
+                              : entry.isCurrent
+                                ? MONTH_BAR_COLORS.current
+                                : MONTH_BAR_COLORS.previous
+                          }
+                          opacity={activeBar && activeBar !== entry.key ? 0.35 : entry.count === 0 ? 0.65 : 1}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                {/* 책 목록 패널 — border 아래 남은 공간 전체 활용, 마우스 휠 스크롤 */}
+                <div className="mt-2 border-t border-border/30 h-[126px] flex flex-col min-h-0 overflow-hidden">
+                  {activeBar ? (
+                    <div className="h-full flex flex-col min-h-0">
+                      <p className="pt-1.5 text-[11px] font-semibold text-muted-foreground mb-1 flex-shrink-0">
+                        {activeMonthData?.label} · {activeBarBooks.length}권
+                      </p>
+                      <div className="overflow-y-auto scrollbar-booklist flex-1 min-h-0 pr-2">
+                        {activeBarBooks.length === 0 ? (
+                          <div className="h-full min-h-[74px] flex flex-col items-center justify-center rounded-lg bg-secondary/30 text-center">
+                            <BookOpen size={16} className="text-muted-foreground/50 mb-1" />
+                            <p className="text-[11px] font-medium text-muted-foreground">
+                              이 달은 독서 기록이 없어요
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 pb-1">
+                            {activeBarBooks.map(b => (
+                              <div key={b.id} className="flex items-center gap-2.5 min-h-[50px]">
+                                <div className="w-[34px] h-[50px] rounded-md flex-shrink-0 overflow-hidden bg-primary/10">
+                                  {b.thumbnail
+                                    ? <img src={b.thumbnail} alt={b.title} className="w-full h-full object-cover" />
+                                    : <div className="w-full h-full flex items-center justify-center"><BookOpen size={16} className="text-primary/50" /></div>
+                                  }
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-semibold line-clamp-1">{b.title}</p>
+                                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{b.author}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center flex-1">
+                      <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+                        막대를 클릭하면<br />월별 도서 목록을 볼 수 있어요
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
-          {/* 관심 장르 분포 */}
-          <div className="book-card p-4">
-            <h3 className="text-sm font-semibold mb-4">장르별 독서 비율</h3>
-            {genres.length === 0 ? (
-              <div className="h-[140px] flex flex-col items-center justify-center gap-2">
-                <p className="text-sm text-muted-foreground">관심 장르가 없어요</p>
-                <button
-                  onClick={() => navigate('/onboarding', { state: { editGenres: true } })}
-                  className="text-xs text-primary font-medium hover:underline"
-                >
-                  장르 선택하러 가기
-                </button>
+          {/* ── 장르별 독서 비율 ── */}
+          <div className="book-card p-4 flex flex-col h-full overflow-hidden">
+            <h3 className="text-sm font-semibold mb-2">장르별 독서 비율</h3>
+            {genreData.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center min-h-[220px] gap-2">
+                <p className="text-sm text-muted-foreground">독서 기록이 없어요</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {genres.map((g, i) => {
-                  // 관심도 비율: 첫 번째 선택 장르가 가장 높게 표시
-                  const pct = Math.max(30, 100 - i * 22);
-                  return (
-                    <div key={g} className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-14 flex-shrink-0 truncate">
-                        {g}
-                      </span>
-                      <div className="flex-1 progress-bar">
-                        <div
-                          className="progress-fill"
-                          style={{ width: `${pct}%` }}
-                        />
+              <div className="flex flex-col flex-1">
+                {/* 반원 파이차트 — 세그먼트 클릭으로 장르 필터 */}
+                <div style={{ height: 96 }}>
+                  <ResponsiveContainer width="100%" height={96}>
+                    <PieChart>
+                      <Pie
+                        data={genreData}
+                        cx="50%"
+                        cy="100%"
+                        startAngle={180}
+                        endAngle={0}
+                        outerRadius={80}
+                        innerRadius={42}
+                        dataKey="value"
+                        paddingAngle={2}
+                        cursor="pointer"
+                        onClick={(data) => setActiveGenre(data.name)}
+                      >
+                        {genreData.map((entry, i) => (
+                          <Cell
+                            key={i}
+                            fill={GENRE_COLORS[i % GENRE_COLORS.length]}
+                            opacity={activeGenre && activeGenre !== entry.name ? 0.35 : 1}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: 'var(--card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}
+                        formatter={(v, name) => [`${v}권`, name]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* 범례 or 선택 장르 도서 목록 */}
+                <div
+                  className="mt-2 h-[154px] overflow-x-hidden pr-1"
+                >
+                  {activeGenre ? (
+                    <div className="h-full flex flex-col min-h-0">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[11px] font-semibold text-muted-foreground">
+                          {activeGenre} · {activeGenreBooks.length}권
+                        </p>
+                        <button
+                          onClick={() => setActiveGenre(null)}
+                          className="text-[10px] text-primary hover:text-primary/80 font-medium transition-colors"
+                        >
+                          목록으로 ↩
+                        </button>
                       </div>
-                      <span className="text-xs font-medium text-primary w-8 text-right">
-                        {pct}%
-                      </span>
+                      <div className="space-y-1.5 overflow-y-auto scrollbar-booklist flex-1 min-h-0 pr-1">
+                        {activeGenreBooks.map(b => (
+                          <div key={b.id} className="flex items-center gap-2">
+                            <div className="w-8 h-10 rounded flex-shrink-0 overflow-hidden bg-primary/10">
+                              {b.thumbnail
+                                ? <img src={b.thumbnail} alt={b.title} className="w-full h-full object-cover" />
+                                : <div className="w-full h-full flex items-center justify-center"><BookOpen size={10} className="text-primary/50" /></div>
+                              }
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold line-clamp-1">{b.title}</p>
+                              <p className="text-[10px] text-muted-foreground">{b.author}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  );
-                })}
-                <p className="text-[10px] text-muted-foreground pt-1">
-                  * 온보딩에서 선택한 관심 장르 기준
-                </p>
+                  ) : (
+                    <div className="h-full flex flex-col justify-between">
+                      {(() => {
+                        const total = genreData.reduce((s, g) => s + g.value, 0);
+                        return genreData.map((entry, i) => {
+                          const pct = Math.round((entry.value / total) * 100);
+                          return (
+                            <div
+                              key={entry.name}
+                              className="flex items-center gap-2 cursor-pointer rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-secondary/70 transition-colors"
+                              onClick={() => setActiveGenre(entry.name)}
+                            >
+                              <span
+                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                style={{ background: GENRE_COLORS[i % GENRE_COLORS.length] }}
+                              />
+                              <span className="text-[11px] text-muted-foreground flex-1 truncate">{entry.name}</span>
+                              <span className="text-[11px] font-semibold text-foreground">{pct}%</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* 포인트 카드 */}
+        {/* 포인트 카드 — 카드 클릭 시 /points 이동, 내역 버튼으로 모달 분리 */}
         <div
           className="book-card p-4 mb-5 cursor-pointer hover:shadow-md transition-shadow"
           onClick={() => navigate('/points')}
@@ -428,17 +1171,21 @@ export default function Profile() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground mb-1">나의 포인트</p>
-              <p className="text-2xl font-bold text-amber-600">
-                {(profile?.totalPoints ?? 0).toLocaleString()}P
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                포인트로 기부에 참여할 수 있어요
-              </p>
+              <p className="text-2xl font-bold text-amber-600">{displayPoints.toLocaleString()}P</p>
+              <p className="text-xs text-muted-foreground mt-0.5">포인트로 기부에 참여할 수 있어요</p>
             </div>
-            <div className="text-right">
+            <div className="flex flex-col items-end gap-1">
               <span className="text-3xl">🎁</span>
-              <ChevronRight size={16} className="text-muted-foreground ml-auto mt-1" />
+              <ChevronRight size={16} className="text-muted-foreground" />
             </div>
+          </div>
+          <div className="flex justify-end mt-2 pt-2 border-t border-border/30">
+            <button
+              onClick={e => { e.stopPropagation(); setActiveModal('points'); }}
+              className="text-[11px] text-amber-600 font-semibold hover:text-amber-700 transition-colors"
+            >
+              적립 내역 보기 ›
+            </button>
           </div>
         </div>
 
@@ -457,6 +1204,64 @@ export default function Profile() {
           {loggingOut ? '로그아웃 중...' : '로그아웃'}
         </Button>
       </div>
+
+      {/* 통계 모달 5종 */}
+      {Object.entries(MODAL_CONFIG).map(([key, { title, content }]) => (
+        <CenterModal
+          key={key}
+          open={activeModal === key}
+          onClose={() => setActiveModal(null)}
+          title={title}
+        >
+          {content}
+        </CenterModal>
+      ))}
+
+      <CenterModal
+        open={genreEditOpen}
+        onClose={() => setGenreEditOpen(false)}
+        title="선호 장르 수정"
+      >
+        <div>
+          <p className="text-xs text-muted-foreground mb-4">최대 3개까지 선택할 수 있어요</p>
+          <div className="grid grid-cols-4 gap-2 mb-5">
+            {GENRE_LIST.map(({ id, emoji, label }) => {
+              const selected    = tempGenres.includes(id);
+              const maxReached  = tempGenres.length >= 3 && !selected;
+              return (
+                <button
+                  key={id}
+                  disabled={maxReached}
+                  onClick={() =>
+                    setTempGenres(prev =>
+                      prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]
+                    )
+                  }
+                  className={`
+                    flex flex-col items-center gap-1.5 rounded-xl p-3 border-2 transition-all
+                    ${selected
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-secondary/40 text-muted-foreground hover:border-primary/50'}
+                    ${maxReached ? 'opacity-40 cursor-not-allowed' : ''}
+                  `}
+                >
+                  <span className="text-xl">{emoji}</span>
+                  <span className="text-[11px] font-medium">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Button
+            onClick={handleSaveGenres}
+            disabled={savingGenres || tempGenres.length === 0}
+            className="w-full h-11 rounded-xl"
+          >
+            {savingGenres
+              ? <><Loader2 size={15} className="animate-spin mr-2" />저장 중...</>
+              : `저장하기 (${tempGenres.length}/3)`}
+          </Button>
+        </div>
+      </CenterModal>
     </>
   );
 }
