@@ -13,7 +13,7 @@ export default function PageLayout({ children, showNav = true, className = '' })
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden page-layout-bg">
       <SideNav />
       <main className={`flex-1 min-w-0 overflow-y-auto ${className}`}>
         <div className="max-w-5xl w-full">
