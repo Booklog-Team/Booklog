@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Star, ChevronDown, Check,
-  BookOpen, PenLine, Loader2, AlertCircle, ShoppingCart, Share2, Clock,
+  BookOpen, PenLine, Loader2, AlertCircle, ShoppingCart, Share2, Clock, MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +50,44 @@ function getRecentBooks(excludeId) {
   try {
     return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").filter((b) => b.id !== excludeId);
   } catch { return []; }
+}
+
+const REGION_MAP = {
+  // 축약형
+  서울: 11, 부산: 21, 대구: 22, 인천: 23, 광주: 24,
+  대전: 25, 울산: 26, 세종: 29, 경기: 31, 강원: 32,
+  충북: 33, 충남: 34, 전북: 35, 전남: 36, 경북: 37,
+  경남: 38, 제주: 39,
+  // 정식 행정구역명 (Google Geocoding API 응답값)
+  서울특별시: 11, 부산광역시: 21, 대구광역시: 22, 인천광역시: 23,
+  광주광역시: 24, 대전광역시: 25, 울산광역시: 26, 세종특별자치시: 29,
+  경기도: 31, 강원도: 32, 강원특별자치도: 32,
+  충청북도: 33, 충청남도: 34, 전라북도: 35, 전북특별자치도: 35,
+  전라남도: 36, 경상북도: 37, 경상남도: 38, 제주특별자치도: 39,
+};
+
+async function geocodeToRegion(lat, lng) {
+  const key = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+  const res = await fetch(
+    `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${key}&language=ko`
+  );
+  const data = await res.json();
+  console.log("[geocodeToRegion] API 전체 응답:", data);
+
+  const components = data.results?.[0]?.address_components || [];
+  console.log("[geocodeToRegion] address_components:", components);
+
+  for (const comp of components) {
+    if (comp.types.includes("administrative_area_level_1")) {
+      const fullName = comp.long_name;
+      const shortName = fullName.replace(/특별시|광역시|특별자치시|특별자치도|도$/, "").trim();
+      console.log("[geocodeToRegion] 추출된 지역명:", { fullName, shortName });
+      const code = REGION_MAP[fullName] ?? REGION_MAP[shortName];
+      console.log("[geocodeToRegion] REGION_MAP 매핑 결과:", code ?? "매핑 없음");
+      if (code) return code;
+    }
+  }
+  return null;
 }
 
 // ── DetailCover ───────────────────────────────────────────────
@@ -151,6 +189,11 @@ export default function BookDetail() {
   const [previewIdx, setPreviewIdx]   = useState(0);
   const previewRef = useRef(null);
 
+  const [libState, setLibState]               = useState("idle");
+  const [libraries, setLibraries]             = useState([]);
+  const [selectedLibCode, setSelectedLibCode] = useState(null);
+  const [libAvail, setLibAvail]               = useState({});
+
   // ── 도서 로드 ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +204,10 @@ export default function BookDetail() {
       setCurrentPage(0);
       setMemo("");
       setRating(0);
+      setLibState("idle");
+      setLibraries([]);
+      setSelectedLibCode(null);
+      setLibAvail({});
 
       try {
         const data = await getBookDetail(id);
@@ -261,6 +308,55 @@ export default function BookDetail() {
     } catch { /* 취소 시 무시 */ }
   };
 
+  const handleFindLibraries = async () => {
+    if (!navigator.geolocation) {
+      toast.error("위치 서비스를 지원하지 않는 브라우저입니다.");
+      return;
+    }
+    setLibState("loading");
+    setLibraries([]);
+    setSelectedLibCode(null);
+    setLibAvail({});
+    try {
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
+      );
+      const regionCode = await geocodeToRegion(pos.coords.latitude, pos.coords.longitude);
+      if (!regionCode) throw new Error("지역 정보를 인식하지 못했습니다.");
+      const LKEY = import.meta.env.VITE_LIBRARY_API_KEY;
+      const r = await fetch(
+        `/api/library/api/libSrchByBook?authKey=${LKEY}&isbn=${book._isbn13}&region=${regionCode}&format=json`
+      );
+      const d = await r.json();
+      const raw = d.response?.libs?.lib;
+      setLibraries(!raw ? [] : Array.isArray(raw) ? raw : [raw]);
+      setLibState("done");
+    } catch (err) {
+      toast.error(err.code === 1 ? "위치 접근이 거부되었습니다." : err.message || "도서관 정보를 가져오지 못했습니다.");
+      setLibState("error");
+    }
+  };
+
+  const handleLibraryClick = async (lib) => {
+    const code = lib.libCode;
+    setSelectedLibCode(code);
+    if (libAvail[code] !== undefined) return;
+    try {
+      const LKEY = import.meta.env.VITE_LIBRARY_API_KEY;
+      const r = await fetch(
+        `/api/library/api/bookExist?authKey=${LKEY}&libCode=${code}&isbn13=${book._isbn13}&format=json`
+      );
+      const d = await r.json();
+      const result = d.response?.result;
+      setLibAvail((prev) => ({
+        ...prev,
+        [code]: { hasBook: result?.hasBook === "Y", loanAvail: result?.loanAvail === "Y" },
+      }));
+    } catch {
+      setLibAvail((prev) => ({ ...prev, [code]: null }));
+    }
+  };
+
   // ── 로딩 / 에러 ──────────────────────────────────────────
   if (isLoading) {
     return (
@@ -298,7 +394,9 @@ export default function BookDetail() {
   const isLongDesc   = description.length > 200;
   const previewImages = book._previewImages || [];
 
-  const progress = totalPages ? Math.round((currentPage / totalPages) * 100) : 0;
+  const isbn13      = book._isbn13 || null;
+  const selectedLib = libraries.find((l) => l.libCode === selectedLibCode) ?? null;
+  const progress    = totalPages ? Math.round((currentPage / totalPages) * 100) : 0;
 
   return (
     <div>
@@ -588,6 +686,107 @@ export default function BookDetail() {
             </div>
           </section>
         )}
+
+        {/* ── 내 주변 도서관 ── */}
+        <section className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm space-y-4">
+          <h3 className="text-base font-bold flex items-center gap-2">
+            <MapPin size={17} className="text-primary" />
+            내 주변 도서관
+          </h3>
+          {!isbn13 ? (
+            <p className="text-sm text-muted-foreground text-center py-3">
+              도서관 정보를 조회할 수 없습니다.
+            </p>
+          ) : libState === "loading" ? (
+            <div className="flex flex-col items-center py-6 gap-2">
+              <Loader2 size={24} className="text-primary animate-spin" />
+              <p className="text-sm text-muted-foreground">주변 도서관 검색 중...</p>
+            </div>
+          ) : libState === "done" ? (
+            <div className="space-y-3">
+              {libraries.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">
+                  주변에 이 책을 소장한 도서관이 없습니다.
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    {libraries.map((lib) => {
+                      const avail = libAvail[lib.libCode];
+                      const isSelected = selectedLibCode === lib.libCode;
+                      return (
+                        <button
+                          key={lib.libCode}
+                          onClick={() => handleLibraryClick(lib)}
+                          className={`w-full text-left p-4 rounded-xl border transition-all ${
+                            isSelected
+                              ? "border-primary/60 bg-primary/5"
+                              : "border-border/50 bg-background hover:border-primary/30 hover:bg-secondary/50"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold truncate">{lib.libName}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{lib.address}</p>
+                            </div>
+                            {isSelected && avail === undefined && (
+                              <Loader2 size={13} className="animate-spin text-muted-foreground flex-shrink-0 mt-0.5" />
+                            )}
+                            {avail && (
+                              <div className="flex flex-col gap-0.5 flex-shrink-0 text-right text-xs font-medium">
+                                <span className={avail.hasBook ? "text-emerald-600" : "text-red-500"}>
+                                  {avail.hasBook ? "소장 ✅" : "미소장 ❌"}
+                                </span>
+                                {avail.hasBook && (
+                                  <span className={avail.loanAvail ? "text-emerald-600" : "text-red-500"}>
+                                    {avail.loanAvail ? "대출가능 ✅" : "대출중 ❌"}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {avail === null && (
+                              <span className="text-xs text-muted-foreground flex-shrink-0">조회 실패</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedLib && (
+                    <div className="rounded-xl overflow-hidden border border-border/50">
+                      <iframe
+                        title="도서관 위치"
+                        width="100%"
+                        height="220"
+                        className="border-0"
+                        loading="lazy"
+                        allowFullScreen
+                        referrerPolicy="no-referrer-when-downgrade"
+                        src={`https://www.google.com/maps/embed/v1/place?q=${encodeURIComponent(
+                          selectedLib.address || selectedLib.libName
+                        )}&key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}`}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+              <button
+                onClick={handleFindLibraries}
+                className="text-xs text-primary font-medium hover:underline"
+              >
+                다시 검색
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleFindLibraries}
+              className="w-full h-12 rounded-xl border border-primary/40 text-primary text-sm font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+            >
+              <MapPin size={16} />
+              내 주변 도서관에서 찾기
+            </button>
+          )}
+        </section>
       </div>
     </div>
   );

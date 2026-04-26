@@ -30,6 +30,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/aladin/, "/ttb/api"),
       },
+      "/api/library": {
+        target: "https://data4library.kr",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/library/, ""),
+      },
     },
   },
 });
