@@ -35,7 +35,26 @@ const GENRE_COLORS = [
 const MONTH_BAR_COLORS = {
   current:  'var(--color-primary)',
   previous: 'var(--chart-bar-prev)',
-  empty:    'var(--color-secondary)',
+  empty:    'var(--chart-bar-empty)',
+};
+
+const CHART_TOOLTIP_STYLE = {
+  background: 'var(--popover)',
+  color: 'var(--popover-foreground)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  boxShadow: '0 14px 36px color-mix(in oklch, var(--foreground) 18%, transparent)',
+  fontSize: 12,
+};
+
+const CHART_TOOLTIP_LABEL_STYLE = {
+  color: 'var(--popover-foreground)',
+  fontWeight: 700,
+};
+
+const CHART_TOOLTIP_ITEM_STYLE = {
+  color: 'var(--popover-foreground)',
+  fontWeight: 600,
 };
 
 const GENRE_LIST = [
@@ -480,7 +499,7 @@ export default function Profile() {
     {
       key: 'pages', label: '기록 페이지',
       value: shelfLoading ? '…' : (totalPages > 999 ? `${(totalPages / 1000).toFixed(1)}k` : `${totalPages}p`),
-      icon: TrendingUp, color: 'text-accent-foreground',
+      icon: TrendingUp, color: '[color:var(--stat-color-2)]',
     },
   ];
 
@@ -874,18 +893,18 @@ export default function Profile() {
     <>
       {/* 프로필 배경 헤더 (z-0) */}
       <div
-        className="relative z-0 mt-6 mx-4 rounded-2xl overflow-hidden"
+        className="relative z-0 mt-6 mx-4 rounded-2xl overflow-hidden pointer-events-none"
         style={{ background: 'var(--profile-banner-gradient)' }}
       >
-        <div className="w-full h-44" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background" />
+        <div className="w-full h-36" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/10 to-background" />
       </div>
 
       {/* 아바타 + 이름 + 장르 (z-10: 배너 위) */}
-      <div className="relative z-10 px-4 -mt-10 mb-5 animate-fade-in-up">
+      <div className="relative z-10 px-4 -mt-16 mb-5 animate-fade-in-up">
         {/* 아바타 · 이름 · 수정 버튼 행 */}
         <div className="flex items-end gap-3 mb-3">
-          <AvatarImg src={user?.photoURL} name={displayName} size={76} />
+          <AvatarImg src={user?.photoURL} name={displayName} size={76} className="bg-background" />
           <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1
@@ -911,7 +930,7 @@ export default function Profile() {
         </div>
 
         {/* 선호 장르 박스 */}
-        <div className="bg-secondary/50 rounded-xl px-3 py-2.5">
+        <div className="bg-secondary/60 backdrop-blur-sm rounded-xl px-3 py-2.5">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-muted-foreground">선호 장르</p>
             <button
@@ -992,17 +1011,14 @@ export default function Profile() {
                   >
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 11, fill: 'oklch(0.55 0.025 60)' }}
+                      tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                       axisLine={false} tickLine={false}
                     />
                     <YAxis hide />
                     <Tooltip
-                      contentStyle={{
-                        background: 'var(--card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                      itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                       formatter={v => [`${v}권`, '독서량']}
                     />
                     <Bar dataKey="count" radius={[6, 6, 0, 0]} cursor="pointer" minPointSize={6}>
@@ -1104,12 +1120,9 @@ export default function Profile() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{
-                          background: 'var(--card)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
+                        contentStyle={CHART_TOOLTIP_STYLE}
+                        labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                        itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                         formatter={(v, name) => [`${v}권`, name]}
                       />
                     </PieChart>
