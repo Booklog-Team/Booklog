@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Search as SearchIcon,
   X,
@@ -70,6 +70,7 @@ function getInitialGenre() {
 }
 
 export default function Search() {
+  const navigate = useNavigate();
   const initialQuery = getInitialQuery();
   const initialGenre = getInitialGenre();
 
@@ -86,9 +87,13 @@ export default function Search() {
   const [recentSearches, setRecentSearches] = useState([]);
   const [initialBooks, setInitialBooks] = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const startIndexRef = useRef(0);
   const activeQueryRef = useRef(initialQuery);
+  const suggestionSeqRef = useRef(0);
 
   useEffect(() => {
     const saved = localStorage.getItem("booklog_recent_searches");
@@ -155,6 +160,46 @@ export default function Search() {
       performGenreSearch(initialGenre, true);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isGenreSearch) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSuggestionLoading(false);
+      return;
+    }
+
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSuggestionLoading(false);
+      return;
+    }
+
+    const seq = suggestionSeqRef.current + 1;
+    suggestionSeqRef.current = seq;
+    setSuggestionLoading(true);
+
+    const timer = setTimeout(() => {
+      searchBooks(trimmed, { start: 1, maxResults: 6 })
+        .then(({ items }) => {
+          if (suggestionSeqRef.current !== seq) return;
+          setSuggestions(items || []);
+          setShowSuggestions(true);
+        })
+        .catch(() => {
+          if (suggestionSeqRef.current !== seq) return;
+          setSuggestions([]);
+          setShowSuggestions(false);
+        })
+        .finally(() => {
+          if (suggestionSeqRef.current === seq) setSuggestionLoading(false);
+        });
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [query, isGenreSearch]);
 
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -280,6 +325,8 @@ export default function Search() {
 
   const handleClear = () => {
     setQuery("");
+    setSuggestions([]);
+    setShowSuggestions(false);
     resetSearch();
   };
 
@@ -291,6 +338,12 @@ export default function Search() {
         performTextSearch(activeQueryRef.current, false);
       }
     }
+  };
+
+  const handleSuggestionSelect = book => {
+    setShowSuggestions(false);
+    setSuggestions([]);
+    navigate(`/book/${book.id}`);
   };
 
   const hasMore = startIndexRef.current < totalItems;
@@ -320,9 +373,19 @@ export default function Search() {
                 setIsGenreSearch(false);
                 setActiveGenre(null);
                 setQuery(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => {
+                if (query.trim().length >= 2 && suggestions.length > 0) {
+                  setShowSuggestions(true);
+                }
+              }}
+              onBlur={() => {
+                setTimeout(() => setShowSuggestions(false), 120);
               }}
               onKeyDown={e => {
                 if (e.key === "Enter" && query.trim().length >= 2) {
+                  setShowSuggestions(false);
                   performTextSearch(query.trim(), true);
                 }
               }}
@@ -337,6 +400,55 @@ export default function Search() {
               >
                 <X size={15} />
               </button>
+            )}
+
+            {showSuggestions && query.trim().length >= 2 && (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-xl border border-border/70 bg-card shadow-xl shadow-primary/10">
+                <div className="max-h-[360px] overflow-y-auto scrollbar-booklist py-1">
+                  {suggestionLoading && suggestions.length === 0 ? (
+                    <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+                      <Loader2 size={14} className="animate-spin text-primary" />
+                      도서 후보를 찾고 있어요
+                    </div>
+                  ) : suggestions.length > 0 ? (
+                    suggestions.map(book => {
+                      const info = book.volumeInfo || {};
+                      const title = info.title || "";
+                      const author = info.authors?.join(", ") || "";
+                      const cover = book._cover || "";
+                      return (
+                        <button
+                          key={book.id}
+                          type="button"
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => handleSuggestionSelect(book)}
+                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/50 transition-colors"
+                        >
+                          {cover ? (
+                            <img
+                              src={cover}
+                              alt={title}
+                              className="w-9 h-12 rounded-md object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-12 rounded-md bg-secondary flex items-center justify-center flex-shrink-0">
+                              <BookOpen size={14} className="text-muted-foreground/40" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold line-clamp-1">{title}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{author}</p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-4 py-3 text-xs text-muted-foreground">
+                      추천할 도서 후보가 없어요
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
