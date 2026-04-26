@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Search as SearchIcon,
   X,
@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Clock,
   Trash2,
+  ArrowLeft,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { searchBooks, getBooksByGenre, GENRE_MAP } from "@/utils/api";
@@ -71,8 +72,10 @@ function getInitialGenre() {
 
 export default function Search() {
   const navigate = useNavigate();
+  const location = useLocation();
   const initialQuery = getInitialQuery();
   const initialGenre = getInitialGenre();
+  const isHomeTagSearch = new URLSearchParams(location.search).get("source") === "homeTag";
 
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState([]);
@@ -90,6 +93,8 @@ export default function Search() {
   const [suggestions, setSuggestions] = useState([]);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [suggestionsClosedFor, setSuggestionsClosedFor] = useState("");
 
   const startIndexRef = useRef(0);
   const activeQueryRef = useRef(initialQuery);
@@ -162,18 +167,89 @@ export default function Search() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (isGenreSearch) {
+    const resetFromNav = () => {
+      setQuery("");
+      setResults([]);
+      setTotalItems(0);
+      setHasSearched(false);
+      setError(null);
+      setIsGenreSearch(false);
+      setActiveGenre(null);
       setSuggestions([]);
       setShowSuggestions(false);
       setSuggestionLoading(false);
+      setActiveSuggestionIndex(-1);
+      setSuggestionsClosedFor("");
+      startIndexRef.current = 0;
+      activeQueryRef.current = "";
+      if (location.search) navigate("/search", { replace: true });
+    };
+
+    window.addEventListener("booklog:reset-search", resetFromNav);
+    return () => window.removeEventListener("booklog:reset-search", resetFromNav);
+  }, [location.search, navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const genre = params.get("genre") || "";
+    const urlQuery = params.get("q") || "";
+
+    if (!genre && !urlQuery) {
+      if (hasSearched || isGenreSearch || activeQueryRef.current || query) {
+        setQuery("");
+        setSuggestions([]);
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+      setSuggestionsClosedFor("");
+      resetSearch();
+      }
+      return;
+    }
+
+    if (genre && genre !== activeGenre) {
+      setQuery("");
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+      setSuggestionsClosedFor("");
+      performGenreSearch(genre, true);
+      return;
+    }
+
+    if (urlQuery && urlQuery !== activeQueryRef.current) {
+      setIsGenreSearch(false);
+      setActiveGenre(null);
+      setQuery(urlQuery);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+      setSuggestionsClosedFor("");
+      performTextSearch(urlQuery, true);
+    }
+  }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isGenreSearch || isHomeTagSearch) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSuggestionLoading(false);
+      setActiveSuggestionIndex(-1);
       return;
     }
 
     const trimmed = query.trim();
+    if (trimmed === suggestionsClosedFor) {
+      setShowSuggestions(false);
+      setSuggestionLoading(false);
+      setActiveSuggestionIndex(-1);
+      return;
+    }
+
     if (trimmed.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       setSuggestionLoading(false);
+      setActiveSuggestionIndex(-1);
       return;
     }
 
@@ -187,11 +263,13 @@ export default function Search() {
           if (suggestionSeqRef.current !== seq) return;
           setSuggestions(items || []);
           setShowSuggestions(true);
+          setActiveSuggestionIndex(-1);
         })
         .catch(() => {
           if (suggestionSeqRef.current !== seq) return;
           setSuggestions([]);
           setShowSuggestions(false);
+          setActiveSuggestionIndex(-1);
         })
         .finally(() => {
           if (suggestionSeqRef.current === seq) setSuggestionLoading(false);
@@ -199,7 +277,7 @@ export default function Search() {
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [query, isGenreSearch]);
+  }, [query, isGenreSearch, isHomeTagSearch, suggestionsClosedFor]);
 
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -228,6 +306,7 @@ export default function Search() {
     setError(null);
     setIsGenreSearch(false);
     setActiveGenre(null);
+    setActiveSuggestionIndex(-1);
     startIndexRef.current = 0;
     activeQueryRef.current = "";
   };
@@ -278,6 +357,9 @@ export default function Search() {
     setIsGenreSearch(true);
     setActiveGenre(genre);
     setError(null);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setSuggestionLoading(false);
 
     if (isNew) {
       setIsLoading(true);
@@ -327,7 +409,10 @@ export default function Search() {
     setQuery("");
     setSuggestions([]);
     setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+    setSuggestionsClosedFor("");
     resetSearch();
+    if (location.search) navigate("/search", { replace: true });
   };
 
   const handleLoadMore = () => {
@@ -343,7 +428,48 @@ export default function Search() {
   const handleSuggestionSelect = book => {
     setShowSuggestions(false);
     setSuggestions([]);
+    setActiveSuggestionIndex(-1);
+    setSuggestionsClosedFor("");
     navigate(`/book/${book.id}`);
+  };
+
+  const handleCloseSuggestions = () => {
+    setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+    setSuggestionsClosedFor(query.trim());
+  };
+
+  const handleSearchKeyDown = e => {
+    const canNavigateSuggestions =
+      !isGenreSearch && showSuggestions && suggestions.length > 0 && query.trim().length >= 2;
+
+    if (canNavigateSuggestions && e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveSuggestionIndex(prev => (prev + 1) % suggestions.length);
+      return;
+    }
+
+    if (canNavigateSuggestions && e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveSuggestionIndex(prev => (prev <= 0 ? suggestions.length - 1 : prev - 1));
+      return;
+    }
+
+    if (e.key === "Escape") {
+      setShowSuggestions(false);
+      setActiveSuggestionIndex(-1);
+      return;
+    }
+
+    if (e.key === "Enter" && query.trim().length >= 2) {
+      e.preventDefault();
+      if (canNavigateSuggestions && activeSuggestionIndex >= 0) {
+        handleSuggestionSelect(suggestions[activeSuggestionIndex]);
+        return;
+      }
+      setShowSuggestions(false);
+      performTextSearch(query.trim(), true);
+    }
   };
 
   const hasMore = startIndexRef.current < totalItems;
@@ -372,23 +498,22 @@ export default function Search() {
               onChange={e => {
                 setIsGenreSearch(false);
                 setActiveGenre(null);
+                if (isHomeTagSearch) navigate("/search", { replace: true });
+                if (e.target.value.trim() !== suggestionsClosedFor) {
+                  setSuggestionsClosedFor("");
+                }
                 setQuery(e.target.value);
                 setShowSuggestions(true);
               }}
               onFocus={() => {
-                if (query.trim().length >= 2 && suggestions.length > 0) {
+                if (!isGenreSearch && !isHomeTagSearch && query.trim().length >= 2 && suggestions.length > 0) {
                   setShowSuggestions(true);
                 }
               }}
               onBlur={() => {
                 setTimeout(() => setShowSuggestions(false), 120);
               }}
-              onKeyDown={e => {
-                if (e.key === "Enter" && query.trim().length >= 2) {
-                  setShowSuggestions(false);
-                  performTextSearch(query.trim(), true);
-                }
-              }}
+              onKeyDown={handleSearchKeyDown}
               className="pl-9 pr-9 h-11 bg-secondary border-none rounded-xl text-sm"
               autoFocus
             />
@@ -402,7 +527,7 @@ export default function Search() {
               </button>
             )}
 
-            {showSuggestions && query.trim().length >= 2 && (
+            {!isGenreSearch && !isHomeTagSearch && showSuggestions && query.trim().length >= 2 && (
               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-xl border border-border/70 bg-card shadow-xl shadow-primary/10">
                 <div className="max-h-[360px] overflow-y-auto scrollbar-booklist py-1">
                   {suggestionLoading && suggestions.length === 0 ? (
@@ -411,7 +536,7 @@ export default function Search() {
                       도서 후보를 찾고 있어요
                     </div>
                   ) : suggestions.length > 0 ? (
-                    suggestions.map(book => {
+                    suggestions.map((book, index) => {
                       const info = book.volumeInfo || {};
                       const title = info.title || "";
                       const author = info.authors?.join(", ") || "";
@@ -421,8 +546,11 @@ export default function Search() {
                           key={book.id}
                           type="button"
                           onMouseDown={e => e.preventDefault()}
+                          onMouseEnter={() => setActiveSuggestionIndex(index)}
                           onClick={() => handleSuggestionSelect(book)}
-                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary/50 transition-colors"
+                          className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                            activeSuggestionIndex === index ? "bg-primary/10" : "hover:bg-secondary/50"
+                          }`}
                         >
                           {cover ? (
                             <img
@@ -448,27 +576,22 @@ export default function Search() {
                     </div>
                   )}
                 </div>
+                <div className="border-t border-border/40 px-3 py-1.5">
+                  <button
+                    type="button"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={handleCloseSuggestions}
+                    className="w-full rounded-lg py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors text-center"
+                    aria-label="자동완성 닫기"
+                  >
+                    닫기
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {isGenreSearch && activeGenre && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-muted-foreground font-bold">
-              장르:
-            </span>
-            <span className="px-2.5 py-1 bg-primary/10 text-primary text-[11px] font-bold rounded-full uppercase">
-              {activeGenre}
-            </span>
-            <button
-              onClick={handleClear}
-              className="text-xs text-muted-foreground hover:text-primary font-medium"
-            >
-              초기화
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="px-4 py-6">
@@ -590,7 +713,7 @@ export default function Search() {
 
         {hasSearched && !isLoading && !error && results.length > 0 && (
           <div className="animate-fade-in">
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-start justify-between gap-3 mb-5">
               <p className="text-sm text-muted-foreground font-medium">
                 {isGenreSearch ? (
                   <>
@@ -608,9 +731,26 @@ export default function Search() {
                   </>
                 )}
               </p>
-              <span className="text-xs text-muted-foreground font-bold">
-                {totalItems.toLocaleString()}건
-              </span>
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-xs text-muted-foreground font-bold">
+                  {totalItems.toLocaleString()}건
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleClear}
+                    className="rounded-full bg-secondary/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                  >
+                    검색 초기화
+                  </button>
+                  <button
+                    onClick={() => navigate("/")}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors"
+                  >
+                    <ArrowLeft size={11} />
+                    메인으로
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
