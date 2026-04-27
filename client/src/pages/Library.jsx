@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import confetti from "canvas-confetti";
+import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { MOCK_BOOKS, READING_CALENDAR } from "@/lib/mockData";
 import {
@@ -38,7 +40,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShelf } from "@/contexts/ShelfContext";
 import { usePoint } from "@/contexts/PointContext";
@@ -353,10 +354,19 @@ export default function Library() {
     const daysSet = new Set();
     let totalPages = 0;
 
-    displayLogs.forEach(log => {
-      if (!log.date?.startsWith(prefix)) return;
-      daysSet.add(log.date);
-      totalPages += Number(log.pagesRead) || 0;
+    calendarBooks.forEach(book => {
+      const bookMonthDates = (book.checkedDates || []).filter(d =>
+        d.startsWith(prefix)
+      );
+      bookMonthDates.forEach(d => daysSet.add(d));
+      if (bookMonthDates.length > 0) {
+        const totalChecked = (book.checkedDates || []).length || 1;
+        const pagesEarned =
+          book.status === "done" ? book.totalPage || 0 : book.currentPage || 0;
+        totalPages += Math.round(
+          (pagesEarned / totalChecked) * bookMonthDates.length
+        );
+      }
     });
 
     const readingDays = daysSet.size;
@@ -393,7 +403,8 @@ export default function Library() {
   const logsOnDateGrouped = useMemo(() => {
     const groups = new Map();
     logsOnDate.forEach(log => {
-      if (!groups.has(log.bookId)) groups.set(log.bookId, { real: [], snapshot: null });
+      if (!groups.has(log.bookId))
+        groups.set(log.bookId, { real: [], snapshot: null });
       if (log.isSnapshot) groups.get(log.bookId).snapshot = log;
       else groups.get(log.bookId).real.push(log);
     });
@@ -596,9 +607,11 @@ export default function Library() {
               흐름을 한눈에 확인해보세요.
             </p>
           </div>
-          <Button onClick={() => navigate("/search")} className="shrink-0 rounded-xl">
-            <Plus size={16} className="mr-1.5" />
-            책 추가
+          <Button
+            onClick={() => navigate("/search")}
+            className="shrink-0 rounded-xl"
+          >
+            <Plus size={16} className="mr-1.5" />책 추가
           </Button>
         </motion.div>
 
@@ -657,17 +670,23 @@ export default function Library() {
                         <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                           {focusedBook.author}
                         </p>
-                        {focusedBook.status === "done" && focusedBook.lastReadDate ? (
+                        {focusedBook.status === "done" &&
+                        focusedBook.lastReadDate ? (
                           <p className="mt-1.5 text-xs font-semibold text-emerald-600">
                             {formatDateKo(focusedBook.lastReadDate)}에 완독
                           </p>
-                        ) : focusedBook.status === "reading" && focusedBookStartDate ? (
+                        ) : focusedBook.status === "reading" &&
+                          focusedBookStartDate ? (
                           <p className="mt-1.5 text-xs text-muted-foreground">
                             {formatDateKo(focusedBookStartDate)}부터 읽기 시작
                           </p>
-                        ) : focusedBook.status === "want" && (focusedBook.addedAt || focusedBook.lastReadDate) ? (
+                        ) : focusedBook.status === "want" &&
+                          (focusedBook.addedAt || focusedBook.lastReadDate) ? (
                           <p className="mt-1.5 text-xs text-muted-foreground">
-                            {formatDateKo(focusedBook.addedAt || focusedBook.lastReadDate)}에 내서재에 등록
+                            {formatDateKo(
+                              focusedBook.addedAt || focusedBook.lastReadDate
+                            )}
+                            에 내서재에 등록
                           </p>
                         ) : null}
                         {focusedBook.totalPage > 0 && (
@@ -695,7 +714,6 @@ export default function Library() {
                         )}
                       </div>
                     </button>
-
                   </div>
 
                   <div className="flex-1 overflow-y-auto">
@@ -721,11 +739,17 @@ export default function Library() {
                       <>
                         <div className="flex items-center justify-between border-b border-border/40 px-4 py-2.5">
                           <div className="flex items-center gap-2">
-                            <FileText size={13} className="text-muted-foreground/60" />
+                            <FileText
+                              size={13}
+                              className="text-muted-foreground/60"
+                            />
                             <span className="text-xs text-muted-foreground">
                               총{" "}
                               <span className="font-semibold text-foreground">
-                                {focusedBookLogs.filter(l => !l.isSnapshot).length}
+                                {
+                                  focusedBookLogs.filter(l => !l.isSnapshot)
+                                    .length
+                                }
                               </span>
                               개의 기록
                             </span>
@@ -786,7 +810,13 @@ export default function Library() {
                                     {!log.isSnapshot && (
                                       <button
                                         type="button"
-                                        onClick={() => setConfirmDeleteLogId(confirmDeleteLogId === log.id ? null : log.id)}
+                                        onClick={() =>
+                                          setConfirmDeleteLogId(
+                                            confirmDeleteLogId === log.id
+                                              ? null
+                                              : log.id
+                                          )
+                                        }
                                         className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
                                       >
                                         <X size={11} />
@@ -795,7 +825,9 @@ export default function Library() {
                                   </div>
                                   {confirmDeleteLogId === log.id && (
                                     <div className="mb-2 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-2.5 py-1.5">
-                                      <span className="flex-1 text-xs text-destructive">삭제하시겠어요?</span>
+                                      <span className="flex-1 text-xs text-destructive">
+                                        삭제하시겠어요?
+                                      </span>
                                       <button
                                         type="button"
                                         onClick={() => handleDeleteLog(log.id)}
@@ -805,7 +837,9 @@ export default function Library() {
                                       </button>
                                       <button
                                         type="button"
-                                        onClick={() => setConfirmDeleteLogId(null)}
+                                        onClick={() =>
+                                          setConfirmDeleteLogId(null)
+                                        }
                                         className="rounded bg-secondary px-2 py-0.5 text-[11px] font-bold text-muted-foreground hover:bg-secondary/70"
                                       >
                                         취소
@@ -827,9 +861,7 @@ export default function Library() {
                                     </div>
                                   )}
                                   {log.memo && (
-                                    <div
-                                      className="mt-2 rounded-l-sm border border-r-0 border-l-[3px] border-primary/25 bg-amber-50/60 px-2.5 py-1.5 dark:bg-amber-950/20"
-                                    >
+                                    <div className="mt-2 rounded-l-sm border border-r-0 border-l-[3px] border-primary/25 bg-amber-50/60 px-2.5 py-1.5 dark:bg-amber-950/20">
                                       <p className="line-clamp-3 text-xs italic leading-relaxed text-amber-900/75 dark:text-amber-100/60">
                                         {log.memo}
                                       </p>
@@ -861,144 +893,190 @@ export default function Library() {
                       {selectedDateBookCount}권의 책을 읽었어요
                     </p>
                     <div className="space-y-2.5">
-                      {logsOnDateGrouped.map(({ bookId, primaryLog, realLogs, hasMultiple }) => {
-                        const book = bookMap.get(bookId);
-                        const startDate = getBookStartDate(
-                          book,
-                          displayLogs.filter(item => item.bookId === bookId)
-                        );
-                        const isExpanded = expandedDateBookIds.has(bookId);
-                        const log = primaryLog;
-                        return (
-                          <div key={bookId} className="rounded-xl border border-border/60 overflow-hidden">
-                            <div className="flex items-stretch">
-                              <button
-                                type="button"
-                                className="flex flex-1 gap-3 p-3 text-left transition-colors hover:bg-secondary/50"
-                                onClick={() => openBookLogs(bookId)}
-                              >
-                                <img
-                                  src={log.thumbnail || "/placeholder.png"}
-                                  alt={log.title}
-                                  className="h-16 w-11 shrink-0 rounded-lg object-cover shadow-sm"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                      {statusLabel(log.status)}
-                                    </span>
-                                    {log.isSnapshot && (
-                                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                                        현재 기록
-                                      </span>
-                                    )}
-                                    {hasMultiple && (
-                                      <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                                        {realLogs.length}회 기록
-                                      </span>
-                                    )}
-                                  </div>
-                                  <h4 className="line-clamp-1 text-sm font-bold">{log.title}</h4>
-                                  <p className="line-clamp-1 text-[11px] text-muted-foreground">{log.author}</p>
-                                  {log.status === "done" ? (
-                                    <p className="mt-1 text-[11px] font-semibold text-emerald-600">
-                                      완독했어요! 🎉
-                                    </p>
-                                  ) : log.status === "want" ? (
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                      {formatDateShort(selectedDate)}에 내서재에 등록
-                                    </p>
-                                  ) : startDate ? (
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                      {formatDateShort(startDate)}부터 읽기 시작
-                                    </p>
-                                  ) : null}
-                                  {!hasMultiple && log.status !== "want" && (log.fromPage > 0 || log.toPage > 0) && (
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                      {log.fromPage || 0}p → {log.toPage || 0}p · {Number(log.pagesRead || 0).toLocaleString()}p
-                                    </p>
-                                  )}
-                                  {!hasMultiple && log.memo && (
-                                    <p className="mt-1 line-clamp-2 text-xs italic text-muted-foreground">
-                                      "{log.memo}"
-                                    </p>
-                                  )}
-                                </div>
-                              </button>
-                              {hasMultiple && (
+                      {logsOnDateGrouped.map(
+                        ({ bookId, primaryLog, realLogs, hasMultiple }) => {
+                          const book = bookMap.get(bookId);
+                          const startDate = getBookStartDate(
+                            book,
+                            displayLogs.filter(item => item.bookId === bookId)
+                          );
+                          const isExpanded = expandedDateBookIds.has(bookId);
+                          const log = primaryLog;
+                          return (
+                            <div
+                              key={bookId}
+                              className="rounded-xl border border-border/60 overflow-hidden"
+                            >
+                              <div className="flex items-stretch">
                                 <button
                                   type="button"
-                                  className="flex items-center border-l border-border/30 px-2.5 transition-colors hover:bg-secondary/50"
-                                  onClick={() =>
-                                    setExpandedDateBookIds(prev => {
-                                      const next = new Set(prev);
-                                      if (next.has(bookId)) next.delete(bookId);
-                                      else next.add(bookId);
-                                      return next;
-                                    })
-                                  }
+                                  className="flex flex-1 gap-3 p-3 text-left transition-colors hover:bg-secondary/50"
+                                  onClick={() => openBookLogs(bookId)}
                                 >
-                                  <ChevronDown
-                                    size={14}
-                                    className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                                  <img
+                                    src={log.thumbnail || "/placeholder.png"}
+                                    alt={log.title}
+                                    className="h-16 w-11 shrink-0 rounded-lg object-cover shadow-sm"
                                   />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                                      <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                        {statusLabel(log.status)}
+                                      </span>
+                                      {log.isSnapshot && (
+                                        <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                          현재 기록
+                                        </span>
+                                      )}
+                                      {hasMultiple && (
+                                        <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                          {realLogs.length}회 기록
+                                        </span>
+                                      )}
+                                    </div>
+                                    <h4 className="line-clamp-1 text-sm font-bold">
+                                      {log.title}
+                                    </h4>
+                                    <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                                      {log.author}
+                                    </p>
+                                    {log.status === "done" ? (
+                                      <p className="mt-1 text-[11px] font-semibold text-emerald-600">
+                                        완독했어요! 🎉
+                                      </p>
+                                    ) : log.status === "want" ? (
+                                      <p className="mt-1 text-[11px] text-muted-foreground">
+                                        {formatDateShort(selectedDate)}에
+                                        내서재에 등록
+                                      </p>
+                                    ) : startDate ? (
+                                      <p className="mt-1 text-[11px] text-muted-foreground">
+                                        {formatDateShort(startDate)}부터 읽기
+                                        시작
+                                      </p>
+                                    ) : null}
+                                    {!hasMultiple &&
+                                      log.status !== "want" &&
+                                      (log.fromPage > 0 || log.toPage > 0) && (
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                          {log.fromPage || 0}p →{" "}
+                                          {log.toPage || 0}p ·{" "}
+                                          {Number(
+                                            log.pagesRead || 0
+                                          ).toLocaleString()}
+                                          p
+                                        </p>
+                                      )}
+                                    {!hasMultiple && log.memo && (
+                                      <p className="mt-1 line-clamp-2 text-xs italic text-muted-foreground">
+                                        "{log.memo}"
+                                      </p>
+                                    )}
+                                  </div>
                                 </button>
-                              )}
-                            </div>
-                            {hasMultiple && isExpanded && (
-                              <div className="border-t border-border/40 bg-secondary/10 px-3 pt-3 pb-1">
-                                {realLogs.map((rl, i) => {
-                                  const rlPagesRead = Number(rl.pagesRead || 0);
-                                  const rlColors = ({
-                                    done: { bar: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-600" },
-                                    reading: { bar: "bg-primary", badge: "bg-primary/10 text-primary" },
-                                    want: { bar: "bg-amber-400", badge: "bg-amber-50 text-amber-600" },
-                                  })[rl.status] || { bar: "bg-primary", badge: "bg-primary/10 text-primary" };
-                                  return (
-                                    <div key={rl.id} className="flex gap-2.5">
-                                      <div className="flex flex-col items-center pt-1">
-                                        <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${rlColors.bar}`} />
-                                        {i < realLogs.length - 1 && (
-                                          <div className="mt-0.5 w-px flex-1 bg-border/40" />
-                                        )}
-                                      </div>
-                                      <div className="mb-2.5 min-w-0 flex-1">
-                                        <div className="mb-0.5 flex items-center gap-1.5">
-                                          <span className="text-[10px] font-semibold text-muted-foreground">기록 {i + 1}</span>
-                                          {rl.status === "done" && (
-                                            <span className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${rlColors.badge}`}>
-                                              <BookOpenCheck size={8} />완독
-                                            </span>
+                                {hasMultiple && (
+                                  <button
+                                    type="button"
+                                    className="flex items-center border-l border-border/30 px-2.5 transition-colors hover:bg-secondary/50"
+                                    onClick={() =>
+                                      setExpandedDateBookIds(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(bookId))
+                                          next.delete(bookId);
+                                        else next.add(bookId);
+                                        return next;
+                                      })
+                                    }
+                                  >
+                                    <ChevronDown
+                                      size={14}
+                                      className={`text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                                    />
+                                  </button>
+                                )}
+                              </div>
+                              {hasMultiple && isExpanded && (
+                                <div className="border-t border-border/40 bg-secondary/10 px-3 pt-3 pb-1">
+                                  {realLogs.map((rl, i) => {
+                                    const rlPagesRead = Number(
+                                      rl.pagesRead || 0
+                                    );
+                                    const rlColors = {
+                                      done: {
+                                        bar: "bg-emerald-400",
+                                        badge: "bg-emerald-50 text-emerald-600",
+                                      },
+                                      reading: {
+                                        bar: "bg-primary",
+                                        badge: "bg-primary/10 text-primary",
+                                      },
+                                      want: {
+                                        bar: "bg-amber-400",
+                                        badge: "bg-amber-50 text-amber-600",
+                                      },
+                                    }[rl.status] || {
+                                      bar: "bg-primary",
+                                      badge: "bg-primary/10 text-primary",
+                                    };
+                                    return (
+                                      <div key={rl.id} className="flex gap-2.5">
+                                        <div className="flex flex-col items-center pt-1">
+                                          <div
+                                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${rlColors.bar}`}
+                                          />
+                                          {i < realLogs.length - 1 && (
+                                            <div className="mt-0.5 w-px flex-1 bg-border/40" />
                                           )}
                                         </div>
-                                        {rl.status !== "want" && (rl.fromPage > 0 || rl.toPage > 0) && (
-                                          <div className="flex items-baseline gap-1">
-                                            <span className="text-xs font-bold text-foreground">
-                                              {rlPagesRead > 0 ? `${rlPagesRead.toLocaleString()}p` : "—"}
+                                        <div className="mb-2.5 min-w-0 flex-1">
+                                          <div className="mb-0.5 flex items-center gap-1.5">
+                                            <span className="text-[10px] font-semibold text-muted-foreground">
+                                              기록 {i + 1}
                                             </span>
-                                            {rl.fromPage > 0 && rl.toPage > 0 && (
-                                              <span className="text-[10px] text-muted-foreground">
-                                                ({rl.fromPage}p → {rl.toPage}p)
+                                            {rl.status === "done" && (
+                                              <span
+                                                className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${rlColors.badge}`}
+                                              >
+                                                <BookOpenCheck size={8} />
+                                                완독
                                               </span>
                                             )}
                                           </div>
-                                        )}
-                                        {rl.memo && (
-                                          <div className="mt-1 rounded-l-sm border border-r-0 border-l-[3px] border-primary/25 bg-amber-50/60 px-2 py-1 dark:bg-amber-950/20">
-                                            <p className="line-clamp-2 text-[10px] italic leading-relaxed text-amber-900/75 dark:text-amber-100/60">
-                                              {rl.memo}
-                                            </p>
-                                          </div>
-                                        )}
+                                          {rl.status !== "want" &&
+                                            (rl.fromPage > 0 ||
+                                              rl.toPage > 0) && (
+                                              <div className="flex items-baseline gap-1">
+                                                <span className="text-xs font-bold text-foreground">
+                                                  {rlPagesRead > 0
+                                                    ? `${rlPagesRead.toLocaleString()}p`
+                                                    : "—"}
+                                                </span>
+                                                {rl.fromPage > 0 &&
+                                                  rl.toPage > 0 && (
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                      ({rl.fromPage}p →{" "}
+                                                      {rl.toPage}p)
+                                                    </span>
+                                                  )}
+                                              </div>
+                                            )}
+                                          {rl.memo && (
+                                            <div className="mt-1 rounded-l-sm border border-r-0 border-l-[3px] border-primary/25 bg-amber-50/60 px-2 py-1 dark:bg-amber-950/20">
+                                              <p className="line-clamp-2 text-[10px] italic leading-relaxed text-amber-900/75 dark:text-amber-100/60">
+                                                {rl.memo}
+                                              </p>
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                      )}
                     </div>
                   </div>
                 )
@@ -1159,11 +1237,6 @@ export default function Library() {
                                   <p className="text-[11px] text-muted-foreground">
                                     {book.author}
                                   </p>
-                                  {book.lastReadDate && (
-                                    <p className="text-[10px] text-muted-foreground/70">
-                                      마지막 기록 {formatDateShort(book.lastReadDate)}
-                                    </p>
-                                  )}
                                   {book.totalPage > 0 && (
                                     <div className="mt-1 space-y-0.5">
                                       <div className="flex justify-between text-[10px]">
@@ -1279,7 +1352,9 @@ export default function Library() {
                   return (
                     <div
                       key={dateKey}
-                      onClick={() => handleDateSelect(dateKey)}
+                      onClick={() =>
+                        setSelectedDate(isSelected ? null : dateKey)
+                      }
                       className={`relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg text-xs transition-all duration-200 ${
                         isSelected
                           ? "font-bold ring-2 ring-primary ring-offset-1"
@@ -1458,24 +1533,30 @@ export default function Library() {
                   ? books
                   : books.filter(b => b.status === tab.value);
               const totalTabPages = Math.ceil(tabBooks.length / PAGE_SIZE);
-              const pagedBooks = tabBooks.slice((shelfPage - 1) * PAGE_SIZE, shelfPage * PAGE_SIZE);
-              const Pagination = totalTabPages > 1 ? (
-                <div className="mt-4 flex items-center justify-center gap-1">
-                  {Array.from({ length: totalTabPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setShelfPage(page)}
-                      className={`h-7 w-7 rounded-lg text-xs font-semibold transition-colors ${
-                        shelfPage === page
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-secondary"
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-              ) : null;
+              const pagedBooks = tabBooks.slice(
+                (shelfPage - 1) * PAGE_SIZE,
+                shelfPage * PAGE_SIZE
+              );
+              const Pagination =
+                totalTabPages > 1 ? (
+                  <div className="mt-4 flex items-center justify-center gap-1">
+                    {Array.from({ length: totalTabPages }, (_, i) => i + 1).map(
+                      page => (
+                        <button
+                          key={page}
+                          onClick={() => setShelfPage(page)}
+                          className={`h-7 w-7 rounded-lg text-xs font-semibold transition-colors ${
+                            shelfPage === page
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    )}
+                  </div>
+                ) : null;
               return (
                 <TabsContent key={tab.value} value={tab.value} className="mt-0">
                   {loading ? (
@@ -1551,14 +1632,22 @@ export default function Library() {
       </div>
 
       {/* ── 책별 로그 팝업 모달 ── */}
-      <Dialog open={!!logModalBookId} onOpenChange={open => { if (!open) setLogModalBookId(null); }}>
+      <Dialog
+        open={!!logModalBookId}
+        onOpenChange={open => {
+          if (!open) setLogModalBookId(null);
+        }}
+      >
         <DialogContent className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl p-0 flex flex-col">
           {logModalBook && (
             <>
               <DialogHeader className="shrink-0 border-b border-border/40 px-5 pt-5 pb-4">
                 <button
                   type="button"
-                  onClick={() => { setLogModalBookId(null); navigate(`/book/${logModalBook.id}`); }}
+                  onClick={() => {
+                    setLogModalBookId(null);
+                    navigate(`/book/${logModalBook.id}`);
+                  }}
                   className="flex w-full items-start gap-3 text-left transition-opacity hover:opacity-75"
                 >
                   <img
@@ -1573,17 +1662,27 @@ export default function Library() {
                     <DialogTitle className="line-clamp-2 text-base font-bold leading-snug">
                       {logModalBook.title}
                     </DialogTitle>
-                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{logModalBook.author}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                      {logModalBook.author}
+                    </p>
                     {logModalBook.totalPage > 0 && (
                       <div className="mt-2 space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">
-                            {logModalBook.status === "done" ? logModalBook.totalPage : logModalBook.currentPage || 0}p / {logModalBook.totalPage}p
+                            {logModalBook.status === "done"
+                              ? logModalBook.totalPage
+                              : logModalBook.currentPage || 0}
+                            p / {logModalBook.totalPage}p
                           </span>
-                          <span className="font-bold text-primary">{bookProgress(logModalBook)}%</span>
+                          <span className="font-bold text-primary">
+                            {bookProgress(logModalBook)}%
+                          </span>
                         </div>
                         <div className="progress-bar">
-                          <div className="progress-fill" style={{ width: `${bookProgress(logModalBook)}%` }} />
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${bookProgress(logModalBook)}%` }}
+                          />
                         </div>
                       </div>
                     )}
@@ -1594,11 +1693,19 @@ export default function Library() {
               <div className="flex-1 overflow-y-auto">
                 {logModalLogs.length === 0 ? (
                   <div className="flex min-h-40 flex-col items-center justify-center gap-3 p-6 text-center">
-                    <CalendarDays size={28} className="text-muted-foreground/30" />
-                    <p className="text-sm text-muted-foreground">아직 이 책의 로그가 없어요</p>
+                    <CalendarDays
+                      size={28}
+                      className="text-muted-foreground/30"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      아직 이 책의 로그가 없어요
+                    </p>
                     <button
                       type="button"
-                      onClick={() => { setLogModalBookId(null); openRecordForBook(logModalBook.id); }}
+                      onClick={() => {
+                        setLogModalBookId(null);
+                        openRecordForBook(logModalBook.id);
+                      }}
                       className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
                     >
                       <PenLine size={12} />
@@ -1609,14 +1716,24 @@ export default function Library() {
                   <>
                     <div className="flex items-center justify-between border-b border-border/40 px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <FileText size={13} className="text-muted-foreground/60" />
+                        <FileText
+                          size={13}
+                          className="text-muted-foreground/60"
+                        />
                         <span className="text-xs text-muted-foreground">
-                          총 <span className="font-semibold text-foreground">{logModalLogs.filter(l => !l.isSnapshot).length}</span>개의 기록
+                          총{" "}
+                          <span className="font-semibold text-foreground">
+                            {logModalLogs.filter(l => !l.isSnapshot).length}
+                          </span>
+                          개의 기록
                         </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => { setLogModalBookId(null); openRecordForBook(logModalBook.id); }}
+                        onClick={() => {
+                          setLogModalBookId(null);
+                          openRecordForBook(logModalBook.id);
+                        }}
                         className="flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/70"
                       >
                         <PenLine size={11} />
@@ -1627,15 +1744,27 @@ export default function Library() {
                       {logModalLogs.map((log, idx) => {
                         const pagesRead = Number(log.pagesRead || 0);
                         const statusColors = {
-                          done: { bar: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-600" },
-                          reading: { bar: "bg-primary", badge: "bg-primary/10 text-primary" },
-                          want: { bar: "bg-amber-400", badge: "bg-amber-50 text-amber-600" },
+                          done: {
+                            bar: "bg-emerald-400",
+                            badge: "bg-emerald-50 text-emerald-600",
+                          },
+                          reading: {
+                            bar: "bg-primary",
+                            badge: "bg-primary/10 text-primary",
+                          },
+                          want: {
+                            bar: "bg-amber-400",
+                            badge: "bg-amber-50 text-amber-600",
+                          },
                         };
-                        const colors = statusColors[log.status] || statusColors.reading;
+                        const colors =
+                          statusColors[log.status] || statusColors.reading;
                         return (
                           <div key={log.id} className="flex gap-3">
                             <div className="flex flex-col items-center pt-1">
-                              <div className={`h-2 w-2 shrink-0 rounded-full ${colors.bar}`} />
+                              <div
+                                className={`h-2 w-2 shrink-0 rounded-full ${colors.bar}`}
+                              />
                               {idx < logModalLogs.length - 1 && (
                                 <div className="mt-1 w-px flex-1 bg-border/50" />
                               )}
@@ -1643,9 +1772,13 @@ export default function Library() {
                             <div className="mb-3 min-w-0 flex-1">
                               <div className="mb-1.5 flex items-center justify-between">
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-xs font-bold text-foreground">{formatDateKo(log.date)}</span>
+                                  <span className="text-xs font-bold text-foreground">
+                                    {formatDateKo(log.date)}
+                                  </span>
                                   {log.status === "done" && (
-                                    <span className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${colors.badge}`}>
+                                    <span
+                                      className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${colors.badge}`}
+                                    >
                                       <BookOpenCheck size={9} />
                                       완독
                                     </span>
@@ -1654,7 +1787,13 @@ export default function Library() {
                                 {!log.isSnapshot && (
                                   <button
                                     type="button"
-                                    onClick={() => setConfirmDeleteLogId(confirmDeleteLogId === log.id ? null : log.id)}
+                                    onClick={() =>
+                                      setConfirmDeleteLogId(
+                                        confirmDeleteLogId === log.id
+                                          ? null
+                                          : log.id
+                                      )
+                                    }
                                     className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive"
                                   >
                                     <X size={11} />
@@ -1663,7 +1802,9 @@ export default function Library() {
                               </div>
                               {confirmDeleteLogId === log.id && (
                                 <div className="mb-2 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-2.5 py-1.5">
-                                  <span className="flex-1 text-xs text-destructive">삭제하시겠어요?</span>
+                                  <span className="flex-1 text-xs text-destructive">
+                                    삭제하시겠어요?
+                                  </span>
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteLog(log.id)}
@@ -1683,7 +1824,9 @@ export default function Library() {
                               {(log.fromPage > 0 || log.toPage > 0) && (
                                 <div className="mb-1.5 flex items-baseline gap-1.5">
                                   <span className="text-sm font-bold text-foreground">
-                                    {pagesRead > 0 ? `${pagesRead.toLocaleString()}p` : "—"}
+                                    {pagesRead > 0
+                                      ? `${pagesRead.toLocaleString()}p`
+                                      : "—"}
                                   </span>
                                   {log.fromPage > 0 && log.toPage > 0 && (
                                     <span className="text-[11px] text-muted-foreground">
@@ -1696,8 +1839,10 @@ export default function Library() {
                                 <div
                                   className="mt-2 rounded-sm border border-r-0 border-l-[3px] border-primary/25 bg-amber-50/60 px-2.5 py-1.5 dark:bg-amber-950/20"
                                   style={{
-                                    maskImage: "radial-gradient(circle at 100% 50%, transparent 6px, black 7px)",
-                                    WebkitMaskImage: "radial-gradient(circle at 100% 50%, transparent 6px, black 7px)",
+                                    maskImage:
+                                      "radial-gradient(circle at 100% 50%, transparent 6px, black 7px)",
+                                    WebkitMaskImage:
+                                      "radial-gradient(circle at 100% 50%, transparent 6px, black 7px)",
                                   }}
                                 >
                                   <p className="line-clamp-3 text-xs italic leading-relaxed text-amber-900/75 dark:text-amber-100/60">
@@ -1719,10 +1864,21 @@ export default function Library() {
       </Dialog>
 
       {/* ── 기록하기 팝업 모달 ── */}
-      <Dialog open={recordModalOpen} onOpenChange={open => { if (!open) { setRecordModalOpen(false); setDatePickerOpen(false); } }}>
+      <Dialog
+        open={recordModalOpen}
+        onOpenChange={open => {
+          if (!open) {
+            setRecordModalOpen(false);
+            setDatePickerOpen(false);
+          }
+        }}
+      >
         <DialogContent className="max-h-[90vh] w-full max-w-sm overflow-hidden rounded-2xl p-0 flex flex-col">
           {focusedBook && (
-            <form onSubmit={handleRecordSubmit} className="flex flex-1 min-h-0 flex-col overflow-hidden">
+            <form
+              onSubmit={handleRecordSubmit}
+              className="flex flex-1 min-h-0 flex-col overflow-hidden"
+            >
               <DialogHeader className="shrink-0 border-b border-border/40 px-4 pt-4 pb-3">
                 <div className="flex items-center gap-3">
                   <img
@@ -1737,7 +1893,9 @@ export default function Library() {
                     <DialogTitle className="line-clamp-2 text-sm font-bold leading-snug">
                       {focusedBook.title}
                     </DialogTitle>
-                    <p className="line-clamp-1 text-[11px] text-muted-foreground">{focusedBook.author}</p>
+                    <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                      {focusedBook.author}
+                    </p>
                   </div>
                 </div>
               </DialogHeader>
@@ -1761,15 +1919,29 @@ export default function Library() {
 
                 {/* 기록 날짜 — 테마 캘린더 */}
                 <div className="space-y-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">기록 날짜</span>
-                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    기록 날짜
+                  </span>
+                  <Popover
+                    open={datePickerOpen}
+                    onOpenChange={setDatePickerOpen}
+                  >
                     <PopoverTrigger asChild>
                       <button
                         type="button"
                         className="flex h-10 w-full items-center gap-2 rounded-xl bg-secondary/40 px-3 text-left text-sm transition-colors hover:bg-secondary/60"
                       >
-                        <CalendarDays size={14} className="shrink-0 text-muted-foreground" />
-                        <span className={recordDate ? "text-foreground" : "text-muted-foreground"}>
+                        <CalendarDays
+                          size={14}
+                          className="shrink-0 text-muted-foreground"
+                        />
+                        <span
+                          className={
+                            recordDate
+                              ? "text-foreground"
+                              : "text-muted-foreground"
+                          }
+                        >
                           {recordDate ? formatDateKo(recordDate) : "날짜 선택"}
                         </span>
                       </button>
@@ -1777,10 +1949,16 @@ export default function Library() {
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
-                        selected={recordDate ? new Date(recordDate + "T00:00:00") : undefined}
+                        selected={
+                          recordDate
+                            ? new Date(recordDate + "T00:00:00")
+                            : undefined
+                        }
                         onSelect={date => {
                           if (date) {
-                            const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+                            const local = new Date(
+                              date.getTime() - date.getTimezoneOffset() * 60000
+                            );
                             setRecordDate(local.toISOString().slice(0, 10));
                             setDatePickerOpen(false);
                           }
@@ -1796,14 +1974,20 @@ export default function Library() {
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-3">
                     <label className="space-y-1.5">
-                      <span className="text-xs font-semibold text-muted-foreground">시작 페이지</span>
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        시작 페이지
+                      </span>
                       <Input
                         type="number"
                         min={0}
                         value={recordFromPage}
                         disabled={recordStatus === "want"}
                         onChange={e => {
-                          const next = clampNumber(e.target.value, 0, focusedBook.totalPage || 99999);
+                          const next = clampNumber(
+                            e.target.value,
+                            0,
+                            focusedBook.totalPage || 99999
+                          );
                           setRecordFromPage(next);
                           if (recordToPage < next) setRecordToPage(next);
                         }}
@@ -1811,7 +1995,9 @@ export default function Library() {
                       />
                     </label>
                     <label className="space-y-1.5">
-                      <span className="text-xs font-semibold text-muted-foreground">끝 페이지</span>
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        끝 페이지
+                      </span>
                       <Input
                         type="number"
                         min={0}
@@ -1819,7 +2005,13 @@ export default function Library() {
                         value={recordToPage}
                         disabled={recordStatus === "want"}
                         onChange={e =>
-                          setRecordToPage(clampNumber(e.target.value, recordFromPage, focusedBook.totalPage || 99999))
+                          setRecordToPage(
+                            clampNumber(
+                              e.target.value,
+                              recordFromPage,
+                              focusedBook.totalPage || 99999
+                            )
+                          )
                         }
                         className="h-10 rounded-xl bg-secondary/40"
                       />
@@ -1829,8 +2021,19 @@ export default function Library() {
                   {recordStatus !== "want" && focusedBook.totalPage > 0 && (
                     <div className="space-y-1.5 pt-1">
                       <div className="flex justify-between text-[11px] text-muted-foreground">
-                        <span>시작 <span className="font-semibold text-foreground">{recordFromPage}p</span></span>
-                        <span>끝 <span className="font-semibold text-primary">{recordToPage}p</span> / {focusedBook.totalPage}p</span>
+                        <span>
+                          시작{" "}
+                          <span className="font-semibold text-foreground">
+                            {recordFromPage}p
+                          </span>
+                        </span>
+                        <span>
+                          끝{" "}
+                          <span className="font-semibold text-primary">
+                            {recordToPage}p
+                          </span>{" "}
+                          / {focusedBook.totalPage}p
+                        </span>
                       </div>
                       <Slider
                         value={[recordFromPage, recordToPage]}
@@ -1851,7 +2054,11 @@ export default function Library() {
                     <div className="rounded-xl bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
                       오늘 기록될 페이지:{" "}
                       <span className="font-bold text-primary">
-                        {Math.max(0, recordToPage - recordFromPage).toLocaleString()}p
+                        {Math.max(
+                          0,
+                          recordToPage - recordFromPage
+                        ).toLocaleString()}
+                        p
                       </span>
                     </div>
                   )}
@@ -1859,11 +2066,17 @@ export default function Library() {
 
                 {/* 메모 */}
                 <label className="block space-y-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground">메모</span>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    메모
+                  </span>
                   <Textarea
                     value={recordMemo}
                     onChange={e => setRecordMemo(e.target.value)}
-                    placeholder={recordStatus === "want" ? "이 책에 대한 기대나 메모를 적어보세요." : "오늘 읽으며 남기고 싶은 생각을 적어보세요."}
+                    placeholder={
+                      recordStatus === "want"
+                        ? "이 책에 대한 기대나 메모를 적어보세요."
+                        : "오늘 읽으며 남기고 싶은 생각을 적어보세요."
+                    }
                     className="h-24 resize-none overflow-y-auto rounded-xl border-none bg-secondary/40 p-3 text-sm"
                   />
                 </label>
@@ -1873,7 +2086,10 @@ export default function Library() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => { setRecordModalOpen(false); setDatePickerOpen(false); }}
+                  onClick={() => {
+                    setRecordModalOpen(false);
+                    setDatePickerOpen(false);
+                  }}
                   className="h-10 flex-1 rounded-xl"
                 >
                   취소
@@ -1884,8 +2100,13 @@ export default function Library() {
                   className="h-10 flex-1 rounded-xl font-bold"
                 >
                   {recordSaving ? (
-                    <><Loader2 size={14} className="mr-2 animate-spin" />저장 중</>
-                  ) : "저장하기"}
+                    <>
+                      <Loader2 size={14} className="mr-2 animate-spin" />
+                      저장 중
+                    </>
+                  ) : (
+                    "저장하기"
+                  )}
                 </Button>
               </div>
             </form>

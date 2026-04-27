@@ -3,6 +3,7 @@
 import { Outlet } from 'react-router-dom';
 import SideNav from './SideNav';
 import WeatherEffects from './WeatherEffects';
+import SeasonEffects from './SeasonEffects';
 import ChatBot from './ChatBot';
 
 export default function PageLayout({ children, showNav = true, className = '' }) {
@@ -10,6 +11,7 @@ export default function PageLayout({ children, showNav = true, className = '' })
     return (
       <div className={`min-h-screen bg-background relative ${className}`}>
         <WeatherEffects />
+        <SeasonEffects />
         {children ?? <Outlet />}
         <ChatBot />
       </div>
@@ -19,6 +21,7 @@ export default function PageLayout({ children, showNav = true, className = '' })
   return (
     <div className="flex h-screen overflow-hidden bg-background relative">
       <WeatherEffects />
+      <SeasonEffects />
       <SideNav />
       <main className={`flex-1 min-w-0 overflow-y-auto ${className}`}>
         <div className="max-w-5xl w-full">

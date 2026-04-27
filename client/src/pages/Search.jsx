@@ -136,7 +136,7 @@ export default function Search() {
 
   useEffect(() => {
     let cancelled = false;
-    const categories = Object.keys(GENRE_MAP);
+    const categories = Object.keys(GENRE_MAP).filter(g => g !== "베스트셀러" && g !== "신간");
     const randomGenre =
       categories[Math.floor(Math.random() * categories.length)];
 
@@ -640,7 +640,7 @@ export default function Search() {
             <section>
               <h3 className="text-sm font-bold mb-4">인기 장르</h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                {Object.keys(GENRE_MAP).map(genre => (
+                {Object.keys(GENRE_MAP).filter(g => g !== "베스트셀러").map(genre => (
                   <button
                     key={genre}
                     onClick={() => performGenreSearch(genre, true)}
