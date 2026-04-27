@@ -255,8 +255,7 @@ export default function Library() {
   const [popupBook, setPopupBook] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
 
-  // 캘린더 전용: 항상 목업 데이터 사용
-  const calendarBooks = MOCK_BOOKS;
+  const calendarBooks = books;
 
   // 가장 최근 기록된 도서 — 실제 데이터 (mainBook 우선, 없으면 reading 중 최신)
   const featured = useMemo(() => {
@@ -278,7 +277,7 @@ export default function Library() {
     [books, featured]
   );
 
-  const streak = useMemo(() => calculateStreak(calendarBooks), []);
+  const streak = useMemo(() => calculateStreak(calendarBooks), [calendarBooks]);
 
   const daysInMonth = getDaysInMonth(calYear, calMonth);
   const firstDay = getFirstDayOfMonth(calYear, calMonth);
@@ -287,12 +286,17 @@ export default function Library() {
 
   const monthCalendarData = useMemo(() => {
     const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-    return Object.fromEntries(
-      Object.entries(READING_CALENDAR).filter(([date]) => date.startsWith(prefix))
-    );
-  }, [calYear, calMonth]);
+    const countByDate = {};
+    calendarBooks.forEach(book => {
+      (book.checkedDates || []).forEach(d => {
+        if (d.startsWith(prefix)) {
+          countByDate[d] = (countByDate[d] || 0) + 1;
+        }
+      });
+    });
+    return countByDate;
+  }, [calYear, calMonth, calendarBooks]);
 
-  // 해당 월 독서 통계 — 캘린더 목업 데이터 기반
   const monthStats = useMemo(() => {
     const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
     const daysSet = new Set();
@@ -315,7 +319,7 @@ export default function Library() {
       totalPages,
       avgPages: readingDays > 0 ? Math.round(totalPages / readingDays) : 0,
     };
-  }, [calYear, calMonth]);
+  }, [calYear, calMonth, calendarBooks]);
 
   const calendarCells = useMemo(() => {
     const cells = [];
@@ -335,11 +339,10 @@ export default function Library() {
     return cells;
   }, [calYear, calMonth, daysInMonth, firstDay]);
 
-  // 선택한 날짜에 읽은 책 목록 — 캘린더 목업 데이터 기반
   const booksOnDate = useMemo(() => {
     if (!selectedDate) return [];
     return calendarBooks.filter(b => (b.checkedDates || []).includes(selectedDate));
-  }, [selectedDate]);
+  }, [selectedDate, calendarBooks]);
 
   const featuredProgress = bookProgress(featured);
 

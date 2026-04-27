@@ -1,6 +1,6 @@
 // Booklog Points — 「따뜻한 라이브러리」
 // PRD.md §9 포인트 & 기부 시스템 — 모든 데이터 Firestore 연동
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Gift, BookOpen, PenLine, Users, MessageSquare,
@@ -9,28 +9,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePoint, POINT_VALUES } from '@/contexts/PointContext';
-import { MOCK_POINT_HISTORY } from '@/lib/mockData';
-
-const POINT_CAT_STYLE = {
-  '출석 체크':        { color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
-  '연속 독서 보너스': { color: 'text-orange-500',  bg: 'bg-orange-500/10'  },
-  '감상 글 작성':     { color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  '완독 보상':        { color: 'text-amber-500',   bg: 'bg-amber-500/10'   },
-  '독서 모임 참여':   { color: 'text-violet-600',  bg: 'bg-violet-500/10'  },
-  '댓글 작성':        { color: 'text-teal-500',    bg: 'bg-teal-500/10'    },
-  '책 등록':          { color: 'text-primary',     bg: 'bg-primary/10'     },
-};
-
-function fmtDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-}
-
-function fmtMonth(yyyyMM) {
-  const [y, m] = yyyyMM.split('-');
-  return `${y}년 ${Number(m)}월`;
-}
 
 // ─── 독서 레벨 시스템 ──────────────────────────────────────
 const LEVELS = [
@@ -84,12 +62,13 @@ const CHARITIES = [
   },
 ];
 
-// ─── 오늘 활동 적립 규칙 ──────────────────────────────────
+// ─── 오늘 활동 적립 규칙 (PRD §9) ────────────────────────
+// type 값은 PointContext.addPoint / lastPointDates 키와 일치해야 함
 const EARN_RULES = [
-  { type: 'reading_check', label: '오늘 독서 체크', pts: POINT_VALUES.reading_check, icon: BookOpen,     bg: 'bg-primary/10',    fg: 'text-primary' },
-  { type: 'memo',          label: '메모 작성',      pts: POINT_VALUES.memo,          icon: PenLine,      bg: 'bg-amber-500/10',  fg: 'text-amber-600' },
-  { type: 'meeting_post',  label: '모임 게시글',    pts: POINT_VALUES.meeting_post,  icon: Users,        bg: 'bg-accent',        fg: 'text-accent-foreground' },
-  { type: 'board_post',    label: '자유게시판 글',  pts: POINT_VALUES.board_post,    icon: MessageSquare, bg: 'bg-secondary',    fg: 'text-secondary-foreground' },
+  { type: 'reading_check', label: '독서 기록',     pts: POINT_VALUES.reading_check, icon: BookOpen,      bg: 'bg-primary/10',    fg: 'text-primary'              },
+  { type: 'memo',          label: '메모 작성',     pts: POINT_VALUES.memo,          icon: PenLine,       bg: 'bg-amber-500/10',  fg: 'text-amber-600'            },
+  { type: 'meeting_post',  label: '모임 게시글',   pts: POINT_VALUES.meeting_post,  icon: Users,         bg: 'bg-accent',        fg: 'text-accent-foreground'    },
+  { type: 'board_post',    label: '자유게시판 글', pts: POINT_VALUES.board_post,    icon: MessageSquare, bg: 'bg-secondary',     fg: 'text-secondary-foreground' },
 ];
 
 const POINTS_PER_BOOK = 1_000;
@@ -103,30 +82,14 @@ export default function Points() {
     preferredCharity,
     globalData,
     globalLoading,
-    canEarnToday,
     donateTo,
   } = usePoint();
 
   const [donating, setDonating] = useState(null);
 
-  // mock 포인트 합계 — Firebase 포인트가 0일 때 표시용
-  const mockPointTotal = useMemo(
-    () => MOCK_POINT_HISTORY.reduce((s, p) => s + p.points, 0),
-    []
-  );
-  const displayPoints = myPoints > 0 ? myPoints : mockPointTotal;
+  // profile.totalPoints 기반 실제 포인트
+  const displayPoints = myPoints;
   const levelInfo     = getLevelInfo(displayPoints);
-
-  // 포인트 내역 월별 그룹 (mock 데이터)
-  const pointsByMonth = useMemo(() => {
-    const map = {};
-    MOCK_POINT_HISTORY.forEach(p => {
-      const month = p.date.slice(0, 7);
-      if (!map[month]) map[month] = [];
-      map[month].push(p);
-    });
-    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-  }, []);
 
   // 파생 값
   const totalDonated     = globalData?.totalDonated     ?? 0;
@@ -138,7 +101,7 @@ export default function Points() {
 
   const selectedCharity = CHARITIES.find(c => c.id === preferredCharity);
 
-  // 오늘 완료한 활동
+  // 오늘 완료한 활동 (lastPointDates 기반)
   const today       = new Date().toISOString().slice(0, 10);
   const earnedToday = EARN_RULES.filter(r => lastPointDates[r.type] === today);
   const totalEarned = earnedToday.reduce((sum, r) => sum + r.pts, 0);
@@ -254,6 +217,7 @@ export default function Points() {
         </div>
 
         {/* ── 오늘의 포인트 활동 ───────────────────────── */}
+        {/* lastPointDates[type] === today → 컬러(활성), 미적립 → 회색(비활성) */}
         <div className="mb-6">
           <h2 className="text-sm font-semibold mb-3">오늘의 포인트 활동</h2>
           <div className="space-y-2">
@@ -262,14 +226,14 @@ export default function Points() {
               return (
                 <div
                   key={type}
-                  className={`book-card p-3.5 flex items-center gap-3 ${earned ? 'opacity-60' : ''}`}
+                  className={`book-card p-3.5 flex items-center gap-3 ${!earned ? 'opacity-50' : ''}`}
                 >
                   <div
                     className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      earned ? 'bg-secondary' : bg
+                      earned ? bg : 'bg-secondary'
                     }`}
                   >
-                    <Icon size={18} className={earned ? 'text-muted-foreground' : fg} />
+                    <Icon size={18} className={earned ? fg : 'text-muted-foreground'} />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-semibold">{label}</p>
@@ -278,7 +242,7 @@ export default function Points() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className={`text-sm font-bold ${earned ? 'text-muted-foreground line-through' : 'text-amber-600'}`}>
+                    <p className={`text-sm font-bold ${earned ? 'text-amber-600' : 'text-muted-foreground'}`}>
                       +{pts}P
                     </p>
                     {earned && <CheckCircle2 size={14} className="text-green-500 ml-auto mt-0.5" />}
@@ -393,42 +357,6 @@ export default function Points() {
               </p>
             </>
           )}
-        </div>
-
-        {/* ── 포인트 내역 ──────────────────────────────── */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold mb-3">포인트 내역</h2>
-          <div className="space-y-5">
-            {pointsByMonth.map(([month, entries]) => (
-              <div key={month}>
-                <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">
-                  {fmtMonth(month)}
-                </p>
-                <div className="book-card overflow-hidden">
-                  {entries.map((entry, idx) => {
-                    const catStyle = POINT_CAT_STYLE[entry.category] ?? { color: 'text-primary', bg: 'bg-primary/10' };
-                    return (
-                      <div
-                        key={entry.id}
-                        className={`px-4 py-2.5 space-y-1 ${idx < entries.length - 1 ? 'border-b border-border/30' : ''}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap ${catStyle.bg} ${catStyle.color}`}>
-                            {entry.category}
-                          </span>
-                          <span className="text-sm font-bold text-amber-500">+{entry.points}P</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3 pl-2.5">
-                          <p className="text-xs text-foreground/75 line-clamp-1 flex-1">{entry.detail}</p>
-                          <p className="text-[11px] text-muted-foreground flex-shrink-0">{fmtDate(entry.date)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* ── 기부 시스템 안내 ─────────────────────────── */}
