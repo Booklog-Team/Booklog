@@ -12,22 +12,55 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import BookCard from "@/components/BookCard";
 import { getBookDetail, searchBooks, getHighQualityCover } from "@/utils/api";
-import { doc, getDoc, setDoc, arrayUnion } from "firebase/firestore";
+import {
+  addDoc,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePoint } from "@/contexts/PointContext";
 
 const STATUS_OPTIONS = [
-  { value: "reading", label: "읽는 중",   emoji: "📖" },
-  { value: "want",    label: "읽고 싶음", emoji: "🔖" },
-  { value: "done",    label: "완독",      emoji: "✅" },
+  {
+    value: "want",
+    label: "읽고 싶음",
+    emoji: "🔖",
+    active: "border-amber-400 bg-amber-100 text-amber-800",
+    inactive: "border-amber-200 bg-amber-50/70 text-amber-700 hover:bg-amber-100",
+  },
+  {
+    value: "reading",
+    label: "읽는 중",
+    emoji: "📖",
+    active: "border-primary bg-primary/10 text-primary",
+    inactive: "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10",
+  },
+  {
+    value: "done",
+    label: "완독",
+    emoji: "✅",
+    active: "border-emerald-400 bg-emerald-100 text-emerald-800",
+    inactive: "border-emerald-200 bg-emerald-50/70 text-emerald-700 hover:bg-emerald-100",
+  },
 ];
 
-const STATUS_CLASS = {
-  want:    "bg-amber-100 text-amber-700 border-amber-300",
-  reading: "bg-primary/10 text-primary border-primary/30",
-  done:    "bg-emerald-100 text-emerald-700 border-emerald-300",
-};
+function getTodayKey() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function clampPage(value, max = 1000) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 0;
+  return Math.max(0, Math.min(next, max || 1000));
+}
 
 // ── 최근 본 도서 localStorage 헬퍼 ───────────────────────────
 const RECENT_KEY = "booklog_recent_books";
@@ -147,8 +180,9 @@ export default function BookDetail() {
   const [status, setStatus]           = useState(null);
   const [savedStatus, setSavedStatus] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [savedCurrentPage, setSavedCurrentPage] = useState(0);
   const [memo, setMemo]               = useState("");
-  const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [savedMemo, setSavedMemo]     = useState("");
   const [rating, setRating]           = useState(0);
   const [memoOpen, setMemoOpen]       = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -164,7 +198,9 @@ export default function BookDetail() {
       setStatus(null);
       setSavedStatus(null);
       setCurrentPage(0);
+      setSavedCurrentPage(0);
       setMemo("");
+      setSavedMemo("");
       setRating(0);
 
       try {
@@ -181,8 +217,11 @@ export default function BookDetail() {
               if (!cancelled && snap.exists()) {
                 const d = snap.data();
                 if (d.status)      { setStatus(d.status); setSavedStatus(d.status); }
-                if (d.currentPage) setCurrentPage(d.currentPage);
-                if (d.memo)        setMemo(d.memo);
+                if (typeof d.currentPage === "number") {
+                  setCurrentPage(d.currentPage);
+                  setSavedCurrentPage(d.currentPage);
+                }
+                if (d.memo)        { setMemo(d.memo); setSavedMemo(d.memo); }
                 if (d.rating)      setRating(d.rating);
               }
             })
@@ -233,46 +272,137 @@ export default function BookDetail() {
   };
 
   // ── 기록 저장 ─────────────────────────────────────────────
-  const handleSave = async () => {
-    if (!user) { toast.error("로그인이 필요합니다."); return; }
-    if (!status) { toast.error("상태를 먼저 선택해주세요."); return; }
+  const handleSave = async ({ silent = false, createLog = true, awardPoints = true } = {}) => {
+    if (!user) { toast.error("로그인이 필요합니다."); return false; }
 
     setSaving(true);
-    const isFirstCompletion = status === "done" && savedStatus !== "done";
-    const today = new Date().toISOString().slice(0, 10);
     try {
+      const bookRef = doc(db, "users", user.uid, "shelf", id);
+
+      if (!status) {
+        if (!savedStatus) {
+          if (!silent) toast.error("상태를 먼저 선택해주세요.");
+          return false;
+        }
+        await deleteDoc(bookRef);
+        setSavedStatus(null);
+        setSavedCurrentPage(0);
+        setSavedMemo("");
+        setCurrentPage(0);
+        setMemo("");
+        setRating(0);
+        if (!silent) toast.success("독서 상태를 해제했습니다.");
+        return true;
+      }
+
       const info = book.volumeInfo || {};
+      const today = getTodayKey();
+      const totalPage = info.pageCount || 0;
+      const targetPage =
+        status === "want"
+          ? 0
+          : status === "done" && totalPage
+            ? totalPage
+            : clampPage(currentPage, totalPage || 1000);
+      const isFirstCompletion = status === "done" && savedStatus !== "done";
+      const trimmedMemo = memo.trim();
+
       const payload = {
         title:       info.title || "제목 없음",
         author:      info.authors?.[0] || "",
         thumbnail:   book._cover || "",
         status,
-        currentPage,
-        totalPage:   info.pageCount || 0,
+        currentPage: targetPage,
+        totalPage,
         memo,
         rating,
-        lastReadDate: today,
       };
+
       if (status === "reading" || status === "done") {
+        payload.lastReadDate = today;
         payload.checkedDates = arrayUnion(today);
       }
-      await setDoc(doc(db, "users", user.uid, "shelf", id), payload, { merge: true });
-      setSavedStatus(status);
-      if (isFirstCompletion) {
-        fireCompletionConfetti();
-        toast.success("🎉 완독을 축하드려요!");
-      } else {
-        toast.success("독서 기록이 저장되었습니다!");
+
+      await setDoc(bookRef, payload, { merge: true });
+
+      const pagesRead = Math.max(0, targetPage - (savedCurrentPage || 0));
+      const memoChanged = trimmedMemo && trimmedMemo !== savedMemo.trim();
+      const shouldWriteLog =
+        createLog &&
+        (status === "reading" || status === "done") &&
+        (pagesRead > 0 || memoChanged || isFirstCompletion);
+
+      if (shouldWriteLog) {
+        await addDoc(collection(db, "users", user.uid, "readingLogs"), {
+          bookId: id,
+          title: payload.title,
+          author: payload.author,
+          thumbnail: payload.thumbnail,
+          status,
+          date: today,
+          pagesRead,
+          fromPage: savedCurrentPage || 0,
+          toPage: targetPage,
+          currentPage: targetPage,
+          totalPage,
+          memo: trimmedMemo,
+          createdAt: serverTimestamp(),
+        });
       }
-      // 포인트 적립 — addPoint 내부에서 하루 1회 중복 체크
-      if (status === "reading" || status === "done") addPoint("reading_check").catch(() => {});
-      if (memo.trim()) addPoint("memo").catch(() => {});
+
+      setCurrentPage(targetPage);
+      setSavedCurrentPage(targetPage);
+      setSavedMemo(memo);
+      setSavedStatus(status);
+
+      if (!silent) {
+        if (isFirstCompletion) {
+          fireCompletionConfetti();
+          toast.success("🎉 완독을 축하드려요!");
+        } else {
+          toast.success("독서 기록이 저장되었습니다!");
+        }
+      }
+
+      if (awardPoints) {
+        if (status === "reading" || status === "done") addPoint("reading_check").catch(() => {});
+        if (trimmedMemo) addPoint("memo").catch(() => {});
+      }
+
+      return true;
     } catch (err) {
       console.error(err);
-      toast.error("저장에 실패했어요. 다시 시도해주세요.");
+      if (!silent) toast.error("저장에 실패했어요. 다시 시도해주세요.");
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleGoToReading = async () => {
+    if (!status) {
+      toast.error("상태를 먼저 선택해주세요.");
+      return;
+    }
+
+    const shouldSaveFirst =
+      status !== savedStatus ||
+      currentPage !== savedCurrentPage ||
+      memo !== savedMemo;
+
+    if (shouldSaveFirst) {
+      const saved = await handleSave({
+        silent: true,
+        createLog: false,
+        awardPoints: false,
+      });
+      if (!saved) {
+        toast.error("내 서재로 이동하기 전에 상태를 저장하지 못했어요.");
+        return;
+      }
+    }
+
+    navigate(`/library?bookId=${id}&record=1`);
   };
 
   // ── 공유 ──────────────────────────────────────────────────
@@ -452,49 +582,46 @@ export default function BookDetail() {
             나의 독서 기록
           </h3>
 
-          {/* 현재 상태 */}
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">현재 상태</p>
-            <div className="relative">
-              <button
-                onClick={() => setShowStatusMenu(!showStatusMenu)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
-                  status ? STATUS_CLASS[status] : "bg-secondary/50 border-border text-muted-foreground"
-                }`}
-              >
-                <span>
-                  {status
-                    ? `${STATUS_OPTIONS.find((s) => s.value === status)?.emoji} ${STATUS_OPTIONS.find((s) => s.value === status)?.label}`
-                    : "상태를 선택해 주세요"}
-                </span>
-                <ChevronDown size={18} className={`transition-transform duration-300 ${showStatusMenu ? "rotate-180" : ""}`} />
-              </button>
-              {showStatusMenu && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border/80 rounded-xl shadow-xl z-30 overflow-hidden animate-in fade-in slide-in-from-top-2">
+          {/* 독서 상태 */}
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">독서 상태</p>
+            <div className="grid grid-cols-3 gap-2">
+              {STATUS_OPTIONS.map((opt) => {
+                const selected = status === opt.value;
+                return (
                   <button
-                    onClick={() => { setStatus(null); setShowStatusMenu(false); }}
-                    className="w-full flex items-center justify-between px-4 py-4 text-sm font-medium hover:bg-secondary transition-colors border-b border-border/30 text-muted-foreground"
+                    key={opt.value}
+                    onClick={() => {
+                      setStatus(opt.value);
+                      if (opt.value === "done" && totalPages) setCurrentPage(totalPages);
+                      if (opt.value === "reading" && !memoOpen) setMemoOpen(true);
+                    }}
+                    className={`relative flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-bold transition-all ${
+                      selected ? opt.active : opt.inactive
+                    }`}
                   >
-                    <span className="flex items-center gap-3">
-                      <span className="text-lg">—</span>
-                      상태를 선택해 주세요
-                    </span>
-                    {status === null && <Check size={18} className="text-primary" />}
-                  </button>
-                  {STATUS_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => { setStatus(opt.value); setShowStatusMenu(false); }}
-                      className="w-full flex items-center justify-between px-4 py-4 text-sm font-medium hover:bg-secondary transition-colors border-b border-border/30 last:border-0"
-                    >
-                      <span className="flex items-center gap-3">
-                        <span className="text-lg">{opt.emoji}</span>
-                        {opt.label}
+                    {selected && (
+                      <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-card/90">
+                        <Check size={11} />
                       </span>
-                      {status === opt.value && <Check size={18} className="text-primary" />}
-                    </button>
-                  ))}
-                </div>
+                    )}
+                    <span className="text-xl leading-none">{opt.emoji}</span>
+                    <span className="leading-tight">{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={() => setStatus(null)}
+                className="text-xs font-semibold text-muted-foreground transition-colors hover:text-destructive"
+              >
+                선택 취소
+              </button>
+              {savedStatus && (
+                <span className="text-xs text-muted-foreground">
+                  저장됨: {STATUS_OPTIONS.find((s) => s.value === savedStatus)?.label}
+                </span>
               )}
             </div>
           </div>
@@ -520,7 +647,7 @@ export default function BookDetail() {
                     <Input
                       type="number"
                       value={currentPage}
-                      onChange={(e) => setCurrentPage(Math.min(Number(e.target.value), totalPages || 1000))}
+                      onChange={(e) => setCurrentPage(clampPage(e.target.value, totalPages || 1000))}
                       className="h-6 p-0 text-center text-sm bg-transparent border-none focus-visible:ring-0 font-bold"
                     />
                   </div>
@@ -585,13 +712,27 @@ export default function BookDetail() {
             )}
           </div>
 
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full h-12 text-base font-bold rounded-xl"
-          >
-            {saving ? <><Loader2 size={16} className="animate-spin mr-2" />저장 중...</> : "기록 저장하기"}
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {status && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGoToReading}
+                disabled={saving}
+                className="h-12 flex-1 rounded-xl text-sm font-bold"
+              >
+                <PenLine size={16} className="mr-2" />
+                기록하러 가기
+              </Button>
+            )}
+            <Button
+              onClick={() => handleSave()}
+              disabled={saving}
+              className="h-12 flex-1 rounded-xl text-base font-bold"
+            >
+              {saving ? <><Loader2 size={16} className="animate-spin mr-2" />저장 중...</> : "저장하기"}
+            </Button>
+          </div>
         </div>
 
         {/* ── 관련 도서 ── */}

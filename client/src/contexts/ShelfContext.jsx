@@ -3,6 +3,7 @@
 // PRD.md §7 Firestore 데이터 구조, §12 팀원 역할 분담 참조
 import React, { createContext, useContext, useEffect, useState } from "react";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -13,6 +14,7 @@ import {
   onSnapshot,
   arrayUnion,
   arrayRemove,
+  increment,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
@@ -35,6 +37,7 @@ import { useAuth } from "./AuthContext";
 /**
  * @typedef {Object} ShelfContextValue
  * @property {BookShelf[]}      books           - 서재 도서 목록
+ * @property {Object[]}         readingLogs     - 독서 로그 목록
  * @property {BookShelf|null}   mainBook        - 대표 도서 (lastReadDate 기준)
  * @property {boolean}          loading         - 로딩 상태
  * @property {Error|null}       error           - 에러 상태
@@ -45,10 +48,24 @@ import { useAuth } from "./AuthContext";
  * @property {Function}         checkTodayRead  - 오늘 독서 체크
  * @property {Function}         updateMemo      - 메모 업데이트
  * @property {Function}         updateProgress  - 읽은 페이지 업데이트
+ * @property {Function}         addReadingLog   - 독서 로그 추가
  * @property {Function}         getBooksByStatus - 상태별 도서 조회
  */
 
 const ShelfContext = createContext(undefined);
+
+function getTodayKey() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function timestampMs(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") return value.seconds * 1000;
+  return 0;
+}
 
 /**
  * ShelfProvider
@@ -58,6 +75,7 @@ const ShelfContext = createContext(undefined);
 export function ShelfProvider({ children }) {
   const { user } = useAuth();
   const [books, setBooks] = useState([]);
+  const [readingLogs, setReadingLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -91,6 +109,38 @@ export function ShelfProvider({ children }) {
         console.error("[ShelfContext] Firestore 구독 에러:", err);
         setError(err);
         setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      setReadingLogs([]);
+      return;
+    }
+
+    const logsRef = collection(db, "users", user.uid, "readingLogs");
+    const unsubscribe = onSnapshot(
+      logsRef,
+      snapshot => {
+        const logsData = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .sort((a, b) => {
+            if ((b.date || "") !== (a.date || "")) {
+              return (b.date || "").localeCompare(a.date || "");
+            }
+            return timestampMs(b.createdAt) - timestampMs(a.createdAt);
+          });
+        setReadingLogs(logsData);
+      },
+      err => {
+        console.error("[ShelfContext] 독서 로그 구독 실패:", err);
+        setError(err);
       }
     );
 
@@ -172,7 +222,13 @@ export function ShelfProvider({ children }) {
       const bookRef = doc(db, "users", user.uid, "shelf", bookId);
       const currentBook = books.find(b => b.id === bookId);
       const updates = { status };
-      if (currentBook?.status === "done" && status !== "done") {
+      if (status === "done") {
+        const today = getTodayKey();
+        updates.currentPage = currentBook?.totalPage || currentBook?.currentPage || 0;
+        updates.lastReadDate = today;
+        updates.checkedDates = arrayUnion(today);
+        if (!currentBook?.startDate) updates.startDate = today;
+      } else if (status === "want" || currentBook?.status === "done") {
         updates.currentPage = 0;
       }
       await updateDoc(bookRef, updates);
@@ -250,6 +306,86 @@ export function ShelfProvider({ children }) {
       await updateDoc(bookRef, { currentPage });
     } catch (err) {
       console.error("[ShelfContext] 진행률 업데이트 실패:", err);
+      setError(err);
+      throw err;
+    }
+  };
+
+  /**
+   * 독서 로그 추가
+   * @param {string} bookId
+   * @param {Object} entry
+   * @param {string} entry.date - YYYY-MM-DD
+   * @param {number} entry.pagesRead - 이번에 읽은 페이지 수
+   * @param {number} entry.currentPage - 기록 후 현재 페이지
+   * @param {string} entry.memo - 기록 메모
+   * @param {string} entry.status - 'want' | 'reading' | 'done'
+   */
+  const addReadingLog = async (bookId, entry = {}) => {
+    if (!user) throw new Error("사용자가 로그인하지 않았습니다.");
+
+    const currentBook = books.find(book => book.id === bookId);
+    if (!currentBook) throw new Error("서재에서 책을 찾을 수 없습니다.");
+
+    const date = entry.date || getTodayKey();
+    const totalPage = Number(currentBook.totalPage) || 0;
+    const nextStatus = entry.status || currentBook.status || "reading";
+    const fromPage = Number(entry.fromPage ?? currentBook.currentPage ?? 0) || 0;
+    const requestedCurrentPage = Number(entry.currentPage ?? fromPage) || 0;
+    const currentPage =
+      nextStatus === "done" && totalPage
+        ? totalPage
+        : Math.max(0, Math.min(requestedCurrentPage, totalPage || 99999));
+    const pagesRead = Math.max(0, Number(entry.pagesRead) || 0);
+    const memo = (entry.memo || "").trim();
+
+    try {
+      await addDoc(collection(db, "users", user.uid, "readingLogs"), {
+        bookId,
+        title: currentBook.title || "제목 없음",
+        author: currentBook.author || "",
+        thumbnail: currentBook.thumbnail || "",
+        status: nextStatus,
+        date,
+        pagesRead,
+        fromPage,
+        toPage: currentPage,
+        currentPage,
+        totalPage,
+        memo,
+        createdAt: serverTimestamp(),
+      });
+
+      const bookRef = doc(db, "users", user.uid, "shelf", bookId);
+      const updates = {
+        status: nextStatus,
+        memo,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (nextStatus === "reading" || nextStatus === "done") {
+        updates.currentPage = currentPage;
+        updates.lastReadDate = date;
+        updates.checkedDates = arrayUnion(date);
+        if (!currentBook.startDate) updates.startDate = date;
+      }
+
+      await updateDoc(bookRef, updates);
+
+      if (nextStatus !== "want" && pagesRead > 0) {
+        const statRef = doc(db, "users", user.uid, "readingStats", date);
+        await setDoc(
+          statRef,
+          {
+            date,
+            pagesRead: increment(pagesRead),
+            count: increment(1),
+          },
+          { merge: true }
+        );
+      }
+    } catch (err) {
+      console.error("[ShelfContext] 독서 로그 추가 실패:", err);
       setError(err);
       throw err;
     }
@@ -353,6 +489,7 @@ export function ShelfProvider({ children }) {
 
   const value = {
     books,
+    readingLogs,
     mainBook,
     loading,
     error,
@@ -363,6 +500,7 @@ export function ShelfProvider({ children }) {
     checkTodayRead,
     updateMemo,
     updateProgress,
+    addReadingLog,
     getBooksByStatus,
     recordDailyReading,
     getDailyReadingStats,

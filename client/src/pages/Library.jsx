@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
   Flame,
@@ -7,17 +7,23 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
-  X,
   Loader2,
   BookOpen,
+  BookOpenCheck,
   PenLine,
   ArrowLeft,
+  CalendarDays,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShelf } from "@/contexts/ShelfContext";
+import { usePoint } from "@/contexts/PointContext";
 import ShelfCard from "@/components/ShelfCard";
 
 const READING_STATUS_OPTS = [
@@ -119,141 +125,143 @@ function bookProgress(book) {
   return 0;
 }
 
-function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
-  const navigate = useNavigate();
-  const [selected, setSelected] = useState(book.status ?? null);
-  const [saving, setSaving] = useState(false);
+function getTodayKey() {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
 
-  const progress = bookProgress(book);
+function clampNumber(value, min, max) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return min;
+  return Math.max(min, Math.min(next, max));
+}
 
-  const handleSave = async () => {
-    if (selected === book.status) { onClose(); return; }
-    setSaving(true);
-    try {
-      if (!selected) { await onDelete(book.id); }
-      else { await onStatusChange(book.id, selected); }
-      onClose();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setSaving(false);
-    }
+function statusLabel(status) {
+  return READING_STATUS_OPTS.find(opt => opt.value === status)?.label || "기록";
+}
+
+function timestampMs(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") return value.seconds * 1000;
+  return 0;
+}
+
+function getBookStartDate(book, logs = []) {
+  const candidates = [
+    book?.startDate,
+    book?.lastReadDate,
+    ...(book?.checkedDates || []),
+    ...logs.map(log => log.date),
+  ].filter(Boolean);
+
+  if (!candidates.length) return null;
+  return candidates.sort()[0];
+}
+
+function normalizeLog(log, book) {
+  const fromPage = Number(log.fromPage ?? 0) || 0;
+  const toPage = Number(log.toPage ?? log.currentPage ?? 0) || 0;
+  const pagesRead = Number(log.pagesRead ?? Math.max(0, toPage - fromPage)) || 0;
+
+  return {
+    ...log,
+    title: log.title || book?.title || "제목 없음",
+    author: log.author || book?.author || "",
+    thumbnail: log.thumbnail || book?.thumbnail || "",
+    status: log.status || book?.status || "reading",
+    fromPage,
+    toPage,
+    pagesRead,
+    totalPage: Number(log.totalPage ?? book?.totalPage ?? 0) || 0,
+    memo: log.memo || "",
   };
+}
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-background shadow-2xl animate-in slide-in-from-bottom-4 fade-in duration-300"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 pb-3 pt-5">
-          <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-            독서 상태
-          </h3>
-          <button
-            onClick={onClose}
-            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <X size={18} />
-          </button>
-        </div>
+function buildDisplayLogs(books, logs) {
+  const bookMap = new Map(books.map(book => [book.id, book]));
+  const normalized = logs.map(log => normalizeLog(log, bookMap.get(log.bookId)));
+  const realLogKeys = new Set(normalized.map(log => `${log.bookId}|${log.date}`));
+  const fallbackLogs = [];
 
-        <div className="flex gap-4 px-5 pb-4">
-          <img
-            src={book.thumbnail || "/placeholder.png"}
-            alt={book.title}
-            className="h-24 w-16 flex-shrink-0 rounded-lg object-cover shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
-          />
-          <div className="min-w-0 flex-1 py-1">
-            <h4 className="mb-0.5 line-clamp-2 text-sm font-bold leading-snug">
-              {book.title}
-            </h4>
-            <p className="line-clamp-1 text-xs text-muted-foreground">{book.author}</p>
-            {book.totalPage > 0 && (
-              <div className="mt-2 space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    {book.status === "done" ? book.totalPage : book.currentPage}p / {book.totalPage}p
-                  </span>
-                  <span className="font-bold text-primary">{progress}%</span>
-                </div>
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${progress}%` }} />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+  books.forEach(book => {
+    const checkedDates = [...(book.checkedDates || [])].sort();
+    const totalRead =
+      book.status === "done"
+        ? book.totalPage || book.currentPage || 0
+        : book.currentPage || 0;
+    const estimatedPages = checkedDates.length
+      ? Math.max(1, Math.round(totalRead / checkedDates.length))
+      : 0;
 
-        <div className="border-t border-border/40" />
+    checkedDates.forEach((date, index) => {
+      const key = `${book.id}|${date}`;
+      if (realLogKeys.has(key)) return;
 
-        <div className="space-y-3 px-5 py-4">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            독서 상태 변경
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {READING_STATUS_OPTS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setSelected(prev => (prev === opt.value ? null : opt.value))}
-                className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-bold transition-all ${
-                  selected === opt.value ? opt.active : opt.inactive
-                }`}
-              >
-                <span className="text-xl">{opt.emoji}</span>
-                <span>{opt.label}</span>
-              </button>
-            ))}
-          </div>
-          {selected && (
-            <button
-              onClick={() => setSelected(null)}
-              className="w-full py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-destructive"
-            >
-              ✕ 선택 취소
-            </button>
-          )}
-        </div>
+      const fromPage = Math.min(totalRead, estimatedPages * index);
+      const toPage = Math.min(totalRead, fromPage + estimatedPages);
 
-        <div className="flex gap-3 px-5 pb-6">
-          <button
-            onClick={() => { navigate(`/book/${book.id}`); onClose(); }}
-            className="h-12 w-28 flex-shrink-0 rounded-xl border border-border text-xs font-bold text-muted-foreground transition-all hover:bg-secondary"
-          >
-            상세 보기 →
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || selected === book.status}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-50"
-          >
-            {saving && <Loader2 size={16} className="animate-spin" />}
-            저장하기
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+      fallbackLogs.push(normalizeLog({
+        id: `snapshot-${book.id}-${date}`,
+        bookId: book.id,
+        date,
+        status: book.status,
+        fromPage,
+        toPage,
+        currentPage: toPage,
+        pagesRead: Math.max(0, toPage - fromPage),
+        memo: book.memo || "",
+        isSnapshot: true,
+      }, book));
+    });
+  });
+
+  return [...normalized, ...fallbackLogs].sort((a, b) => {
+    if ((b.date || "") !== (a.date || "")) return (b.date || "").localeCompare(a.date || "");
+    return timestampMs(b.createdAt) - timestampMs(a.createdAt);
+  });
 }
 
 export default function Library() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
-  const { books, mainBook, loading, error, removeBook, updateStatus } = useShelf();
+  const {
+    books,
+    readingLogs,
+    mainBook,
+    loading,
+    error,
+    removeBook,
+    updateStatus,
+    addReadingLog,
+  } = useShelf();
+  const { addPoint } = usePoint();
 
   const today = new Date();
+  const todayStr = getTodayKey();
   const [activeTab, setActiveTab] = useState("all");
   const [viewMode, setViewMode] = useState("list");
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
-  const [popupBook, setPopupBook] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [focusedBookId, setFocusedBookId] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [recordSaving, setRecordSaving] = useState(false);
+  const [recordDate, setRecordDate] = useState(todayStr);
+  const [recordStatus, setRecordStatus] = useState("reading");
+  const [recordFromPage, setRecordFromPage] = useState(0);
+  const [recordToPage, setRecordToPage] = useState(0);
+  const [recordMemo, setRecordMemo] = useState("");
 
   const calendarBooks = books;
+  const bookMap = useMemo(() => new Map(books.map(book => [book.id, book])), [books]);
+  const displayLogs = useMemo(
+    () => buildDisplayLogs(books, readingLogs),
+    [books, readingLogs]
+  );
 
   // 가장 최근 기록된 도서 — 실제 데이터 (mainBook 우선, 없으면 reading 중 최신)
   const featured = useMemo(() => {
@@ -280,35 +288,29 @@ export default function Library() {
   const daysInMonth = getDaysInMonth(calYear, calMonth);
   const firstDay = getFirstDayOfMonth(calYear, calMonth);
   const monthName = `${calYear}년 ${calMonth + 1}월`;
-  const todayStr = new Date().toISOString().slice(0, 10);
 
   const monthCalendarData = useMemo(() => {
     const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-    const countByDate = {};
-    calendarBooks.forEach(book => {
-      (book.checkedDates || []).forEach(d => {
-        if (d.startsWith(prefix)) {
-          countByDate[d] = (countByDate[d] || 0) + 1;
-        }
-      });
+    const booksByDate = {};
+    displayLogs.forEach(log => {
+      if (!log.date?.startsWith(prefix)) return;
+      if (!booksByDate[log.date]) booksByDate[log.date] = new Set();
+      booksByDate[log.date].add(log.bookId);
     });
-    return countByDate;
-  }, [calYear, calMonth, calendarBooks]);
+    return Object.fromEntries(
+      Object.entries(booksByDate).map(([date, bookIds]) => [date, bookIds.size])
+    );
+  }, [calYear, calMonth, displayLogs]);
 
   const monthStats = useMemo(() => {
     const prefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
     const daysSet = new Set();
     let totalPages = 0;
 
-    calendarBooks.forEach(book => {
-      const bookMonthDates = (book.checkedDates || []).filter(d => d.startsWith(prefix));
-      bookMonthDates.forEach(d => daysSet.add(d));
-      if (bookMonthDates.length > 0) {
-        const totalChecked = (book.checkedDates || []).length || 1;
-        const pagesEarned =
-          book.status === "done" ? (book.totalPage || 0) : (book.currentPage || 0);
-        totalPages += Math.round((pagesEarned / totalChecked) * bookMonthDates.length);
-      }
+    displayLogs.forEach(log => {
+      if (!log.date?.startsWith(prefix)) return;
+      daysSet.add(log.date);
+      totalPages += Number(log.pagesRead) || 0;
     });
 
     const readingDays = daysSet.size;
@@ -317,7 +319,7 @@ export default function Library() {
       totalPages,
       avgPages: readingDays > 0 ? Math.round(totalPages / readingDays) : 0,
     };
-  }, [calYear, calMonth, calendarBooks]);
+  }, [calYear, calMonth, displayLogs]);
 
   const calendarCells = useMemo(() => {
     const cells = [];
@@ -337,17 +339,188 @@ export default function Library() {
     return cells;
   }, [calYear, calMonth, daysInMonth, firstDay]);
 
-  const booksOnDate = useMemo(() => {
+  const logsOnDate = useMemo(() => {
     if (!selectedDate) return [];
-    return calendarBooks.filter(b => (b.checkedDates || []).includes(selectedDate));
-  }, [selectedDate, calendarBooks]);
+    return displayLogs.filter(log => log.date === selectedDate);
+  }, [selectedDate, displayLogs]);
+
+  const selectedDateBookCount = useMemo(
+    () => new Set(logsOnDate.map(log => log.bookId)).size,
+    [logsOnDate]
+  );
+
+  const focusedBook = focusedBookId ? bookMap.get(focusedBookId) : null;
+
+  const focusedBookLogs = useMemo(
+    () => displayLogs.filter(log => log.bookId === focusedBookId),
+    [displayLogs, focusedBookId]
+  );
+
+  const focusedBookStartDate = useMemo(
+    () => focusedBook ? getBookStartDate(focusedBook, focusedBookLogs) : null,
+    [focusedBook, focusedBookLogs]
+  );
 
   const featuredProgress = bookProgress(featured);
 
-  // 왼쪽 열 레이블: 날짜 선택 시 해당 날짜로 교체
-  const leftLabel = selectedDate
-    ? `${formatDateShort(selectedDate)} 기록`
-    : "최근 읽은 도서";
+  const prepareRecordForm = book => {
+    if (!book) return;
+
+    const nextStatus = book.status === "want" ? "reading" : book.status || "reading";
+    const fromPage = Number(book.currentPage) || 0;
+    const toPage =
+      nextStatus === "done" && book.totalPage
+        ? book.totalPage
+        : fromPage;
+
+    setRecordDate(todayStr);
+    setRecordStatus(nextStatus);
+    setRecordFromPage(fromPage);
+    setRecordToPage(toPage);
+    setRecordMemo("");
+  };
+
+  const openBookLogs = bookId => {
+    if (!bookId) return;
+    setFocusedBookId(bookId);
+    setIsRecording(false);
+  };
+
+  const openRecordForBook = bookId => {
+    const book = bookMap.get(bookId);
+    if (!book) return;
+    setFocusedBookId(bookId);
+    setIsRecording(true);
+    prepareRecordForm(book);
+  };
+
+  const openTodayRecord = () => {
+    const target = featured || books.find(book => book.status === "reading") || books[0];
+    if (!target) {
+      navigate("/search");
+      return;
+    }
+    setSelectedDate(null);
+    openRecordForBook(target.id);
+  };
+
+  useEffect(() => {
+    const queryBookId = searchParams.get("bookId");
+    if (!queryBookId || !bookMap.has(queryBookId)) return;
+
+    setSelectedDate(null);
+    setFocusedBookId(queryBookId);
+    if (searchParams.get("record") === "1") {
+      setIsRecording(true);
+      prepareRecordForm(bookMap.get(queryBookId));
+    } else {
+      setIsRecording(false);
+    }
+    setSearchParams({}, { replace: true });
+  }, [bookMap, searchParams, setSearchParams]);
+
+  const handleBackLeftPanel = () => {
+    if (isRecording) {
+      setIsRecording(false);
+      return;
+    }
+    if (focusedBookId) {
+      setFocusedBookId(null);
+      return;
+    }
+    if (selectedDate) {
+      setSelectedDate(null);
+    }
+  };
+
+  const handleDateSelect = dateKey => {
+    setSelectedDate(prev => {
+      const next = prev === dateKey ? null : dateKey;
+      if (next) {
+        setFocusedBookId(null);
+        setIsRecording(false);
+      }
+      return next;
+    });
+  };
+
+  const handleStatusChange = async (book, nextStatus) => {
+    if (!book || book.status === nextStatus) return;
+    setStatusSaving(true);
+    try {
+      await updateStatus(book.id, nextStatus);
+      toast.success(`"${book.title}"을(를) ${statusLabel(nextStatus)}으로 변경했습니다.`);
+    } catch (err) {
+      console.error(err);
+      toast.error("독서 상태 변경에 실패했어요.");
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  const handleRecordStatusChange = nextStatus => {
+    setRecordStatus(nextStatus);
+    if (nextStatus === "want") return;
+    if (nextStatus === "done" && focusedBook?.totalPage) {
+      setRecordToPage(focusedBook.totalPage);
+    }
+  };
+
+  const handleRecordSubmit = async e => {
+    e.preventDefault();
+    if (!focusedBook) return;
+
+    const maxPage = focusedBook.totalPage || 99999;
+    const fromPage = recordStatus === "want"
+      ? Number(focusedBook.currentPage) || 0
+      : clampNumber(recordFromPage, 0, maxPage);
+    const toPage = recordStatus === "want"
+      ? fromPage
+      : clampNumber(recordToPage, fromPage, maxPage);
+    const pagesRead = Math.max(0, toPage - fromPage);
+
+    if (recordStatus !== "want" && pagesRead <= 0 && !recordMemo.trim()) {
+      toast.error("읽은 페이지나 메모를 남겨주세요.");
+      return;
+    }
+
+    setRecordSaving(true);
+    try {
+      await addReadingLog(focusedBook.id, {
+        date: recordDate || todayStr,
+        status: recordStatus,
+        pagesRead,
+        fromPage,
+        currentPage: toPage,
+        memo: recordMemo,
+      });
+
+      if (recordStatus === "reading" || recordStatus === "done") {
+        addPoint("reading_check").catch(() => {});
+      }
+      if (recordMemo.trim()) {
+        addPoint("memo").catch(() => {});
+      }
+
+      toast.success("독서 로그를 저장했습니다.");
+      setSelectedDate(recordDate || todayStr);
+      setIsRecording(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("기록 저장에 실패했어요.");
+    } finally {
+      setRecordSaving(false);
+    }
+  };
+
+  const showBackButton = selectedDate || focusedBookId || isRecording;
+  const leftLabel = isRecording
+    ? "기록하기"
+    : focusedBook
+      ? "책별 로그"
+      : selectedDate
+        ? `${formatDateShort(selectedDate)} 기록`
+        : "최근 읽은 도서";
 
   return (
     <>
@@ -361,8 +534,8 @@ export default function Library() {
               {profile?.nickname ? `${profile.nickname}님의` : "나의"} 독서 흐름을 한눈에 확인해보세요.
             </p>
           </div>
-          <Button onClick={() => navigate("/search")} className="shrink-0 rounded-xl">
-            <Plus size={16} className="mr-1.5" />책 추가
+          <Button onClick={openTodayRecord} className="shrink-0 rounded-xl">
+            <PenLine size={16} className="mr-1.5" />오늘 기록하기
           </Button>
         </div>
 
@@ -380,9 +553,9 @@ export default function Library() {
 
             {/* 레이블 — 날짜 선택 시 텍스트 교체 */}
             <div className="mb-3 flex items-center gap-1.5">
-              {selectedDate && (
+              {showBackButton && (
                 <button
-                  onClick={() => setSelectedDate(null)}
+                  onClick={handleBackLeftPanel}
                   className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 >
                   <ArrowLeft size={13} />
@@ -393,11 +566,282 @@ export default function Library() {
               </h2>
             </div>
 
-            {/* 단일 카드 — 날짜 선택 여부에 따라 내용 전환 */}
+            {/* 단일 카드 — 최근 도서, 날짜별 로그, 책별 로그, 기록 입력을 같은 자리에서 전환 */}
             <div className="book-card flex flex-1 min-h-0 flex-col overflow-hidden">
-              {selectedDate ? (
-                /* ── 날짜별 기록 패널 ── */
-                booksOnDate.length === 0 ? (
+              {isRecording && focusedBook ? (
+                <form onSubmit={handleRecordSubmit} className="flex flex-1 min-h-0 flex-col">
+                  <div className="shrink-0 border-b border-border/40 p-5">
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={focusedBook.thumbnail || "/placeholder.png"}
+                        alt={focusedBook.title}
+                        className="h-24 w-16 shrink-0 rounded-xl object-cover shadow-md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                          {statusLabel(focusedBook.status)}
+                        </p>
+                        <h3 className="line-clamp-2 text-base font-bold leading-snug">
+                          {focusedBook.title}
+                        </h3>
+                        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                          {focusedBook.author}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 space-y-4 overflow-y-auto p-5">
+                    <div className="grid grid-cols-3 gap-2">
+                      {READING_STATUS_OPTS.map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => handleRecordStatusChange(opt.value)}
+                          className={`rounded-xl px-2 py-2.5 text-xs font-bold transition-colors ${
+                            recordStatus === opt.value ? opt.active : opt.inactive
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-muted-foreground">기록 날짜</span>
+                      <Input
+                        type="date"
+                        value={recordDate}
+                        onChange={e => setRecordDate(e.target.value)}
+                        className="h-10 rounded-xl bg-secondary/40"
+                      />
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="space-y-1.5">
+                        <span className="text-xs font-semibold text-muted-foreground">시작 페이지</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={recordFromPage}
+                          disabled={recordStatus === "want"}
+                          onChange={e => {
+                            const next = clampNumber(e.target.value, 0, focusedBook.totalPage || 99999);
+                            setRecordFromPage(next);
+                            if (recordToPage < next) setRecordToPage(next);
+                          }}
+                          className="h-10 rounded-xl bg-secondary/40"
+                        />
+                      </label>
+                      <label className="space-y-1.5">
+                        <span className="text-xs font-semibold text-muted-foreground">끝 페이지</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={focusedBook.totalPage || undefined}
+                          value={recordToPage}
+                          disabled={recordStatus === "want"}
+                          onChange={e => setRecordToPage(
+                            clampNumber(e.target.value, recordFromPage, focusedBook.totalPage || 99999)
+                          )}
+                          className="h-10 rounded-xl bg-secondary/40"
+                        />
+                      </label>
+                    </div>
+
+                    {recordStatus !== "want" && (
+                      <div className="rounded-xl bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+                        오늘 기록될 페이지:{" "}
+                        <span className="font-bold text-primary">
+                          {Math.max(0, recordToPage - recordFromPage).toLocaleString()}p
+                        </span>
+                      </div>
+                    )}
+
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-muted-foreground">메모</span>
+                      <Textarea
+                        value={recordMemo}
+                        onChange={e => setRecordMemo(e.target.value)}
+                        placeholder="오늘 읽으며 남기고 싶은 생각을 적어보세요."
+                        className="min-h-28 resize-none rounded-xl border-none bg-secondary/40 p-4 text-sm"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex shrink-0 gap-2 border-t border-border/40 p-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsRecording(false)}
+                      className="h-11 flex-1 rounded-xl"
+                    >
+                      취소
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={recordSaving}
+                      className="h-11 flex-1 rounded-xl font-bold"
+                    >
+                      {recordSaving ? (
+                        <>
+                          <Loader2 size={15} className="mr-2 animate-spin" />
+                          저장 중
+                        </>
+                      ) : (
+                        "저장하기"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              ) : focusedBook ? (
+                <>
+                  <div className="shrink-0 border-b border-border/40 p-5">
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={focusedBook.thumbnail || "/placeholder.png"}
+                        alt={focusedBook.title}
+                        className="h-28 w-[76px] shrink-0 rounded-xl object-cover shadow-md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                          {statusLabel(focusedBook.status)}
+                        </p>
+                        <h3 className="line-clamp-2 text-lg font-bold leading-snug">
+                          {focusedBook.title}
+                        </h3>
+                        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                          {focusedBook.author}
+                        </p>
+                        {focusedBookStartDate && (
+                          <p className="mt-1.5 text-xs text-muted-foreground">
+                            {formatDateKo(focusedBookStartDate)}부터 읽기 시작
+                          </p>
+                        )}
+                        {focusedBook.totalPage > 0 && (
+                          <div className="mt-2.5 space-y-1.5">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">
+                                {focusedBook.status === "done" ? focusedBook.totalPage : focusedBook.currentPage || 0}p / {focusedBook.totalPage}p
+                              </span>
+                              <span className="font-bold text-primary">{bookProgress(focusedBook)}%</span>
+                            </div>
+                            <div className="progress-bar">
+                              <div className="progress-fill" style={{ width: `${bookProgress(focusedBook)}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      {READING_STATUS_OPTS.map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          disabled={statusSaving}
+                          onClick={() => handleStatusChange(focusedBook, opt.value)}
+                          className={`rounded-xl px-2 py-2 text-xs font-bold transition-colors ${
+                            focusedBook.status === opt.value ? opt.active : opt.inactive
+                          } disabled:opacity-60`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => openRecordForBook(focusedBook.id)}
+                        className="h-10 flex-1 rounded-xl text-sm font-bold"
+                      >
+                        <PenLine size={15} className="mr-2" />
+                        기록하기
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => navigate(`/book/${focusedBook.id}`)}
+                        className="h-10 w-24 rounded-xl text-xs font-bold"
+                      >
+                        상세
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    {focusedBookLogs.length === 0 ? (
+                      <div className="flex min-h-40 flex-col items-center justify-center gap-2 text-center p-4">
+                        <CalendarDays size={28} className="text-muted-foreground/30" />
+                        <p className="text-sm text-muted-foreground">아직 이 책의 로그가 없어요</p>
+                        <p className="text-xs text-muted-foreground/60">기록하기 버튼으로 첫 기록을 남겨보세요</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2.5">
+                          <FileText size={13} className="text-muted-foreground/60" />
+                          <span className="text-xs text-muted-foreground">
+                            총 <span className="font-semibold text-foreground">{focusedBookLogs.filter(l => !l.isSnapshot).length}</span>개의 기록
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          {focusedBookLogs.map((log, idx) => {
+                            const pagesRead = Number(log.pagesRead || 0);
+                            const statusColors = {
+                              done: { bar: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-600" },
+                              reading: { bar: "bg-primary", badge: "bg-primary/10 text-primary" },
+                              want: { bar: "bg-amber-400", badge: "bg-amber-50 text-amber-600" },
+                            };
+                            const colors = statusColors[log.status] || statusColors.reading;
+                            return (
+                              <div key={log.id} className="flex gap-3">
+                                <div className="flex flex-col items-center pt-1">
+                                  <div className={`h-2 w-2 shrink-0 rounded-full ${colors.bar}`} />
+                                  {idx < focusedBookLogs.length - 1 && (
+                                    <div className="mt-1 w-px flex-1 bg-border/50" />
+                                  )}
+                                </div>
+                                <div className="mb-3 min-w-0 flex-1">
+                                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs font-bold text-foreground">{formatDateKo(log.date)}</span>
+                                    {log.status === "done" && (
+                                      <span className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${colors.badge}`}>
+                                        <BookOpenCheck size={9} />
+                                        완독
+                                      </span>
+                                    )}
+                                  </div>
+                                  {(log.fromPage > 0 || log.toPage > 0) && (
+                                    <div className="mb-1.5 flex items-baseline gap-1.5">
+                                      <span className="text-sm font-bold text-foreground">
+                                        {pagesRead > 0 ? `${pagesRead.toLocaleString()}p` : "—"}
+                                      </span>
+                                      {log.fromPage > 0 && log.toPage > 0 && (
+                                        <span className="text-[11px] text-muted-foreground">
+                                          ({log.fromPage}p → {log.toPage}p)
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                  {log.memo && (
+                                    <div className="mt-1.5 rounded-lg border-l-2 border-primary/30 bg-secondary/30 py-2 pl-3 pr-2">
+                                      <p className="line-clamp-3 text-xs leading-relaxed text-foreground/80">
+                                        {log.memo}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              ) : selectedDate ? (
+                logsOnDate.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
                     <BookOpen size={28} className="text-muted-foreground/30" />
                     <p className="text-sm text-muted-foreground">이 날은 독서 기록이 없어요</p>
@@ -408,61 +852,59 @@ export default function Library() {
                 ) : (
                   <div className="flex-1 overflow-y-auto p-4">
                     <p className="mb-3 text-xs text-muted-foreground">
-                      {booksOnDate.length}권의 책을 읽었어요
+                      {selectedDateBookCount}권의 책을 읽었어요
                     </p>
                     <div className="space-y-2.5">
-                      {booksOnDate.map(book => {
-                        const prog = bookProgress(book);
+                      {logsOnDate.map(log => {
+                        const book = bookMap.get(log.bookId);
+                        const startDate = getBookStartDate(book, displayLogs.filter(item => item.bookId === log.bookId));
                         return (
-                          <div
-                            key={book.id}
-                            className="flex cursor-pointer gap-3 rounded-xl border border-border/60 p-3 transition-colors hover:bg-secondary/50"
-                            onClick={() => setPopupBook(book)}
+                          <button
+                            key={log.id}
+                            type="button"
+                            className="flex w-full gap-3 rounded-xl border border-border/60 p-3 text-left transition-colors hover:bg-secondary/50"
+                            onClick={() => openBookLogs(log.bookId)}
                           >
                             <img
-                              src={book.thumbnail || "/placeholder.png"}
-                              alt={book.title}
+                              src={log.thumbnail || "/placeholder.png"}
+                              alt={log.title}
                               className="h-16 w-11 shrink-0 rounded-lg object-cover shadow-sm"
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                {book.status === "reading"
-                                  ? "읽는 중"
-                                  : book.status === "done"
-                                    ? "완독"
-                                    : "읽고 싶음"}
-                              </p>
-                              <h4 className="line-clamp-1 text-sm font-bold">{book.title}</h4>
-                              <p className="mb-1.5 text-[11px] text-muted-foreground">{book.author}</p>
-                              {book.totalPage > 0 && (
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-[10px]">
-                                    <span className="text-muted-foreground">
-                                      {book.status === "done" ? book.totalPage : book.currentPage || 0}p / {book.totalPage}p
-                                    </span>
-                                    <span className="font-bold text-primary">{prog}%</span>
-                                  </div>
-                                  <div className="progress-bar">
-                                    <div className="progress-fill" style={{ width: `${prog}%` }} />
-                                  </div>
-                                </div>
+                              <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                  {statusLabel(log.status)}
+                                </span>
+                                {log.isSnapshot && (
+                                  <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                    현재 기록
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="line-clamp-1 text-sm font-bold">{log.title}</h4>
+                              <p className="line-clamp-1 text-[11px] text-muted-foreground">{log.author}</p>
+                              {startDate && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {formatDateShort(startDate)}부터 읽기 시작
+                                </p>
                               )}
-                              {book.memo && (
-                                <p className="mt-1 line-clamp-1 text-[10px] italic text-muted-foreground">
-                                  "{book.memo}"
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {log.fromPage || 0}p부터 {log.toPage || 0}p까지 · {Number(log.pagesRead || 0).toLocaleString()}p
+                              </p>
+                              {log.memo && (
+                                <p className="mt-1 line-clamp-2 text-xs italic text-muted-foreground">
+                                  "{log.memo}"
                                 </p>
                               )}
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
                   </div>
                 )
               ) : (
-                /* ── 일반 뷰: 최근 읽은 도서 + 읽는 중 ── */
                 <>
-                  {/* 최근 읽은 도서 */}
                   {loading ? (
                     <div className="shrink-0 flex items-center gap-4 p-5">
                       <Skeleton className="h-32 w-[88px] shrink-0 rounded-xl" />
@@ -477,9 +919,8 @@ export default function Library() {
                   ) : featured ? (
                     <div
                       className="shrink-0 cursor-pointer p-5 transition-colors hover:bg-secondary/20"
-                      onClick={() => setPopupBook(featured)}
+                      onClick={() => openBookLogs(featured.id)}
                     >
-                      {/* items-center → 이미지 세로 가운데 정렬 */}
                       <div className="flex items-center gap-4">
                         <img
                           src={featured.thumbnail || "/placeholder.png"}
@@ -489,11 +930,7 @@ export default function Library() {
                         />
                         <div className="min-w-0 flex-1">
                           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                            {featured.status === "reading"
-                              ? "읽는 중"
-                              : featured.status === "done"
-                                ? "완독"
-                                : "읽고 싶음"}
+                            {statusLabel(featured.status)}
                           </p>
                           <h3 className="line-clamp-2 text-lg font-bold leading-snug">
                             {featured.title}
@@ -513,18 +950,12 @@ export default function Library() {
                             <div className="mt-2.5 space-y-1.5">
                               <div className="flex justify-between text-xs">
                                 <span className="text-muted-foreground">
-                                  {featured.status === "done"
-                                    ? featured.totalPage
-                                    : featured.currentPage || 0}
-                                  p / {featured.totalPage}p
+                                  {featured.status === "done" ? featured.totalPage : featured.currentPage || 0}p / {featured.totalPage}p
                                 </span>
                                 <span className="font-bold text-primary">{featuredProgress}%</span>
                               </div>
                               <div className="progress-bar">
-                                <div
-                                  className="progress-fill"
-                                  style={{ width: `${featuredProgress}%` }}
-                                />
+                                <div className="progress-fill" style={{ width: `${featuredProgress}%` }} />
                               </div>
                             </div>
                           )}
@@ -539,11 +970,11 @@ export default function Library() {
                             className="mt-3 flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
                             onClick={e => {
                               e.stopPropagation();
-                              navigate(`/book/${featured.id}`);
+                              openRecordForBook(featured.id);
                             }}
                           >
                             <PenLine size={12} />
-                            기록하러 가기
+                            기록하기
                           </button>
                         </div>
                       </div>
@@ -558,12 +989,9 @@ export default function Library() {
                     </div>
                   )}
 
-                  {/* 구분선 */}
                   <div className="shrink-0 border-t border-border/40" />
 
-                  {/* 읽는 중 섹션 — flex-1 로 남은 높이를 모두 채움 */}
                   <div className="flex flex-1 min-h-0 flex-col">
-                    {/* 읽는 중 레이블 */}
                     <div className="flex shrink-0 items-center gap-2 px-4 pt-3 pb-2">
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         읽는 중
@@ -575,7 +1003,6 @@ export default function Library() {
                       )}
                     </div>
 
-                    {/* 책 목록 — flex-1 으로 빈 공간까지 채우고, 넘치면 스크롤 */}
                     {loading ? (
                       <div className="flex-1 min-h-0 space-y-1.5 overflow-hidden px-3 pb-1">
                         {[1, 2].map(i => (
@@ -604,7 +1031,7 @@ export default function Library() {
                               <div
                                 key={book.id}
                                 className="flex cursor-pointer items-center gap-3 rounded-xl p-2 transition-colors hover:bg-secondary/60"
-                                onClick={() => setPopupBook(book)}
+                                onClick={() => openBookLogs(book.id)}
                               >
                                 <img
                                   src={book.thumbnail || "/placeholder.png"}
@@ -625,10 +1052,7 @@ export default function Library() {
                                         <span className="font-bold text-primary">{prog}%</span>
                                       </div>
                                       <div className="progress-bar">
-                                        <div
-                                          className="progress-fill"
-                                          style={{ width: `${prog}%` }}
-                                        />
+                                        <div className="progress-fill" style={{ width: `${prog}%` }} />
                                       </div>
                                     </div>
                                   )}
@@ -640,7 +1064,6 @@ export default function Library() {
                       </div>
                     )}
 
-                    {/* 책 추가 버튼 — 스크롤 영향 없이 항상 하단 고정 */}
                     <div className="shrink-0 border-t border-border/40 p-3">
                       <button
                         className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-secondary py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
@@ -722,7 +1145,7 @@ export default function Library() {
                   return (
                     <div
                       key={dateKey}
-                      onClick={() => setSelectedDate(isSelected ? null : dateKey)}
+                      onClick={() => handleDateSelect(dateKey)}
                       className={`relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg text-xs transition-all duration-200 ${
                         isSelected
                           ? "font-bold ring-2 ring-primary ring-offset-1"
@@ -894,7 +1317,7 @@ export default function Library() {
                           variant="compact"
                           onStatusChange={updateStatus}
                           onDelete={removeBook}
-                          onClick={() => setPopupBook(book)}
+                          onClick={() => openBookLogs(book.id)}
                         />
                       ))}
                     </div>
@@ -907,7 +1330,7 @@ export default function Library() {
                           variant="grid"
                           onStatusChange={updateStatus}
                           onDelete={removeBook}
-                          onClick={() => setPopupBook(book)}
+                          onClick={() => openBookLogs(book.id)}
                         />
                       ))}
                     </div>
@@ -919,14 +1342,6 @@ export default function Library() {
         </div>
       </div>
 
-      {popupBook && (
-        <ReadingBookPopup
-          book={popupBook}
-          onClose={() => setPopupBook(null)}
-          onStatusChange={updateStatus}
-          onDelete={removeBook}
-        />
-      )}
     </>
   );
 }
