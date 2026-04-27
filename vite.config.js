@@ -27,6 +27,11 @@ export default defineConfig(({ mode }) => {
       host: true,
       fs: { strict: false },
       proxy: {
+        "/api/library": {
+          target: "https://data4library.kr",
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/api\/library/, ""),
+        },
         "/api/aladin": {
           target: "http://www.aladin.co.kr",
           changeOrigin: true,
