@@ -21,36 +21,40 @@ import Profile from './pages/Profile';
 import Points from './pages/Points';
 import NotFound from './pages/NotFound';
 
+import { WeatherProvider } from './contexts/WeatherContext';
+
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <TooltipProvider>
-          <Toaster position="top-center" richColors />
-          <Routes>
-            {/* 비로그인 접근 가능 */}
-            <Route path="/auth" element={<Auth />} />
+      <ThemeProvider defaultTheme="light">
+        <WeatherProvider>
+          <TooltipProvider>
+            <Toaster position="top-center" richColors />
+            <Routes>
+              {/* 비로그인 접근 가능 */}
+              <Route path="/auth" element={<Auth />} />
 
-            {/* 로그인 필수 (PrivateRoute) */}
-            <Route element={<PrivateRoute />}>
-              {/* 온보딩: 풀스크린, 네비 없음 */}
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route element={<PageLayout />}>
-                <Route path="/" element={<Home />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/book/:id" element={<BookDetail />} />
-                <Route path="/library" element={<Library />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/community" element={<Community />} />
-                <Route path="/community/meeting" element={<Meeting />} />
-                <Route path="/community/board" element={<Board />} />
-                <Route path="/points" element={<Points />} />
+              {/* 로그인 필수 (PrivateRoute) */}
+              <Route element={<PrivateRoute />}>
+                {/* 온보딩: 풀스크린, 네비 없음 */}
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route element={<PageLayout />}>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/search" element={<Search />} />
+                  <Route path="/book/:id" element={<BookDetail />} />
+                  <Route path="/library" element={<Library />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/community" element={<Community />} />
+                  <Route path="/community/meeting" element={<Meeting />} />
+                  <Route path="/community/board" element={<Board />} />
+                  <Route path="/points" element={<Points />} />
+                </Route>
               </Route>
-            </Route>
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </TooltipProvider>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </TooltipProvider>
+        </WeatherProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

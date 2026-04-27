@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { MOCK_COMMUNITY_POSTS, MOCK_BOARD_COMMENTS } from '@/lib/mockData';
+import { usePoint } from '@/contexts/PointContext';
 
 // ─── 헬퍼 ────────────────────────────────────────────────
 function formatTs(ts) {
@@ -55,6 +55,7 @@ export default function Board() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile } = useAuth();
+  const { addPoint } = usePoint();
   const myName = profile?.nickname || user?.email?.split('@')[0] || '독서인';
 
   const [view, setView]                     = useState('list');
@@ -68,32 +69,25 @@ export default function Board() {
   const [newPost, setNewPost]               = useState({ title: '', content: '', category: '자유' });
   const [fromCommunity, setFromCommunity]   = useState(false);
 
-  // ── UI 확인용: 항상 mock 데이터 사용 ──────────────────────────────────────
-  // TODO: 실제 데이터 전환 시 아래 mock 라인을 제거하고 Firebase 구독으로 교체
-  //
-  // useEffect(() => {
-  //   const q = query(collection(db, 'board'), orderBy('createdAt', 'desc'));
-  //   const unsub = onSnapshot(q,
-  //     snap => { setFbPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
-  //     () => setLoadingPosts(false)
-  //   );
-  //   return unsub;
-  // }, []);
-  //
-  // useEffect(() => {
-  //   if (!selectedPostId || isMockPost) return;
-  //   const q = query(collection(db, 'board', selectedPostId, 'comments'), orderBy('createdAt', 'asc'));
-  //   return onSnapshot(q, snap => setFbComments(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-  // }, [selectedPostId]);
-  //
-  // const posts = fbPosts;
-  // const comments = isMockPost ? (MOCK_BOARD_COMMENTS[selectedPostId] ?? []) : fbComments;
-  // ─────────────────────────────────────────────────────────────────────────
-  const posts    = MOCK_COMMUNITY_POSTS;
-  const isMockPost = selectedPostId?.startsWith('mock-');
-  const comments = isMockPost
-    ? (MOCK_BOARD_COMMENTS[selectedPostId] ?? [])
-    : fbComments;
+  // board 목록 실시간 구독
+  useEffect(() => {
+    const q = query(collection(db, 'board'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q,
+      snap => { setFbPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
+      () => setLoadingPosts(false)
+    );
+    return unsub;
+  }, []);
+
+  // 선택된 게시글 댓글 실시간 구독
+  useEffect(() => {
+    if (!selectedPostId) return;
+    const q = query(collection(db, 'board', selectedPostId, 'comments'), orderBy('createdAt', 'asc'));
+    return onSnapshot(q, snap => setFbComments(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+  }, [selectedPostId]);
+
+  const posts    = fbPosts;
+  const comments = fbComments;
 
   // onSnapshot이 posts를 갱신할 때 selectedPost도 자동 최신화
   const selectedPost = posts.find(p => p.id === selectedPostId) ?? null;
@@ -145,6 +139,7 @@ export default function Board() {
         createdAt:  serverTimestamp(),
       });
       toast.success('게시글이 등록됐어요!');
+      addPoint('board_post').catch(() => {});
       setNewPost({ title: '', content: '', category: '자유' });
       setView('list');
     } catch {
