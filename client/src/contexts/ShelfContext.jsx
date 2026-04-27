@@ -164,6 +164,7 @@ export function ShelfProvider({ children }) {
         lastReadDate: book.lastReadDate || null,
         checkedDates: book.checkedDates || [],
         memo: book.memo || "",
+        addedAt: getTodayKey(),
       });
     } catch (err) {
       console.error("[ShelfContext] 도서 추가 실패:", err);
@@ -232,6 +233,28 @@ export function ShelfProvider({ children }) {
         updates.currentPage = 0;
       }
       await updateDoc(bookRef, updates);
+
+      if (status === "done" && currentBook && currentBook.status !== "done") {
+        const today = getTodayKey();
+        const totalPage = Number(currentBook.totalPage) || 0;
+        const targetPage = totalPage || Number(currentBook.currentPage) || 0;
+        const fromPage = Number(currentBook.currentPage) || 0;
+        await addDoc(collection(db, "users", user.uid, "readingLogs"), {
+          bookId,
+          title: currentBook.title || "제목 없음",
+          author: currentBook.author || "",
+          thumbnail: currentBook.thumbnail || "",
+          status: "done",
+          date: today,
+          pagesRead: Math.max(0, targetPage - fromPage),
+          fromPage,
+          toPage: targetPage,
+          currentPage: targetPage,
+          totalPage,
+          memo: "",
+          createdAt: serverTimestamp(),
+        });
+      }
     } catch (err) {
       console.error("[ShelfContext] 상태 변경 실패:", err);
       setError(err);
@@ -392,6 +415,21 @@ export function ShelfProvider({ children }) {
   };
 
   /**
+   * 독서 로그 삭제
+   * @param {string} logId
+   */
+  const deleteReadingLog = async logId => {
+    if (!user) throw new Error("사용자가 로그인하지 않았습니다.");
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "readingLogs", logId));
+    } catch (err) {
+      console.error("[ShelfContext] 독서 로그 삭제 실패:", err);
+      setError(err);
+      throw err;
+    }
+  };
+
+  /**
    * 일일 독서 기록 저장 (Firestore users/{uid}/readingStats/{date})
    * @param {string} date - YYYY-MM-DD
    * @param {number} pagesRead - 읽은 페이지 수
@@ -501,6 +539,7 @@ export function ShelfProvider({ children }) {
     updateMemo,
     updateProgress,
     addReadingLog,
+    deleteReadingLog,
     getBooksByStatus,
     recordDailyReading,
     getDailyReadingStats,

@@ -2,13 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import {
-  ArrowLeft, Star, ChevronDown, Check,
+  ArrowLeft, Star, Check, X,
   BookOpen, PenLine, Loader2, AlertCircle, ShoppingCart, Share2, Clock, MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
-import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import BookCard from "@/components/BookCard";
 import { getBookDetail, searchBooks, getHighQualityCover } from "@/utils/api";
@@ -226,10 +229,13 @@ export default function BookDetail() {
   const [memo, setMemo]               = useState("");
   const [savedMemo, setSavedMemo]     = useState("");
   const [rating, setRating]           = useState(0);
-  const [memoOpen, setMemoOpen]       = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const [previewIdx, setPreviewIdx]   = useState(0);
   const previewRef = useRef(null);
+
+  const [shelfPopupOpen, setShelfPopupOpen]           = useState(false);
+  const [pendingBookDetailStatus, setPendingBookDetailStatus] = useState(null);
+  const [prevReadingPage, setPrevReadingPage]         = useState(0);
 
   const [libState, setLibState]               = useState("idle");
   const [libraries, setLibraries]             = useState([]);
@@ -271,6 +277,7 @@ export default function BookDetail() {
                 if (typeof d.currentPage === "number") {
                   setCurrentPage(d.currentPage);
                   setSavedCurrentPage(d.currentPage);
+                  if (d.status !== "done") setPrevReadingPage(d.currentPage);
                 }
                 if (d.memo)        { setMemo(d.memo); setSavedMemo(d.memo); }
                 if (d.rating)      setRating(d.rating);
@@ -454,6 +461,81 @@ export default function BookDetail() {
     }
 
     navigate(`/library?bookId=${id}&record=1`);
+  };
+
+  const handlePopupStatusSelect = async (newStatus) => {
+    if (!user || !book) { toast.error("로그인이 필요합니다."); return; }
+    setShelfPopupOpen(false);
+    setPendingBookDetailStatus(null);
+    setSaving(true);
+    try {
+      const bookRef = doc(db, "users", user.uid, "shelf", id);
+      const info = book.volumeInfo || {};
+      const today = getTodayKey();
+      const totalPage = info.pageCount || 0;
+
+      let targetPage;
+      if (newStatus === "done") {
+        setPrevReadingPage(savedCurrentPage);
+        targetPage = totalPage;
+      } else if (newStatus === "want") {
+        targetPage = 0;
+      } else {
+        targetPage = savedStatus === "done" ? prevReadingPage : (savedCurrentPage || 0);
+      }
+
+      const isFirstAdd = !savedStatus;
+      await setDoc(bookRef, {
+        title: info.title || "제목 없음",
+        author: info.authors?.[0] || "",
+        thumbnail: book._cover || "",
+        status: newStatus,
+        currentPage: targetPage,
+        totalPage,
+        memo: savedMemo || "",
+        rating,
+        ...(newStatus !== "want" && { lastReadDate: today, checkedDates: arrayUnion(today) }),
+        ...(isFirstAdd && { addedAt: today }),
+      }, { merge: true });
+
+      const isFirstCompletion = newStatus === "done" && savedStatus !== "done";
+
+      if (isFirstCompletion) {
+        const fromPage = savedCurrentPage || 0;
+        await addDoc(collection(db, "users", user.uid, "readingLogs"), {
+          bookId: id,
+          title: info.title || "제목 없음",
+          author: info.authors?.[0] || "",
+          thumbnail: book._cover || "",
+          status: "done",
+          date: today,
+          pagesRead: Math.max(0, totalPage - fromPage),
+          fromPage,
+          toPage: totalPage,
+          currentPage: totalPage,
+          totalPage,
+          memo: "",
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      setStatus(newStatus);
+      setSavedStatus(newStatus);
+      setCurrentPage(targetPage);
+      setSavedCurrentPage(targetPage);
+      if (isFirstCompletion) {
+        fireCompletionConfetti();
+        toast.success("🎉 완독을 축하드려요!");
+      } else {
+        toast.success(savedStatus ? "독서 상태를 변경했습니다." : "서재에 추가했습니다.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("저장에 실패했어요.");
+      setStatus(savedStatus);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── 공유 ──────────────────────────────────────────────────
@@ -646,17 +728,43 @@ export default function BookDetail() {
             </div>
           </div>
 
-          {aladinLink && (
-            <a
-              href={aladinLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 bg-primary text-primary-foreground w-full h-12 rounded-xl text-sm font-bold hover:bg-primary/90 transition-colors shadow-md shadow-primary/20"
-            >
-              <ShoppingCart size={16} />
-              알라딘에서 구매하기
-            </a>
-          )}
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShelfPopupOpen(true)}
+                className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border text-sm font-bold transition-colors ${
+                  savedStatus
+                    ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+                    : "border-border bg-secondary text-muted-foreground hover:bg-secondary/70"
+                }`}
+              >
+                <PenLine size={15} />
+                {savedStatus ? STATUS_OPTIONS.find(s => s.value === savedStatus)?.label : "내 서재에 추가"}
+              </button>
+              {aladinLink && (
+                <a
+                  href={aladinLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20"
+                >
+                  <ShoppingCart size={15} />
+                  알라딘 구매
+                </a>
+              )}
+            </div>
+            {savedStatus && (
+              <button
+                type="button"
+                onClick={handleGoToReading}
+                className="flex w-full items-center justify-center gap-1.5 py-1.5 text-xs text-primary/60 transition-colors hover:text-primary hover:underline"
+              >
+                <PenLine size={11} />
+                기록하러 가기
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── 미리보기 이미지 갤러리 ── */}
@@ -696,166 +804,6 @@ export default function BookDetail() {
             )}
           </div>
         )}
-
-        {/* ── 나의 독서 기록 카드 ── */}
-        <div className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm space-y-5">
-          <h3 className="text-base font-bold flex items-center gap-2">
-            <PenLine size={17} className="text-primary" />
-            나의 독서 기록
-          </h3>
-
-          {/* 독서 상태 */}
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">독서 상태</p>
-            <div className="grid grid-cols-3 gap-2">
-              {STATUS_OPTIONS.map((opt) => {
-                const selected = status === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => {
-                      setStatus(opt.value);
-                      if (opt.value === "done" && totalPages) setCurrentPage(totalPages);
-                      if (opt.value === "reading" && !memoOpen) setMemoOpen(true);
-                    }}
-                    className={`relative flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-bold transition-all ${
-                      selected ? opt.active : opt.inactive
-                    }`}
-                  >
-                    {selected && (
-                      <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-card/90">
-                        <Check size={11} />
-                      </span>
-                    )}
-                    <span className="text-xl leading-none">{opt.emoji}</span>
-                    <span className="leading-tight">{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={() => setStatus(null)}
-                className="text-xs font-semibold text-muted-foreground transition-colors hover:text-destructive"
-              >
-                선택 취소
-              </button>
-              {savedStatus && (
-                <span className="text-xs text-muted-foreground">
-                  저장됨: {STATUS_OPTIONS.find((s) => s.value === savedStatus)?.label}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* 읽은 페이지 & 별점 */}
-          {(status === "reading" || status === "done") && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <p className="text-muted-foreground">읽은 페이지</p>
-                  <span className="text-primary font-bold">{progress}%</span>
-                </div>
-                <Slider
-                  value={[currentPage]}
-                  onValueChange={([v]) => setCurrentPage(v)}
-                  max={totalPages || 1000}
-                  step={1}
-                  className="py-2"
-                />
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-secondary/50 px-3 py-1.5 rounded-lg flex-1 max-w-[120px]">
-                    <BookOpen size={14} className="text-muted-foreground" />
-                    <Input
-                      type="number"
-                      value={currentPage}
-                      onChange={(e) => setCurrentPage(clampPage(e.target.value, totalPages || 1000))}
-                      className="h-6 p-0 text-center text-sm bg-transparent border-none focus-visible:ring-0 font-bold"
-                    />
-                  </div>
-                  <span className="text-sm text-muted-foreground">/ {totalPages || "?"} p</span>
-                </div>
-              </div>
-
-              {/* 진행률 공유 버튼 (읽는 중일 때) */}
-              {status === "reading" && (
-                <button
-                  onClick={async () => {
-                    const text = `📖 "${title}" ${progress}% 읽었어요! (${currentPage}/${totalPages || "?"}p)`;
-                    try {
-                      if (navigator.share) {
-                        await navigator.share({ title, text, url: aladinLink || window.location.href });
-                      } else {
-                        await navigator.clipboard.writeText(text);
-                        toast.success("진행률이 클립보드에 복사되었습니다!");
-                      }
-                    } catch { /* 취소 */ }
-                  }}
-                  className="flex items-center gap-2 text-xs text-primary font-medium hover:underline"
-                >
-                  <Share2 size={13} />
-                  독서 진행률 공유하기
-                </button>
-              )}
-
-              {status === "done" && (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">나의 평점</p>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button key={star} onClick={() => setRating(star)} className="transition-all hover:scale-110 active:scale-95">
-                        <Star size={32} className={star <= rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 독서 메모 */}
-          <div className="space-y-3">
-            <button onClick={() => setMemoOpen(!memoOpen)} className="w-full flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">독서 메모</p>
-              <ChevronDown size={16} className={`text-muted-foreground transition-transform duration-300 ${memoOpen ? "rotate-180" : ""}`} />
-            </button>
-            {memoOpen && (
-              <div className="animate-in slide-in-from-top-2">
-                <Textarea
-                  placeholder="이 책에 대한 생각이나 기억하고 싶은 문장을 자유롭게 적어보세요..."
-                  value={memo}
-                  onChange={(e) => setMemo(e.target.value)}
-                  className="min-h-[120px] bg-secondary/30 border-none rounded-xl text-sm resize-none p-4"
-                />
-              </div>
-            )}
-            {!memoOpen && memo && (
-              <p className="text-sm text-muted-foreground italic line-clamp-2 px-1">"{memo}"</p>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {status && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleGoToReading}
-                disabled={saving}
-                className="h-12 flex-1 rounded-xl text-sm font-bold"
-              >
-                <PenLine size={16} className="mr-2" />
-                기록하러 가기
-              </Button>
-            )}
-            <Button
-              onClick={() => handleSave()}
-              disabled={saving}
-              className="h-12 flex-1 rounded-xl text-base font-bold"
-            >
-              {saving ? <><Loader2 size={16} className="animate-spin mr-2" />저장 중...</> : "저장하기"}
-            </Button>
-          </div>
-        </div>
 
         {/* ── 내 주변 도서관 ── */}
         <section className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm space-y-4">
@@ -987,6 +935,83 @@ export default function BookDetail() {
           </section>
         )}
       </div>
+
+      {/* ── 서재 상태 선택 팝업 ── */}
+      <Dialog
+        open={shelfPopupOpen}
+        onOpenChange={open => {
+          if (!open) { setShelfPopupOpen(false); setPendingBookDetailStatus(null); }
+        }}
+      >
+        <DialogContent className="max-w-xs rounded-2xl p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">
+              {savedStatus ? "독서 상태" : "내 서재에 추가"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-1 grid grid-cols-3 gap-2">
+            {STATUS_OPTIONS.map(opt => {
+              const isCurrentSaved = savedStatus === opt.value;
+              const isPending = pendingBookDetailStatus === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    if (isCurrentSaved && !pendingBookDetailStatus) return;
+                    setPendingBookDetailStatus(isCurrentSaved ? null : opt.value);
+                  }}
+                  className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-bold transition-all disabled:opacity-60 ${
+                    isPending
+                      ? opt.active
+                      : isCurrentSaved && !pendingBookDetailStatus
+                        ? opt.active
+                        : opt.inactive
+                  }`}
+                >
+                  <span className="text-lg">{opt.emoji}</span>
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {pendingBookDetailStatus && (() => {
+            const bannerColors = {
+              done: { wrap: "bg-emerald-50 border-emerald-200", text: "text-emerald-800", btn: "bg-emerald-500 hover:bg-emerald-600" },
+              reading: { wrap: "bg-sky-50 border-sky-200", text: "text-sky-800", btn: "bg-sky-500 hover:bg-sky-600" },
+              want: { wrap: "bg-amber-50 border-amber-200", text: "text-amber-800", btn: "bg-amber-500 hover:bg-amber-600" },
+            };
+            const bc = bannerColors[pendingBookDetailStatus] || bannerColors.want;
+            const label = STATUS_OPTIONS.find(o => o.value === pendingBookDetailStatus)?.label;
+            return (
+              <div className={`mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 ${bc.wrap}`}>
+                <span className={`flex-1 text-xs ${bc.text}`}>
+                  <span className="font-bold">{label}</span>으로 {savedStatus ? "변경" : "등록"}할까요?
+                </span>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => handlePopupStatusSelect(pendingBookDetailStatus)}
+                  className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white transition-colors disabled:opacity-60 ${bc.btn}`}
+                >
+                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                  저장
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingBookDetailStatus(null)}
+                  className="flex items-center gap-1 rounded-lg bg-white/70 px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:bg-white/90"
+                >
+                  <X size={11} />
+                  취소
+                </button>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
