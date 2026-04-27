@@ -1,40 +1,47 @@
 // Booklog Community — 탭 기반 커뮤니티 허브
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase/config';
-import { useAuth } from '@/contexts/AuthContext';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useState } from "react";
+// ── TODO: 실제 데이터 전환 시 아래 주석 해제하고 mock 데이터 라인 제거 ──
+// import { useState, useEffect } from "react";
+// import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+// import { db } from "@/firebase/config";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Plus, Users, Calendar, BookOpen,
-  Heart, MessageSquare, Loader2,
-} from 'lucide-react';
+  Plus,
+  Users,
+  Calendar,
+  BookOpen,
+  Heart,
+  MessageSquare,
+} from "lucide-react";
+import { MOCK_COMMUNITY_MEETINGS, MOCK_COMMUNITY_POSTS } from "@/lib/mockData";
 
 const BOOK_COVERS = [
-  'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=400&h=180&fit=crop',
-  'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=180&fit=crop',
-  'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=400&h=180&fit=crop',
-  'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=180&fit=crop',
-  'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=400&h=180&fit=crop',
+  "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=400&h=180&fit=crop",
+  "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=180&fit=crop",
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=400&h=180&fit=crop",
+  "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=180&fit=crop",
+  "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=400&h=180&fit=crop",
 ];
 
-const CATEGORIES = ['전체', '자유', '독후감', '질문'];
+const CATEGORIES = ["전체", "자유", "독후감", "질문"];
 
 const CAT_STYLE = {
-  '자유':   { bg: 'bg-secondary',  text: 'text-secondary-foreground' },
-  '독후감': { bg: 'bg-primary/10', text: 'text-primary' },
-  '질문':   { bg: 'bg-accent',     text: 'text-accent-foreground' },
+  자유: { bg: "bg-secondary", text: "text-secondary-foreground" },
+  독후감: { bg: "bg-primary/10", text: "text-primary" },
+  질문: { bg: "bg-accent", text: "text-accent-foreground" },
 };
 
 function formatTs(ts) {
-  if (!ts) return '';
+  if (!ts) return "";
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   const diffMin = Math.floor((Date.now() - d) / 60000);
-  if (diffMin < 1)  return '방금 전';
+  if (diffMin < 1) return "방금 전";
   if (diffMin < 60) return `${diffMin}분 전`;
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24)   return `${diffH}시간 전`;
-  return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+  if (diffH < 24) return `${diffH}시간 전`;
+  return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
 }
 
 function coverUrl(meeting, idx) {
@@ -43,45 +50,63 @@ function coverUrl(meeting, idx) {
 
 export default function Community() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
-  const [meetings, setMeetings]               = useState([]);
-  const [posts, setPosts]                     = useState([]);
-  const [loadingMeetings, setLoadingMeetings] = useState(true);
-  const [loadingPosts, setLoadingPosts]       = useState(true);
-  const [filterCat, setFilterCat]             = useState('전체');
-  const [imgErrors, setImgErrors]             = useState({});
+  // location.state로 돌아온 탭 복원 (Meeting.jsx → back → Community)
+  const defaultTab = location.state?.tab ?? "meeting";
 
-  useEffect(() => {
-    const q = query(collection(db, 'meetings'), orderBy('createdAt', 'desc'));
-    return onSnapshot(q,
-      snap => { setMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingMeetings(false); },
-      ()   => setLoadingMeetings(false)
-    );
-  }, []);
+  const [filterCat, setFilterCat] = useState("전체");
+  const [imgErrors, setImgErrors] = useState({});
 
-  useEffect(() => {
-    const q = query(collection(db, 'board'), orderBy('createdAt', 'desc'));
-    return onSnapshot(q,
-      snap => { setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
-      ()   => setLoadingPosts(false)
-    );
-  }, []);
+  // ── UI 확인용: 항상 mock 데이터 사용 ──────────────────────────────────────
+  // TODO: 실제 데이터 전환 시 아래 mock 라인을 제거하고 Firebase 구독으로 교체
+  //
+  // const [meetings, setMeetings] = useState([]);
+  // const [posts, setPosts] = useState([]);
+  // const [loadingMeetings, setLoadingMeetings] = useState(true);
+  // const [loadingPosts, setLoadingPosts] = useState(true);
+  //
+  // useEffect(() => {
+  //   const q = query(collection(db, "meetings"), orderBy("createdAt", "desc"));
+  //   return onSnapshot(q,
+  //     snap => { setMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingMeetings(false); },
+  //     () => setLoadingMeetings(false)
+  //   );
+  // }, []);
+  //
+  // useEffect(() => {
+  //   const q = query(collection(db, "board"), orderBy("createdAt", "desc"));
+  //   return onSnapshot(q,
+  //     snap => { setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
+  //     () => setLoadingPosts(false)
+  //   );
+  // }, []);
+  //
+  // const effectiveMeetings = meetings;
+  // const effectivePosts = posts;
+  // ─────────────────────────────────────────────────────────────────────────
+  const effectiveMeetings = MOCK_COMMUNITY_MEETINGS;
+  const effectivePosts = MOCK_COMMUNITY_POSTS;
 
-  const filteredPosts = filterCat === '전체'
-    ? posts
-    : posts.filter(p => p.category === filterCat);
+  const filteredPosts =
+    filterCat === "전체"
+      ? effectivePosts
+      : effectivePosts.filter(p => p.category === filterCat);
 
   return (
     <>
       <div className="px-4 pt-8 pb-2">
-        <h1 className="text-2xl font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+        <h1
+          className="text-2xl font-bold"
+          style={{ fontFamily: "'Noto Serif KR', serif" }}
+        >
           커뮤니티
         </h1>
       </div>
 
       <div className="px-4 pb-10">
-        <Tabs defaultValue="meeting">
+        <Tabs defaultValue={defaultTab}>
           <TabsList className="w-full bg-secondary rounded-xl p-1 h-auto mt-3 mb-5">
             <TabsTrigger
               value="meeting"
@@ -101,38 +126,49 @@ export default function Community() {
           <TabsContent value="meeting" className="mt-0">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-muted-foreground">
-                {!loadingMeetings && `${meetings.length}개 모임 운영 중`}
+                {`${effectiveMeetings.length}개 모임 운영 중`}
               </p>
               <button
-                onClick={() => navigate('/community/meeting', { state: { view: 'create-meeting' } })}
+                onClick={() =>
+                  navigate("/community/meeting", {
+                    state: { view: "create-meeting" },
+                  })
+                }
                 className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-full text-xs font-semibold hover:bg-primary/90 transition-colors"
               >
                 <Plus size={13} /> 모임 만들기
               </button>
             </div>
 
-            {loadingMeetings ? (
-              <div className="flex justify-center pt-20">
-                <Loader2 size={28} className="animate-spin text-muted-foreground" />
-              </div>
-            ) : meetings.length === 0 ? (
+            {effectiveMeetings.length === 0 ? (
               <div className="flex flex-col items-center pt-20 text-center">
                 <p className="text-5xl mb-4">📚</p>
-                <p className="text-base font-semibold mb-1">아직 개설된 모임이 없어요</p>
-                <p className="text-sm text-muted-foreground">첫 번째 독서 모임을 만들어보세요!</p>
+                <p className="text-base font-semibold mb-1">
+                  아직 개설된 모임이 없어요
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  첫 번째 독서 모임을 만들어보세요!
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 stagger-children">
-                {meetings.map((meeting, idx) => {
+                {effectiveMeetings.map((meeting, idx) => {
                   const memberCount = meeting.members?.length ?? 0;
-                  const isJoined   = meeting.members?.includes(user?.uid);
-                  const isFull     = memberCount >= (meeting.maxMembers || 10);
-                  const pct        = Math.min(100, (memberCount / (meeting.maxMembers || 1)) * 100);
+                  const isJoined = meeting.members?.includes(user?.uid);
+                  const isFull = memberCount >= (meeting.maxMembers || 10);
+                  const pct = Math.min(
+                    100,
+                    (memberCount / (meeting.maxMembers || 1)) * 100
+                  );
 
                   return (
                     <div
                       key={meeting.id}
-                      onClick={() => navigate('/community/meeting', { state: { view: 'detail', meetingId: meeting.id } })}
+                      onClick={() =>
+                        navigate("/community/meeting", {
+                          state: { view: "detail", meeting },
+                        })
+                      }
                       className="book-card overflow-hidden cursor-pointer hover:shadow-md transition-all"
                     >
                       {/* 커버 이미지 */}
@@ -142,7 +178,9 @@ export default function Community() {
                             src={coverUrl(meeting, idx)}
                             alt={meeting.title}
                             className="w-full h-full object-cover"
-                            onError={() => setImgErrors(p => ({ ...p, [meeting.id]: true }))}
+                            onError={() =>
+                              setImgErrors(p => ({ ...p, [meeting.id]: true }))
+                            }
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20">
@@ -189,7 +227,8 @@ export default function Community() {
                         {/* 인원 + 마감일 */}
                         <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
                           <span className="flex items-center gap-0.5">
-                            <Users size={10} /> {memberCount}/{meeting.maxMembers}명
+                            <Users size={10} /> {memberCount}/
+                            {meeting.maxMembers}명
                           </span>
                           {meeting.deadline && (
                             <span className="flex items-center gap-0.5">
@@ -201,7 +240,9 @@ export default function Community() {
                         {/* 책 */}
                         <div className="flex items-center gap-1 mb-2 text-[11px] text-muted-foreground">
                           <BookOpen size={10} className="flex-shrink-0" />
-                          <span className="truncate">{meeting.currentBook || '—'}</span>
+                          <span className="truncate">
+                            {meeting.currentBook || "—"}
+                          </span>
                         </div>
 
                         {/* 진행률 바 */}
@@ -224,10 +265,12 @@ export default function Community() {
             {/* 상단 헤더 */}
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">
-                {!loadingPosts && `${filteredPosts.length}개 게시글`}
+                {`${filteredPosts.length}개 게시글`}
               </p>
               <button
-                onClick={() => navigate('/community/board', { state: { view: 'create' } })}
+                onClick={() =>
+                  navigate("/community/board", { state: { view: "create" } })
+                }
                 className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-full text-xs font-semibold hover:bg-primary/90 transition-colors"
               >
                 <Plus size={13} /> 글쓰기
@@ -242,8 +285,8 @@ export default function Community() {
                   onClick={() => setFilterCat(cat)}
                   className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                     filterCat === cat
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-muted-foreground hover:bg-secondary/80"
                   }`}
                 >
                   {cat}
@@ -251,41 +294,50 @@ export default function Community() {
               ))}
             </div>
 
-            {loadingPosts ? (
-              <div className="flex justify-center pt-20">
-                <Loader2 size={28} className="animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredPosts.length === 0 ? (
+            {filteredPosts.length === 0 ? (
               <div className="flex flex-col items-center pt-20 text-center">
                 <p className="text-5xl mb-4">📋</p>
                 <p className="text-base font-semibold mb-1">
-                  {filterCat === '전체' ? '아직 게시글이 없어요' : `${filterCat} 글이 없어요`}
+                  {filterCat === "전체"
+                    ? "아직 게시글이 없어요"
+                    : `${filterCat} 글이 없어요`}
                 </p>
-                <p className="text-sm text-muted-foreground">첫 글을 작성해보세요!</p>
+                <p className="text-sm text-muted-foreground">
+                  첫 글을 작성해보세요!
+                </p>
               </div>
             ) : (
               <div className="space-y-3 stagger-children">
                 {filteredPosts.map(post => {
-                  const isLiked      = post.likes?.includes(user?.uid);
-                  const likeCount    = post.likes?.length ?? 0;
+                  const isLiked = post.likes?.includes(user?.uid);
+                  const likeCount = post.likes?.length ?? 0;
                   const commentCount = post.commentCount ?? 0;
-                  const catStyle     = CAT_STYLE[post.category] ?? CAT_STYLE['자유'];
+                  const catStyle =
+                    CAT_STYLE[post.category] ?? CAT_STYLE["자유"];
                   return (
                     <div
                       key={post.id}
-                      onClick={() => navigate('/community/board', { state: { view: 'detail', postId: post.id } })}
+                      onClick={() =>
+                        navigate("/community/board", {
+                          state: { view: "detail", postId: post.id },
+                        })
+                      }
                       className="book-card p-4 cursor-pointer hover:shadow-md transition-all"
                     >
                       <div className="flex items-start gap-3">
                         {/* 아바타 */}
                         <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
-                          {(post.authorName || '?')[0]}
+                          {(post.authorName || "?")[0]}
                         </div>
                         <div className="flex-1 min-w-0">
                           {/* 작성자 + 카테고리 + 시간 */}
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <span className="text-xs font-semibold">{post.authorName}</span>
-                            <span className={`text-[10px] font-semibold ${catStyle.bg} ${catStyle.text} rounded-full px-2 py-0.5`}>
+                            <span className="text-xs font-semibold">
+                              {post.authorName}
+                            </span>
+                            <span
+                              className={`text-[10px] font-semibold ${catStyle.bg} ${catStyle.text} rounded-full px-2 py-0.5`}
+                            >
                               {post.category}
                             </span>
                             <span className="text-[11px] text-muted-foreground ml-auto">
@@ -293,15 +345,22 @@ export default function Community() {
                             </span>
                           </div>
                           {/* 제목 */}
-                          <h3 className="text-sm font-semibold mb-1 line-clamp-1">{post.title}</h3>
+                          <h3 className="text-sm font-semibold mb-1 line-clamp-1">
+                            {post.title}
+                          </h3>
                           {/* 내용 미리보기 */}
                           <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                             {post.content}
                           </p>
                           {/* 좋아요 + 댓글 */}
                           <div className="flex items-center gap-3 mt-2">
-                            <span className={`flex items-center gap-1 text-xs ${isLiked ? 'text-red-500' : 'text-muted-foreground'}`}>
-                              <Heart size={12} fill={isLiked ? 'currentColor' : 'none'} />
+                            <span
+                              className={`flex items-center gap-1 text-xs ${isLiked ? "text-red-500" : "text-muted-foreground"}`}
+                            >
+                              <Heart
+                                size={12}
+                                fill={isLiked ? "currentColor" : "none"}
+                              />
                               <span>{likeCount}</span>
                             </span>
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">

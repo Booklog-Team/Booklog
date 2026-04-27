@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Users, Calendar, BookOpen,
   Send, ChevronRight, Loader2, MessageSquare, Crown, Trash2,
+  Megaphone, Pencil, ChevronDown,
 } from 'lucide-react';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
@@ -15,6 +16,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import {
+  MOCK_COMMUNITY_MEETINGS,
+  MOCK_MEETING_POSTS,
+  MOCK_MEETING_POST_COMMENTS,
+} from '@/lib/mockData';
 
 // ─── 상수
 const BOOK_COVERS = [
@@ -50,7 +56,7 @@ function coverUrl(meeting, idx) {
 
 const EMPTY_MEETING_FORM = {
   title: '', description: '', currentBook: '',
-  pageRange: '', deadline: '', maxMembers: '10', genre: '',
+  pageStart: '', pageEnd: '', deadline: '', maxMembers: '10', genre: '',
 };
 
 // ─── 메인 컴포넌트
@@ -74,6 +80,15 @@ export default function Meeting() {
   const [commentText, setCommentText]           = useState('');
   const [imgErrors, setImgErrors]               = useState({});
   const [pendingMeetingId, setPendingMeetingId] = useState(null);
+  const [fromCommunity, setFromCommunity]       = useState(false);
+  const [editingAnn, setEditingAnn]             = useState(false);
+  const [annText, setAnnText]                   = useState('');
+  const [mockMemberMap, setMockMemberMap]       = useState(() => {
+    const map = {};
+    MOCK_COMMUNITY_MEETINGS.forEach(m => { map[m.id] = [...(m.members || [])]; });
+    return map;
+  });
+  const [showPrevAnns, setShowPrevAnns]         = useState(false);
 
   // Community.jsx에서 navigation state로 넘어온 경우 처리
   useEffect(() => {
@@ -81,8 +96,15 @@ export default function Meeting() {
     if (!state) return;
     if (state.view === 'create-meeting') {
       setView('create-meeting');
+    } else if (state.view === 'detail' && state.meeting) {
+      // Community.jsx에서 전체 meeting 객체를 넘겨준 경우 (mock 포함) 바로 사용
+      setSelectedMeeting(state.meeting);
+      setView('detail');
+      setFromCommunity(true);
     } else if (state.view === 'detail' && state.meetingId) {
+      // Firebase meetingId만 넘겨준 경우 (기존 방식)
       setPendingMeetingId(state.meetingId);
+      setFromCommunity(true);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -110,9 +132,11 @@ export default function Meeting() {
     }
   }, [meetings, pendingMeetingId]);
 
-  // 선택된 모임의 게시글 실시간 구독
+  const isMockMeeting = selectedMeeting?.id?.startsWith('mock-');
+
+  // 선택된 모임의 게시글 실시간 구독 (Firebase 모임만)
   useEffect(() => {
-    if (!selectedMeeting?.id) return;
+    if (!selectedMeeting?.id || isMockMeeting) return;
     setLoadingPosts(true);
     const q = query(
       collection(db, 'meetings', selectedMeeting.id, 'posts'),
@@ -123,11 +147,11 @@ export default function Meeting() {
       setLoadingPosts(false);
     });
     return unsub;
-  }, [selectedMeeting?.id]);
+  }, [selectedMeeting?.id, isMockMeeting]);
 
-  // 선택된 게시글의 댓글 실시간 구독
+  // 선택된 게시글의 댓글 실시간 구독 (Firebase 모임만)
   useEffect(() => {
-    if (!selectedMeeting?.id || !selectedPost?.id) return;
+    if (!selectedMeeting?.id || !selectedPost?.id || isMockMeeting) return;
     const q = query(
       collection(db, 'meetings', selectedMeeting.id, 'posts', selectedPost.id, 'comments'),
       orderBy('createdAt', 'asc')
@@ -136,11 +160,31 @@ export default function Meeting() {
       setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return unsub;
-  }, [selectedMeeting?.id, selectedPost?.id]);
+  }, [selectedMeeting?.id, selectedPost?.id, isMockMeeting]);
+
+  // mock 모임: MOCK_MEETING_POSTS / MOCK_MEETING_POST_COMMENTS 사용
+  const effectivePosts    = isMockMeeting
+    ? (MOCK_MEETING_POSTS[selectedMeeting?.id] ?? [])
+    : posts;
+  const effectiveComments = isMockMeeting
+    ? (MOCK_MEETING_POST_COMMENTS[selectedPost?.id] ?? [])
+    : comments;
 
   // 모임 참여 / 나가기
   async function handleJoinToggle() {
-    if (!user || !selectedMeeting) return;
+    if (!selectedMeeting) return;
+    const uid = user?.uid || 'preview-user';
+
+    if (isMockMeeting) {
+      const current = mockMemberMap[selectedMeeting.id] ?? selectedMeeting.members ?? [];
+      const wasJoined = current.includes(uid);
+      const next = wasJoined ? current.filter(id => id !== uid) : [...current, uid];
+      setMockMemberMap(prev => ({ ...prev, [selectedMeeting.id]: next }));
+      toast.success(wasJoined ? '모임에서 나왔습니다.' : '모임에 참여했습니다! 🎉');
+      return;
+    }
+
+    if (!user) return;
     const isJoined = selectedMeeting.members?.includes(user.uid);
     const ref = doc(db, 'meetings', selectedMeeting.id);
     try {
@@ -168,7 +212,9 @@ export default function Meeting() {
         title:       meetingForm.title.trim(),
         description: meetingForm.description.trim(),
         currentBook: meetingForm.currentBook.trim(),
-        pageRange:   meetingForm.pageRange.trim(),
+        pageRange:   meetingForm.pageStart && meetingForm.pageEnd
+          ? `p.${meetingForm.pageStart} ~ ${meetingForm.pageEnd}`
+          : '',
         deadline:    meetingForm.deadline,
         maxMembers:  Number(meetingForm.maxMembers) || 10,
         genre:       meetingForm.genre,
@@ -218,6 +264,45 @@ export default function Meeting() {
       setView('list');
     } catch {
       toast.error('삭제 중 오류가 발생했어요.');
+    }
+  }
+
+  // 모임장 공지 저장
+  async function handleSaveAnnouncement() {
+    if (!selectedMeeting || !annText.trim()) return;
+    setSubmitting(true);
+    const today = new Date().toISOString().slice(0, 10);
+    const newEntry = { text: annText.trim(), createdAt: today };
+
+    if (isMockMeeting) {
+      const existing = selectedMeeting.announcements
+        ?? (selectedMeeting.announcement
+          ? [{ text: selectedMeeting.announcement, createdAt: selectedMeeting.createdAt || today }]
+          : []);
+      setSelectedMeeting(prev => ({ ...prev, announcements: [newEntry, ...existing] }));
+      setEditingAnn(false);
+      setAnnText('');
+      toast.success('공지가 저장됐어요.');
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const existing = selectedMeeting.announcements ?? [];
+      await updateDoc(doc(db, 'meetings', selectedMeeting.id), {
+        announcements: [newEntry, ...existing],
+      });
+      setSelectedMeeting(prev => ({
+        ...prev,
+        announcements: [newEntry, ...(prev.announcements ?? [])],
+      }));
+      setEditingAnn(false);
+      setAnnText('');
+      toast.success('공지가 저장됐어요.');
+    } catch {
+      toast.error('공지 저장에 실패했어요.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -329,25 +414,38 @@ export default function Meeting() {
               className="h-11 bg-secondary border-none rounded-xl"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">읽을 범위</p>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">읽을 범위</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground flex-shrink-0">p.</span>
               <Input
-                placeholder="예) p.1 ~ 120"
-                value={meetingForm.pageRange}
-                onChange={e => setMeetingForm(p => ({ ...p, pageRange: e.target.value }))}
-                className="h-11 bg-secondary border-none rounded-xl"
+                type="number"
+                min="1"
+                placeholder="시작"
+                value={meetingForm.pageStart}
+                onChange={e => setMeetingForm(p => ({ ...p, pageStart: e.target.value }))}
+                className="h-11 flex-1 bg-secondary border-none rounded-xl text-center"
               />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">마감일</p>
+              <span className="text-sm text-muted-foreground flex-shrink-0">~</span>
               <Input
-                type="date"
-                value={meetingForm.deadline}
-                onChange={e => setMeetingForm(p => ({ ...p, deadline: e.target.value }))}
-                className="h-11 bg-secondary border-none rounded-xl"
+                type="number"
+                min="1"
+                placeholder="끝"
+                value={meetingForm.pageEnd}
+                onChange={e => setMeetingForm(p => ({ ...p, pageEnd: e.target.value }))}
+                className="h-11 flex-1 bg-secondary border-none rounded-xl text-center"
               />
+              <span className="text-sm text-muted-foreground flex-shrink-0">p.</span>
             </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1.5">마감일</p>
+            <Input
+              type="date"
+              value={meetingForm.deadline}
+              onChange={e => setMeetingForm(p => ({ ...p, deadline: e.target.value }))}
+              className="h-11 bg-secondary border-none rounded-xl"
+            />
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1.5">최대 인원</p>
@@ -451,14 +549,14 @@ export default function Meeting() {
           </div>
 
           <div className="mb-4">
-            <h3 className="text-sm font-semibold mb-3">댓글 {comments.length}개</h3>
-            {comments.length === 0 ? (
+            <h3 className="text-sm font-semibold mb-3">댓글 {effectiveComments.length}개</h3>
+            {effectiveComments.length === 0 ? (
               <div className="text-center py-6 text-xs text-muted-foreground">
                 첫 댓글을 남겨보세요 💬
               </div>
             ) : (
               <div className="space-y-3">
-                {comments.map(c => (
+                {effectiveComments.map(c => (
                   <div key={c.id} className="flex gap-2.5">
                     <Avatar name={c.authorName} size={8} />
                     <div className="flex-1 bg-secondary/60 rounded-xl px-3 py-2.5">
@@ -507,15 +605,25 @@ export default function Meeting() {
 
   // 모임 상세
   if (view === 'detail' && selectedMeeting) {
-    const isJoined    = selectedMeeting.members?.includes(user?.uid);
+    const uid = user?.uid || 'preview-user';
+    const effectiveMembers = isMockMeeting
+      ? (mockMemberMap[selectedMeeting.id] ?? selectedMeeting.members ?? [])
+      : (selectedMeeting.members ?? []);
+    const isJoined    = effectiveMembers.includes(uid);
     const isHost      = selectedMeeting.hostUid === user?.uid;
-    const memberCount = selectedMeeting.members?.length ?? 0;
+    const memberCount = effectiveMembers.length;
+    const rawAnns     = selectedMeeting.announcements
+      ?? (selectedMeeting.announcement
+        ? [{ text: selectedMeeting.announcement, createdAt: selectedMeeting.createdAt || '' }]
+        : []);
+    const latestAnn   = rawAnns[0] ?? null;
+    const prevAnns    = rawAnns.slice(1);
 
     return (
       <>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button
-            onClick={() => setView('list')}
+            onClick={() => fromCommunity ? navigate('/community', { state: { tab: 'meeting' } }) : setView('list')}
             className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -603,6 +711,93 @@ export default function Meeting() {
                 {isJoined ? '모임 나가기' : '모임 참여하기'}
               </Button>
             )}
+
+            {/* 모임장 공지 — 모임장이면 항상, 공지가 있을 때도 표시 */}
+            {(isHost || rawAnns.length > 0) && (
+              <div className={`mt-4 rounded-xl border p-4 ${
+                isHost ? 'bg-amber-500/10 border-amber-500/20' : 'bg-secondary/60 border-border/40'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Megaphone size={13} className="text-amber-600" />
+                    <span className="text-xs font-bold text-amber-700">모임장 공지</span>
+                  </div>
+                  {isHost && !editingAnn && (
+                    <button
+                      onClick={() => { setAnnText(''); setEditingAnn(true); }}
+                      className="flex items-center gap-1 text-[11px] text-amber-600 hover:text-amber-700 font-semibold transition-colors"
+                    >
+                      <Pencil size={11} />
+                      공지 작성
+                    </button>
+                  )}
+                </div>
+
+                {editingAnn ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={annText}
+                      onChange={e => setAnnText(e.target.value)}
+                      placeholder="예) 4월 26일~5월 10일 동안 p.1~100을 읽겠습니다. 다들 화이팅!"
+                      className="min-h-[80px] bg-background border-amber-200 rounded-xl resize-none text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleSaveAnnouncement}
+                        disabled={submitting || !annText.trim()}
+                        className="flex-1 h-8 text-xs rounded-lg"
+                      >
+                        저장
+                      </Button>
+                      <button
+                        onClick={() => setEditingAnn(false)}
+                        className="px-3 h-8 text-xs rounded-lg border border-border hover:bg-secondary transition-colors"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : latestAnn ? (
+                  <>
+                    <p className="text-[11px] text-muted-foreground mb-1">{formatTs(latestAnn.createdAt)}</p>
+                    <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                      {latestAnn.text}
+                    </p>
+                    {prevAnns.length > 0 && (
+                      <div className="mt-3">
+                        <button
+                          onClick={() => setShowPrevAnns(v => !v)}
+                          className="flex items-center gap-1 text-[11px] text-amber-600/80 hover:text-amber-600 font-medium transition-colors"
+                        >
+                          <ChevronDown
+                            size={13}
+                            className={`transition-transform duration-200 ${showPrevAnns ? 'rotate-180' : ''}`}
+                          />
+                          {showPrevAnns ? '이전 공지 접기' : `이전 공지 ${prevAnns.length}개 보기`}
+                        </button>
+                        {showPrevAnns && (
+                          <div className="mt-2 space-y-3">
+                            {prevAnns.map((ann, i) => (
+                              <div key={i} className="border-t border-amber-500/10 pt-2">
+                                <p className="text-[11px] text-muted-foreground mb-0.5">{formatTs(ann.createdAt)}</p>
+                                <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">
+                                  {ann.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-amber-600/60 italic">
+                    아직 작성된 공지가 없어요. 공지 작성 버튼을 눌러주세요.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 감상 게시글 */}
@@ -619,11 +814,11 @@ export default function Meeting() {
               )}
             </div>
 
-            {loadingPosts ? (
+            {loadingPosts && !isMockMeeting ? (
               <div className="flex justify-center py-8">
                 <Loader2 size={22} className="animate-spin text-muted-foreground" />
               </div>
-            ) : posts.length === 0 ? (
+            ) : effectivePosts.length === 0 ? (
               <div className="book-card p-8 flex flex-col items-center text-center">
                 <p className="text-3xl mb-2">📝</p>
                 <p className="text-sm font-semibold mb-1">아직 감상 글이 없어요</p>
@@ -633,7 +828,7 @@ export default function Meeting() {
               </div>
             ) : (
               <div className="space-y-3">
-                {posts.map(post => (
+                {effectivePosts.map(post => (
                   <button
                     key={post.id}
                     onClick={() => { setSelectedPost(post); setView('post-detail'); }}

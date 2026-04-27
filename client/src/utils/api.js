@@ -177,21 +177,21 @@ async function apiFetch(path, params = {}) {
  */
 export const searchBooks = (query, options = {}) => {
   if (!query?.trim()) return Promise.resolve({ items: [], totalResults: 0, nextStart: null });
-  const { start = 1 } = options;
-  const key = `search|${query}|${start}`;
+  const { start = 1, maxResults = 20 } = options;
+  const key = `search|${query}|${start}|${maxResults}`;
 
   return deduplicate(key, async () => {
     const data = await apiFetch(`${PROXY_BASE}/ItemSearch.aspx`, {
       Query: query,
       QueryType: "Keyword",
-      MaxResults: 20,
+      MaxResults: maxResults,
       start,
       SearchTarget: "Book",
     });
 
     const items = (data.item || []).map(normalizeBook);
     const totalResults = data.totalResults || 0;
-    const nextStart = start * 20 < totalResults ? start + 1 : null;
+    const nextStart = start * maxResults < totalResults ? start + 1 : null;
 
     return { items, totalResults, nextStart };
   });

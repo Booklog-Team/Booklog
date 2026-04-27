@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { MOCK_COMMUNITY_POSTS, MOCK_BOARD_COMMENTS } from '@/lib/mockData';
 
 // ─── 헬퍼 ────────────────────────────────────────────────
 function formatTs(ts) {
@@ -56,18 +57,46 @@ export default function Board() {
   const { user, profile } = useAuth();
   const myName = profile?.nickname || user?.email?.split('@')[0] || '독서인';
 
-  const [view, setView]                 = useState('list');
-  const [posts, setPosts]               = useState([]);
+  const [view, setView]                     = useState('list');
+  const [fbPosts, setFbPosts]               = useState([]);
   const [selectedPostId, setSelectedPostId] = useState(null);
-  const [comments, setComments]         = useState([]);
+  const [fbComments, setFbComments]         = useState([]);
+  const [loadingPosts, setLoadingPosts]     = useState(true);
+  const [submitting, setSubmitting]         = useState(false);
+  const [filterCat, setFilterCat]           = useState('전체');
+  const [commentText, setCommentText]       = useState('');
+  const [newPost, setNewPost]               = useState({ title: '', content: '', category: '자유' });
+  const [fromCommunity, setFromCommunity]   = useState(false);
+
+  // ── UI 확인용: 항상 mock 데이터 사용 ──────────────────────────────────────
+  // TODO: 실제 데이터 전환 시 아래 mock 라인을 제거하고 Firebase 구독으로 교체
+  //
+  // useEffect(() => {
+  //   const q = query(collection(db, 'board'), orderBy('createdAt', 'desc'));
+  //   const unsub = onSnapshot(q,
+  //     snap => { setFbPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
+  //     () => setLoadingPosts(false)
+  //   );
+  //   return unsub;
+  // }, []);
+  //
+  // useEffect(() => {
+  //   if (!selectedPostId || isMockPost) return;
+  //   const q = query(collection(db, 'board', selectedPostId, 'comments'), orderBy('createdAt', 'asc'));
+  //   return onSnapshot(q, snap => setFbComments(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+  // }, [selectedPostId]);
+  //
+  // const posts = fbPosts;
+  // const comments = isMockPost ? (MOCK_BOARD_COMMENTS[selectedPostId] ?? []) : fbComments;
+  // ─────────────────────────────────────────────────────────────────────────
+  const posts    = MOCK_COMMUNITY_POSTS;
+  const isMockPost = selectedPostId?.startsWith('mock-');
+  const comments = isMockPost
+    ? (MOCK_BOARD_COMMENTS[selectedPostId] ?? [])
+    : fbComments;
 
   // onSnapshot이 posts를 갱신할 때 selectedPost도 자동 최신화
   const selectedPost = posts.find(p => p.id === selectedPostId) ?? null;
-  const [loadingPosts, setLoadingPosts] = useState(true);
-  const [submitting, setSubmitting]   = useState(false);
-  const [filterCat, setFilterCat]     = useState('전체');
-  const [commentText, setCommentText] = useState('');
-  const [newPost, setNewPost]         = useState({ title: '', content: '', category: '자유' });
 
   // Community.jsx에서 navigation state로 넘어온 경우 처리
   useEffect(() => {
@@ -78,34 +107,9 @@ export default function Board() {
     } else if (state.view === 'detail' && state.postId) {
       setSelectedPostId(state.postId);
       setView('detail');
+      setFromCommunity(true);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 게시글 실시간 구독
-  useEffect(() => {
-    const q = query(collection(db, 'board'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q,
-      snap => {
-        setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setLoadingPosts(false);
-      },
-      () => setLoadingPosts(false)
-    );
-    return unsub;
-  }, []);
-
-  // 댓글 실시간 구독
-  useEffect(() => {
-    if (!selectedPostId) return;
-    const q = query(
-      collection(db, 'board', selectedPostId, 'comments'),
-      orderBy('createdAt', 'asc')
-    );
-    const unsub = onSnapshot(q, snap => {
-      setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return unsub;
-  }, [selectedPostId]);
 
   const filteredPosts = filterCat === '전체'
     ? posts
@@ -259,7 +263,10 @@ export default function Board() {
       <>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button
-            onClick={() => setView('list')}
+            onClick={() => fromCommunity
+              ? navigate('/community', { state: { tab: 'board' } })
+              : setView('list')
+            }
             className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -417,11 +424,7 @@ export default function Board() {
           ))}
         </div>
 
-        {loadingPosts ? (
-          <div className="flex justify-center pt-16">
-            <Loader2 size={28} className="animate-spin text-muted-foreground" />
-          </div>
-        ) : filteredPosts.length === 0 ? (
+        {filteredPosts.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-16 text-center">
             <p className="text-5xl mb-4">📋</p>
             <p className="text-base font-semibold mb-2">

@@ -21,7 +21,11 @@ const ONBOARDING_TO_GENRE = {
   아동: "어린이",
 };
 
-const KEYWORDS = ["소설", "자기계발", "한국문학", "SF", "철학", "에세이"];
+const HERO_IMAGES = [
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663584969128/K9LDMhfUcVKdtMjF2S9GdE/booklog-hero-FbzG9jogJPcArmEM9bJ2RD.webp",
+];
+
+const KEYWORDS = ["소설", "자기계발", "인문학", "역사", "과학", "에세이"];
 
 function calculateStreak(shelf) {
   const all = new Set();

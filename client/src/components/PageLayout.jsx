@@ -1,3 +1,5 @@
+// Booklog PageLayout — warm library
+// Web layout: left sidebar + scrollable main content
 import { Outlet } from 'react-router-dom';
 import SideNav from './SideNav';
 import WeatherEffects from './WeatherEffects';
@@ -13,13 +15,13 @@ export default function PageLayout({ children, showNav = true, className = '' })
       </div>
     );
   }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background relative">
       <WeatherEffects />
       <SideNav />
       <main className={`flex-1 min-w-0 overflow-y-auto ${className}`}>
         <div className="max-w-5xl w-full">
-          {/* 중첩 라우트 페이지 렌더 */}
           {children ?? <Outlet />}
         </div>
       </main>
@@ -27,4 +29,3 @@ export default function PageLayout({ children, showNav = true, className = '' })
     </div>
   );
 }
-
