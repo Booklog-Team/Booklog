@@ -1,8 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Bot, User, Search } from "lucide-react";
+import { MessageCircle, X, Send, Bot, User, Search, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { searchBooks } from "@/utils/api";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useShelf } from "@/contexts/ShelfContext";
+import { usePoint } from "@/contexts/PointContext";
+import { getDocs, collection, query, orderBy, limit } from "firebase/firestore";
+import { db } from "@/firebase/config";
+import { MOCK_COMMUNITY_POSTS } from "@/lib/mockData";
 
 const WEATHER_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
@@ -16,13 +22,17 @@ async function fetchWeather() {
     lon = pos.coords.longitude;
   } catch { /* 위치 허용 안 하면 서울 기본값 사용 */ }
 
-  const res = await fetch(
-    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_KEY}&units=metric&lang=kr`
-  );
-  if (!res.ok) throw new Error("날씨 API 오류");
-  const d = await res.json();
+  // 역지오코딩 + 날씨 동시 요청
+  const [geoRes, weatherRes] = await Promise.all([
+    fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${WEATHER_KEY}`),
+    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_KEY}&units=metric&lang=kr`),
+  ]);
+  if (!weatherRes.ok) throw new Error("날씨 API 오류");
+  const [geoData, d] = await Promise.all([geoRes.json(), weatherRes.json()]);
+  const cityName = geoData[0]?.local_names?.ko || geoData[0]?.name || "서울";
+
   return {
-    city: d.name,
+    city: cityName,
     main: d.weather[0].main,
     temp: Math.round(d.main.temp),
     feelsLike: Math.round(d.main.feels_like),
@@ -48,34 +58,110 @@ function getWeatherBookKeyword(main, temp) {
   return WEATHER_BOOK_MAP[main] || "베스트셀러";
 }
 
-const SYSTEM_PROMPT = `너는 'Booklog' 도서 앱의 AI 사서야. 사용자 메시지를 분석해서 반드시 아래 JSON 형식으로만 응답해. JSON 외 다른 텍스트는 절대 출력하지 마.
+const BASE_SYSTEM_PROMPT = `너는 'Booklog' 도서 앱의 AI 사서야. 사용자 메시지를 분석해서 반드시 아래 JSON 형식으로만 응답해. JSON 외 다른 텍스트는 절대 출력하지 마.
 
 {"type":"book","keyword":"알라딘 검색 키워드","message":"자연스러운 한국어 응답"}
-{"type":"weather","message":"날씨 관련 짧은 한국어 응답"}
+{"type":"weather","message":"날씨 관련 짧은 한국어 응답 (날씨 정보만, 책 언급 금지)"}
+{"type":"weather_books","message":"날씨와 어울리는 책 추천 응답"}
+{"type":"user_data","message":"사용자 데이터를 바탕으로 한 자연스러운 한국어 답변"}
+{"type":"community_data","message":"커뮤니티·모임·게시판 정보를 바탕으로 한 자연스러운 한국어 답변"}
 {"type":"general","message":"친절하고 자연스러운 한국어 답변"}
 
 분류 기준:
 - book: 책/도서 추천, 특정 책이나 작가 검색, 소설·에세이·자기계발 등 장르 언급
-- weather: 날씨, 기온, 비, 맑음, 흐림 등 날씨 관련 질문
+- weather: 날씨·기온·비·맑음·흐림 등 순수 날씨 질문
+- weather_books: 날씨와 함께 책 추천을 명시적으로 요청
+- user_data: 사용자 본인의 서재·독서 현황·포인트·레벨·완독 수·읽는 책·프로필 관련 질문
+- community_data: 커뮤니티 모임, 게시판 글, 다른 독자들의 활동 관련 질문 ("어떤 모임이 있어", "최근 게시글", "커뮤니티 현황" 등)
 - general: 인사, 역사 인물, 과학, 일반 상식, 그 외 모든 것
 
 keyword 작성법 (book 타입 전용):
 - 핵심 키워드만 짧게 (예: "가벼운 소설 추천해줘" → "가벼운 소설")
 - 작가 이름 언급 시 그 이름으로 (예: "한강 책 찾아줘" → "한강")`;
 
+const INITIAL_MESSAGE = {
+  id: 1,
+  text: "안녕하세요! Booklog AI 도우미예요 😊 책 추천, 도서 검색, 날씨, 궁금한 것 뭐든지 물어보세요!",
+  isBot: true,
+};
+
+const LEVELS = [
+  { level: 1, label: "새싹 독자",     emoji: "🌱", minPts: 0   },
+  { level: 2, label: "꾸준한 독자",   emoji: "📚", minPts: 50  },
+  { level: 3, label: "책벌레",        emoji: "🐛", minPts: 150 },
+  { level: 4, label: "독서왕",        emoji: "👑", minPts: 300 },
+  { level: 5, label: "도서관 수호자", emoji: "🏛️", minPts: 500 },
+];
+function getLevelInfo(pts) {
+  let cur = LEVELS[0], nxt = LEVELS[1];
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (pts >= LEVELS[i].minPts) { cur = LEVELS[i]; nxt = LEVELS[i + 1] ?? null; break; }
+  }
+  return { label: cur.label, emoji: cur.emoji, ptsToNext: nxt ? nxt.minPts - pts : 0 };
+}
+
 const ChatBot = () => {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const { books: shelfBooks } = useShelf();
+  const { myPoints } = usePoint();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: "안녕하세요! Booklog AI 도우미예요 😊 책 추천, 도서 검색, 날씨, 궁금한 것 뭐든지 물어보세요!",
-      isBot: true,
-    },
-  ]);
+  const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef(null);
+  const [meetings, setMeetings] = useState([]);
+  const meetingsLoadedRef = useRef(false);
+
+  // 채팅 열릴 때 모임 데이터 로드 (1회)
+  useEffect(() => {
+    if (!isOpen || meetingsLoadedRef.current) return;
+    meetingsLoadedRef.current = true;
+    getDocs(query(collection(db, "meetings"), orderBy("createdAt", "desc"), limit(10)))
+      .then(snap => setMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(() => {});
+  }, [isOpen]);
+
+  const buildUserContext = () => {
+    if (!user) return "\n[사용자 정보: 로그인하지 않은 상태]";
+
+    const reading = shelfBooks.filter(b => b.status === "reading");
+    const done    = shelfBooks.filter(b => b.status === "done");
+    const want    = shelfBooks.filter(b => b.status === "want");
+
+    const fmt = (arr) =>
+      arr.length === 0
+        ? "없음"
+        : arr.map(b => `"${b.title}"(${b.author || "저자 미상"})`).join(", ");
+
+    const readingDetail = reading.map(b => {
+      const pct = b.totalPage && b.currentPage
+        ? Math.round((b.currentPage / b.totalPage) * 100)
+        : null;
+      return `"${b.title}"(${b.author || "저자 미상"}${pct !== null ? `, ${pct}% 진행` : ""})`;
+    }).join(", ") || "없음";
+
+    const lvl = getLevelInfo(myPoints);
+    const meetingsSummary = meetings.length === 0
+      ? "현재 모임 없음"
+      : meetings.slice(0, 5).map(m => `"${m.title || "제목없음"}"(${m.currentMembers ?? m.members?.length ?? 0}명)`).join(", ");
+    const boardSummary = MOCK_COMMUNITY_POSTS.slice(0, 5)
+      .map(p => `"${p.title}"(${p.category}, 좋아요 ${p.likes?.length ?? 0})`).join(", ");
+
+    return `
+[사용자 개인 데이터 — user_data 질문에 이 정보를 바탕으로 답변]
+- 닉네임: ${profile?.nickname || "설정 안 됨"}
+- 관심 장르: ${profile?.genres?.join(", ") || "없음"}
+- 포인트: ${myPoints}pt / 레벨: ${lvl.emoji} ${lvl.label}${lvl.ptsToNext > 0 ? ` (다음 레벨까지 ${lvl.ptsToNext}pt)` : " (최고 레벨)"}
+- 서재 총 도서: ${shelfBooks.length}권
+- 읽는 중 (${reading.length}권): ${readingDetail}
+- 완독 (${done.length}권): ${fmt(done)}
+- 읽고 싶음 (${want.length}권): ${fmt(want)}
+
+[커뮤니티 현황 — community_data 질문에 이 정보를 바탕으로 답변]
+- 독서 모임 (총 ${meetings.length}개): ${meetingsSummary}
+- 게시판 최근 글: ${boardSummary}`;
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -98,10 +184,10 @@ const ChatBot = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
-          max_tokens: 300,
+          max_tokens: 400,
           response_format: { type: "json_object" },
           messages: [
-            { role: "system", content: SYSTEM_PROMPT },
+            { role: "system", content: BASE_SYSTEM_PROMPT + buildUserContext() },
             { role: "user", content: userInput },
           ],
         }),
@@ -135,10 +221,21 @@ const ChatBot = () => {
       } else if (parsed.type === "weather") {
         try {
           weather = await fetchWeather();
+          botText = parsed.message || `${weather.city}의 현재 날씨예요! ${weather.desc}, ${weather.temp}°C입니다.`;
+        } catch {
+          botText = "날씨 정보를 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
+        }
+      } else if (parsed.type === "user_data") {
+        botText = parsed.message || "서재 정보를 확인해보세요.";
+      } else if (parsed.type === "community_data") {
+        botText = parsed.message || "커뮤니티 정보를 확인해보세요.";
+      } else if (parsed.type === "weather_books") {
+        try {
+          weather = await fetchWeather();
           const keyword = getWeatherBookKeyword(weather.main, weather.temp);
           const { items } = await searchBooks(keyword);
           books = items.slice(0, 3);
-          botText = `${weather.city}의 현재 날씨예요! ${weather.desc} 날씨엔 ${keyword} 책이 잘 어울려요 📚`;
+          botText = parsed.message || `${weather.city}의 현재 날씨예요! ${weather.desc} 날씨엔 ${keyword} 책이 잘 어울려요 📚`;
         } catch {
           botText = "날씨 정보를 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
         }
@@ -182,16 +279,23 @@ const ChatBot = () => {
           >
             {/* Header */}
             <div className="bg-primary p-4 text-primary-foreground flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
                 <Bot size={22} />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="font-bold text-sm">Booklog AI</p>
                 <p className="text-[10px] opacity-80 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
                   책 추천 · 검색 · 날씨 · 일반 질문
                 </p>
               </div>
+              <button
+                onClick={() => setMessages([INITIAL_MESSAGE])}
+                className="w-8 h-8 bg-white/15 hover:bg-white/25 rounded-full flex items-center justify-center transition-colors flex-shrink-0"
+                title="대화 초기화"
+              >
+                <RotateCcw size={14} />
+              </button>
             </div>
 
             {/* Messages */}

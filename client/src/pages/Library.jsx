@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { MOCK_BOOKS, READING_CALENDAR } from "@/lib/mockData";
 import {
   Plus,
@@ -352,7 +353,12 @@ export default function Library() {
       <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6 lg:px-8">
 
         {/* 페이지 헤더 */}
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <motion.div
+          className="mb-6 flex items-start justify-between gap-4"
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
           <div>
             <h1 className="text-2xl font-bold tracking-tight">내 서재</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -362,7 +368,7 @@ export default function Library() {
           <Button onClick={() => navigate("/search")} className="shrink-0 rounded-xl">
             <Plus size={16} className="mr-1.5" />책 추가
           </Button>
-        </div>
+        </motion.div>
 
         {error && (
           <div className="mb-6 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -371,7 +377,12 @@ export default function Library() {
         )}
 
         {/* ── 메인 그리드 (두 열 항상 동일 높이) ── */}
-        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-stretch">
+        <motion.div
+          className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-stretch"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.1 }}
+        >
 
           {/* ── 왼쪽 열 ── */}
           <div className="flex flex-col lg:h-0 lg:min-h-full">
@@ -811,10 +822,15 @@ export default function Library() {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── 서재 전체 탭 ── */}
-        <div className="mb-8">
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.2 }}
+        >
           <div className="mb-3 flex justify-end">
             <div className="flex gap-1">
               <button
@@ -884,29 +900,41 @@ export default function Library() {
                       </Button>
                     </div>
                   ) : viewMode === "list" ? (
-                    <div className="grid grid-cols-2 gap-3 stagger-children">
-                      {tabBooks.map(book => (
-                        <ShelfCard
+                    <div className="grid grid-cols-2 gap-3">
+                      {tabBooks.map((book, idx) => (
+                        <motion.div
                           key={book.id}
-                          book={book}
-                          variant="compact"
-                          onStatusChange={updateStatus}
-                          onDelete={removeBook}
-                          onClick={() => setPopupBook(book)}
-                        />
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: idx * 0.05 }}
+                        >
+                          <ShelfCard
+                            book={book}
+                            variant="compact"
+                            onStatusChange={updateStatus}
+                            onDelete={removeBook}
+                            onClick={() => setPopupBook(book)}
+                          />
+                        </motion.div>
                       ))}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 stagger-children">
-                      {tabBooks.map(book => (
-                        <ShelfCard
+                    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+                      {tabBooks.map((book, idx) => (
+                        <motion.div
                           key={book.id}
-                          book={book}
-                          variant="grid"
-                          onStatusChange={updateStatus}
-                          onDelete={removeBook}
-                          onClick={() => setPopupBook(book)}
-                        />
+                          initial={{ opacity: 0, scale: 0.92 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.3, delay: idx * 0.04 }}
+                        >
+                          <ShelfCard
+                            book={book}
+                            variant="grid"
+                            onStatusChange={updateStatus}
+                            onDelete={removeBook}
+                            onClick={() => setPopupBook(book)}
+                          />
+                        </motion.div>
                       ))}
                     </div>
                   )}
@@ -914,7 +942,7 @@ export default function Library() {
               );
             })}
           </Tabs>
-        </div>
+        </motion.div>
       </div>
 
       {popupBook && (
