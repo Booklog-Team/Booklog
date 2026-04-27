@@ -76,19 +76,23 @@ async function geocodeToRegion(lat, lng) {
   const data = await res.json();
   console.log("[geocodeToRegion] API 전체 응답:", data);
 
-  const components = data.results?.[0]?.address_components || [];
-  console.log("[geocodeToRegion] address_components:", components);
+  const results = data.results || [];
+  console.log("[geocodeToRegion] results 개수:", results.length);
 
-  for (const comp of components) {
-    if (comp.types.includes("administrative_area_level_1")) {
-      const fullName = comp.long_name;
-      const shortName = fullName.replace(/특별시|광역시|특별자치시|특별자치도|도$/, "").trim();
-      console.log("[geocodeToRegion] 추출된 지역명:", { fullName, shortName });
-      const code = REGION_MAP[fullName] ?? REGION_MAP[shortName];
-      console.log("[geocodeToRegion] REGION_MAP 매핑 결과:", code ?? "매핑 없음");
-      if (code) return code;
-    }
+  for (const result of results) {
+    const components = result.address_components || [];
+    const province = components.find(c => c.types.includes("administrative_area_level_1"));
+    if (!province) continue;
+
+    const fullName = province.long_name;
+    const shortName = fullName.replace(/특별시|광역시|특별자치시|특별자치도|도$/, "").trim();
+    console.log("[geocodeToRegion] 추출된 지역명:", { fullName, shortName }, "/ result 인덱스:", results.indexOf(result));
+    const code = REGION_MAP[fullName] ?? REGION_MAP[shortName];
+    console.log("[geocodeToRegion] REGION_MAP 매핑 결과:", code ?? "매핑 없음");
+    if (code) return code;
   }
+
+  console.error("[geocodeToRegion] 모든 results에서 administrative_area_level_1 미발견");
   return null;
 }
 
@@ -353,40 +357,60 @@ export default function BookDetail() {
       const pos = await new Promise((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
       );
+      console.log("[handleFindLibraries] 위치 획득:", pos.coords.latitude, pos.coords.longitude);
+
       const regionCode = await geocodeToRegion(pos.coords.latitude, pos.coords.longitude);
-      if (!regionCode) throw new Error("지역 정보를 인식하지 못했습니다.");
+      console.log("[handleFindLibraries] geocodeToRegion 반환값:", regionCode, "/ 타입:", typeof regionCode);
+
+      if (!regionCode) {
+        console.error("[handleFindLibraries] regionCode가 falsy → 지역 인식 실패");
+        throw new Error("지역 정보를 인식하지 못했습니다.");
+      }
+
       const LKEY = import.meta.env.VITE_LIBRARY_API_KEY;
-      const r = await fetch(
-        `/api/library/api/libSrchByBook?authKey=${LKEY}&isbn=${book._isbn13}&region=${regionCode}&format=json`
-      );
+      const isbn = book._isbn13;
+      const url = `/api/library/api/libSrchByBook?authKey=${LKEY}&isbn=${isbn}&region=${regionCode}&format=json`;
+      console.log("[handleFindLibraries] 도서관 API URL:", url);
+      console.log("[handleFindLibraries] ISBN13:", isbn, "/ LKEY 존재:", !!LKEY);
+
+      const r = await fetch(url);
+      console.log("[handleFindLibraries] 응답 status:", r.status, "/ ok:", r.ok);
+
       const d = await r.json();
-      const raw = d.response?.libs?.lib;
-      setLibraries(!raw ? [] : Array.isArray(raw) ? raw : [raw]);
+      console.log("[handleFindLibraries] response 전체:", JSON.stringify(d.response, null, 2));
+
+      // 정보나루 API 응답 구조: response.libs = [{ lib: {...} }, ...]
+      const libs = d.response?.libs;
+      const raw = Array.isArray(libs) ? libs.map(item => item.lib).filter(Boolean) : [];
+      console.log("[handleFindLibraries] 추출된 lib 목록:", raw);
+      setLibraries(raw);
       setLibState("done");
+
+      // 전체 도서관 소장/대출 일괄 조회
+      if (isbn && raw.length > 0) {
+        raw.forEach(lib => {
+          fetch(`/api/library/api/bookExist?authKey=${LKEY}&libCode=${lib.libCode}&isbn13=${isbn}&format=json`)
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(data => {
+              const result = data.response?.result;
+              setLibAvail(prev => ({
+                ...prev,
+                [lib.libCode]: { hasBook: result?.hasBook === "Y", loanAvail: result?.loanAvailable === "Y" },
+              }));
+            })
+            .catch(() => setLibAvail(prev => ({ ...prev, [lib.libCode]: null })));
+        });
+      }
     } catch (err) {
-      toast.error(err.code === 1 ? "위치 접근이 거부되었습니다." : err.message || "도서관 정보를 가져오지 못했습니다.");
+      console.error("[handleFindLibraries] catch 발생 — message:", err.message, "/ code:", err.code, "/ err:", err);
+      const isGeoBlocked = err instanceof GeolocationPositionError && err.code === 1;
+      toast.error(isGeoBlocked ? "위치 접근이 거부되었습니다." : err.message || "도서관 정보를 가져오지 못했습니다.");
       setLibState("error");
     }
   };
 
-  const handleLibraryClick = async (lib) => {
-    const code = lib.libCode;
-    setSelectedLibCode(code);
-    if (libAvail[code] !== undefined) return;
-    try {
-      const LKEY = import.meta.env.VITE_LIBRARY_API_KEY;
-      const r = await fetch(
-        `/api/library/api/bookExist?authKey=${LKEY}&libCode=${code}&isbn13=${book._isbn13}&format=json`
-      );
-      const d = await r.json();
-      const result = d.response?.result;
-      setLibAvail((prev) => ({
-        ...prev,
-        [code]: { hasBook: result?.hasBook === "Y", loanAvail: result?.loanAvail === "Y" },
-      }));
-    } catch {
-      setLibAvail((prev) => ({ ...prev, [code]: null }));
-    }
+  const handleLibraryClick = (lib) => {
+    setSelectedLibCode(prev => prev === lib.libCode ? null : lib.libCode);
   };
 
   // ── 로딩 / 에러 ──────────────────────────────────────────
@@ -692,33 +716,6 @@ export default function BookDetail() {
           </Button>
         </div>
 
-        {/* ── 관련 도서 ── */}
-        {related.length > 0 && (
-          <section className="pt-2">
-            <h3 className="text-base font-bold mb-4">관련 도서</h3>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-              {related.map((b) => (
-                <BookCard key={b.id} book={b} variant="compact" />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── 최근 본 도서 ── */}
-        {recentBooks.length > 0 && (
-          <section className="pt-2">
-            <h3 className="text-base font-bold mb-4 flex items-center gap-2">
-              <Clock size={15} className="text-muted-foreground" />
-              최근 본 도서
-            </h3>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-              {recentBooks.slice(0, 6).map((b) => (
-                <RecentBookCard key={b.id} book={b} onClick={() => navigate(`/book/${b.id}`)} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* ── 내 주변 도서관 ── */}
         <section className="bg-card border border-border/50 rounded-2xl p-5 shadow-sm space-y-4">
           <h3 className="text-base font-bold flex items-center gap-2">
@@ -742,7 +739,7 @@ export default function BookDetail() {
                 </p>
               ) : (
                 <>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                     {libraries.map((lib) => {
                       const avail = libAvail[lib.libCode];
                       const isSelected = selectedLibCode === lib.libCode;
@@ -750,35 +747,37 @@ export default function BookDetail() {
                         <button
                           key={lib.libCode}
                           onClick={() => handleLibraryClick(lib)}
-                          className={`w-full text-left p-4 rounded-xl border transition-all ${
+                          className={`w-full text-left p-3.5 rounded-xl border transition-all ${
                             isSelected
                               ? "border-primary/60 bg-primary/5"
                               : "border-border/50 bg-background hover:border-primary/30 hover:bg-secondary/50"
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-sm font-bold truncate">{lib.libName}</p>
                               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{lib.address}</p>
                             </div>
-                            {isSelected && avail === undefined && (
-                              <Loader2 size={13} className="animate-spin text-muted-foreground flex-shrink-0 mt-0.5" />
-                            )}
-                            {avail && (
-                              <div className="flex flex-col gap-0.5 flex-shrink-0 text-right text-xs font-medium">
-                                <span className={avail.hasBook ? "text-emerald-600" : "text-red-500"}>
-                                  {avail.hasBook ? "소장 ✅" : "미소장 ❌"}
-                                </span>
-                                {avail.hasBook && (
-                                  <span className={avail.loanAvail ? "text-emerald-600" : "text-red-500"}>
-                                    {avail.loanAvail ? "대출가능 ✅" : "대출중 ❌"}
+                            <div className="flex flex-col items-end gap-0.5 flex-shrink-0 text-xs font-medium">
+                              {avail === undefined && (
+                                <Loader2 size={13} className="animate-spin text-muted-foreground" />
+                              )}
+                              {avail === null && (
+                                <span className="text-muted-foreground">조회 실패</span>
+                              )}
+                              {avail && (
+                                <>
+                                  <span className={avail.hasBook ? "text-emerald-600" : "text-red-500"}>
+                                    {avail.hasBook ? "소장 ✅" : "미소장 ❌"}
                                   </span>
-                                )}
-                              </div>
-                            )}
-                            {avail === null && (
-                              <span className="text-xs text-muted-foreground flex-shrink-0">조회 실패</span>
-                            )}
+                                  {avail.hasBook && (
+                                    <span className={avail.loanAvail ? "text-emerald-600" : "text-amber-500"}>
+                                      {avail.loanAvail ? "대출가능 ✅" : "대출중 ❌"}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </button>
                       );
@@ -819,6 +818,33 @@ export default function BookDetail() {
             </button>
           )}
         </section>
+
+        {/* ── 관련 도서 ── */}
+        {related.length > 0 && (
+          <section className="pt-2">
+            <h3 className="text-base font-bold mb-4">관련 도서</h3>
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+              {related.map((b) => (
+                <BookCard key={b.id} book={b} variant="compact" />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── 최근 본 도서 ── */}
+        {recentBooks.length > 0 && (
+          <section className="pt-2">
+            <h3 className="text-base font-bold mb-4 flex items-center gap-2">
+              <Clock size={15} className="text-muted-foreground" />
+              최근 본 도서
+            </h3>
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+              {recentBooks.slice(0, 6).map((b) => (
+                <RecentBookCard key={b.id} book={b} onClick={() => navigate(`/book/${b.id}`)} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

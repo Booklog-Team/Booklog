@@ -14,11 +14,6 @@ export default defineConfig(({ mode }) => {
         "@shared": path.resolve(import.meta.dirname, "shared"),
         "@assets": path.resolve(import.meta.dirname, "attached_assets"),
       },
-      "/api/library": {
-        target: "https://data4library.kr",
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api\/library/, ""),
-      },
     },
     root: path.resolve(import.meta.dirname, "client"),
     envDir: path.resolve(import.meta.dirname),
@@ -32,6 +27,11 @@ export default defineConfig(({ mode }) => {
       host: true,
       fs: { strict: false },
       proxy: {
+        "/api/library": {
+          target: "https://data4library.kr",
+          changeOrigin: true,
+          rewrite: (p) => p.replace(/^\/api\/library/, ""),
+        },
         "/api/aladin": {
           target: "http://www.aladin.co.kr",
           changeOrigin: true,
