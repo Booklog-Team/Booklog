@@ -112,6 +112,9 @@ const ChatBot = () => {
   const scrollRef = useRef(null);
   const [meetings, setMeetings] = useState([]);
   const meetingsLoadedRef = useRef(false);
+  const requestTimestampsRef = useRef([]);
+  const [rateLimitUntil, setRateLimitUntil] = useState(null);
+  const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
 
   // 채팅 열릴 때 모임 데이터 로드 (1회)
   useEffect(() => {
@@ -164,13 +167,38 @@ const ChatBot = () => {
   };
 
   useEffect(() => {
+    if (!rateLimitUntil) return;
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((rateLimitUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setRateLimitUntil(null);
+        setRateLimitCountdown(0);
+      } else {
+        setRateLimitCountdown(remaining);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitUntil]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || rateLimitUntil) return;
+
+    // 분당 요청 수 체크 (30 RPM)
+    const now = Date.now();
+    requestTimestampsRef.current = requestTimestampsRef.current.filter(t => now - t < 60000);
+    if (requestTimestampsRef.current.length >= 30) {
+      const waitMs = 60000 - (now - requestTimestampsRef.current[0]);
+      setRateLimitUntil(now + waitMs);
+      setRateLimitCountdown(Math.ceil(waitMs / 1000));
+      return;
+    }
+    requestTimestampsRef.current.push(now);
 
     const userInput = input.trim();
     setMessages(prev => [...prev, { id: Date.now(), text: userInput, isBot: false }]);
@@ -192,6 +220,13 @@ const ChatBot = () => {
           ],
         }),
       });
+
+      if (groqRes.status === 429) {
+        const waitMs = 60000;
+        setRateLimitUntil(Date.now() + waitMs);
+        setRateLimitCountdown(60);
+        throw new Error("rate_limit");
+      }
 
       const groqData = await groqRes.json();
 
@@ -246,11 +281,13 @@ const ChatBot = () => {
         { id: Date.now() + 1, text: botText, isBot: true, books, weather },
       ]);
     } catch (err) {
-      console.error("ChatBot error:", err);
-      setMessages(prev => [
-        ...prev,
-        { id: Date.now() + 1, text: "잠시 문제가 생겼어요. 다시 말씀해 주시겠어요?", isBot: true },
-      ]);
+      if (err.message !== "rate_limit") {
+        console.error("ChatBot error:", err);
+        setMessages(prev => [
+          ...prev,
+          { id: Date.now() + 1, text: "잠시 문제가 생겼어요. 다시 말씀해 주시겠어요?", isBot: true },
+        ]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -319,7 +356,7 @@ const ChatBot = () => {
 
                   {/* Book Results */}
                   {msg.isBot && msg.books?.length > 0 && (
-                    <div className="mt-3 ml-10 space-y-2 w-full pr-4">
+                    <div className="mt-3 ml-10 space-y-2 max-w-[calc(100%-2.5rem)]">
                       {msg.books.map(book => (
                         <div
                           key={book.id}
@@ -329,7 +366,7 @@ const ChatBot = () => {
                           <img
                             src={book._cover || book.volumeInfo?.imageLinks?.thumbnail || "/placeholder-book.png"}
                             alt={book.volumeInfo.title}
-                            className="w-12 h-16 object-cover rounded-md shadow-sm flex-shrink-0"
+                            className="w-10 h-14 object-cover rounded-md shadow-sm flex-shrink-0"
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold truncate">{book.volumeInfo.title}</p>
@@ -348,30 +385,30 @@ const ChatBot = () => {
 
                   {/* Weather Card */}
                   {msg.isBot && msg.weather && (
-                    <div className="mt-3 ml-10 w-full pr-4">
+                    <div className="mt-3 ml-10 max-w-[calc(100%-2.5rem)]">
                       <div className="bg-gradient-to-br from-sky-50 to-blue-100 border border-sky-200 rounded-2xl p-3 shadow-sm">
                         <div className="flex items-center gap-2 mb-2">
                           <img
                             src={`https://openweathermap.org/img/wn/${msg.weather.icon}@2x.png`}
                             alt={msg.weather.desc}
-                            className="w-12 h-12"
+                            className="w-10 h-10 flex-shrink-0"
                           />
-                          <div>
-                            <p className="text-sm font-bold text-sky-900">{msg.weather.city}</p>
-                            <p className="text-[11px] text-sky-600 capitalize">{msg.weather.desc}</p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-sky-900 truncate">{msg.weather.city}</p>
+                            <p className="text-[11px] text-sky-600 capitalize truncate">{msg.weather.desc}</p>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-1.5 text-center">
-                          <div className="bg-white/70 rounded-xl p-2">
-                            <p className="text-sm font-bold text-sky-800">{msg.weather.temp}°C</p>
+                        <div className="flex gap-1.5">
+                          <div className="flex-1 bg-white/70 rounded-xl p-2 text-center">
+                            <p className="text-xs font-bold text-sky-800">{msg.weather.temp}°C</p>
                             <p className="text-[9px] text-sky-500">기온</p>
                           </div>
-                          <div className="bg-white/70 rounded-xl p-2">
-                            <p className="text-sm font-bold text-sky-800">{msg.weather.feelsLike}°C</p>
+                          <div className="flex-1 bg-white/70 rounded-xl p-2 text-center">
+                            <p className="text-xs font-bold text-sky-800">{msg.weather.feelsLike}°C</p>
                             <p className="text-[9px] text-sky-500">체감</p>
                           </div>
-                          <div className="bg-white/70 rounded-xl p-2">
-                            <p className="text-sm font-bold text-sky-800">{msg.weather.humidity}%</p>
+                          <div className="flex-1 bg-white/70 rounded-xl p-2 text-center">
+                            <p className="text-xs font-bold text-sky-800">{msg.weather.humidity}%</p>
                             <p className="text-[9px] text-sky-500">습도</p>
                           </div>
                         </div>
@@ -396,22 +433,30 @@ const ChatBot = () => {
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-border bg-white flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="책 추천, 검색, 날씨, 궁금한 것 모두!"
-                className="flex-1 bg-secondary/30 border-none rounded-2xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-              />
-              <button
-                onClick={handleSend}
-                disabled={isLoading}
-                className="w-10 h-10 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:opacity-90 transition-all disabled:opacity-50"
-              >
-                <Send size={18} />
-              </button>
+            <div className="border-t border-border bg-white">
+              {rateLimitUntil && (
+                <div className="mx-3 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-700 text-center font-medium">
+                  ⏳ 요청 한도 초과 · {rateLimitCountdown}초 후 다시 이용 가능해요
+                </div>
+              )}
+              <div className="p-3 flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  placeholder={rateLimitUntil ? "잠시 기다려주세요..." : "책 추천, 검색, 날씨, 궁금한 것 모두!"}
+                  disabled={!!rateLimitUntil}
+                  className="flex-1 bg-secondary/30 border-none rounded-2xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={isLoading || !!rateLimitUntil}
+                  className="w-10 h-10 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:opacity-90 transition-all disabled:opacity-50"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
