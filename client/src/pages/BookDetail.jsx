@@ -15,6 +15,7 @@ import { getBookDetail, searchBooks, getHighQualityCover } from "@/utils/api";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePoint } from "@/contexts/PointContext";
 
 const STATUS_OPTIONS = [
   { value: "reading", label: "읽는 중",   emoji: "📖" },
@@ -134,6 +135,7 @@ export default function BookDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { addPoint } = usePoint();
 
   const [book, setBook]         = useState(null);
   const [related, setRelated]   = useState([]);
@@ -257,6 +259,9 @@ export default function BookDetail() {
       } else {
         toast.success("독서 기록이 저장되었습니다!");
       }
+      // 포인트 적립 — addPoint 내부에서 하루 1회 중복 체크
+      if (status === "reading" || status === "done") addPoint("reading_check").catch(() => {});
+      if (memo.trim()) addPoint("memo").catch(() => {});
     } catch (err) {
       console.error(err);
       toast.error("저장에 실패했어요. 다시 시도해주세요.");
