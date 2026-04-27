@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
+import { ko } from "date-fns/locale";
 import {
   Popover,
   PopoverContent,
@@ -1949,6 +1950,7 @@ export default function Library() {
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
+                        locale={ko}
                         selected={
                           recordDate
                             ? new Date(recordDate + "T00:00:00")

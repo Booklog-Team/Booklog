@@ -1,10 +1,10 @@
 // Booklog Meeting.jsx — 독서 모임
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Users, Calendar, BookOpen,
   Send, ChevronRight, Loader2, MessageSquare, Crown, Trash2,
-  Megaphone, Pencil, ChevronDown,
+  Megaphone, Pencil, ChevronDown, Search as SearchIcon, CalendarDays,
 } from 'lucide-react';
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
@@ -22,6 +22,15 @@ import {
   MOCK_MEETING_POSTS,
   MOCK_MEETING_POST_COMMENTS,
 } from '@/lib/mockData';
+import { searchBooks } from '@/utils/api';
+import { Slider } from '@/components/ui/slider';
+import { Calendar as CalendarUI } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { ko } from 'date-fns/locale';
 
 // ─── 상수
 const BOOK_COVERS = [
@@ -92,12 +101,27 @@ export default function Meeting() {
   });
   const [showPrevAnns, setShowPrevAnns]         = useState(false);
 
+  // 책 검색 자동완성
+  const [bookQuery, setBookQuery]                         = useState('');
+  const [bookSuggestions, setBookSuggestions]             = useState([]);
+  const [showBookSuggestions, setShowBookSuggestions]     = useState(false);
+  const [bookSuggestionLoading, setBookSuggestionLoading] = useState(false);
+  const [activeBookSuggestionIdx, setActiveBookSuggestionIdx] = useState(-1);
+  const [bookSuggestionsClosedFor, setBookSuggestionsClosedFor] = useState('');
+  const [selectedBookTotalPages, setSelectedBookTotalPages] = useState(null);
+  const bookSuggestionSeqRef = useRef(0);
+  const [deadlinePickerOpen, setDeadlinePickerOpen] = useState(false);
+  const [confirmState, setConfirmState] = useState({ open: false, title: '', body: '', action: null });
+  function openConfirm(title, body, action) { setConfirmState({ open: true, title, body, action }); }
+  function closeConfirm() { setConfirmState({ open: false, title: '', body: '', action: null }); }
+
   // Community.jsx에서 navigation state로 넘어온 경우 처리
   useEffect(() => {
     const state = location.state;
     if (!state) return;
     if (state.view === 'create-meeting') {
       setView('create-meeting');
+      setFromCommunity(true);
     } else if (state.view === 'detail' && state.meeting) {
       // Community.jsx에서 전체 meeting 객체를 넘겨준 경우 (mock 포함) 바로 사용
       setSelectedMeeting(state.meeting);
@@ -227,6 +251,8 @@ export default function Meeting() {
       });
       toast.success('모임이 개설됐어요! 🎉');
       setMeetingForm(EMPTY_MEETING_FORM);
+      setBookQuery('');
+      setSelectedBookTotalPages(null);
       setView('list');
     } catch {
       toast.error('모임 생성에 실패했어요. 다시 시도해주세요.');
@@ -259,15 +285,15 @@ export default function Meeting() {
 
   // 모임 삭제 (호스트 전용)
   async function handleDeleteMeeting() {
-    if (!window.confirm('모임을 삭제할까요? 이 작업은 되돌릴 수 없어요.')) return;
-    try {
-      await deleteDoc(doc(db, 'meetings', selectedMeeting.id));
-      toast.success('모임이 삭제됐어요.');
-      setSelectedMeeting(null);
-      setView('list');
-    } catch {
-      toast.error('삭제 중 오류가 발생했어요.');
-    }
+    openConfirm('모임을 삭제할까요?', '이 작업은 되돌릴 수 없어요.', async () => {
+      try {
+        await deleteDoc(doc(db, 'meetings', selectedMeeting.id));
+        toast.success('모임이 삭제됐어요.');
+        navigate('/community', { state: { tab: 'meeting' } });
+      } catch {
+        toast.error('삭제 중 오류가 발생했어요.');
+      }
+    });
   }
 
   // 모임장 공지 저장
@@ -309,14 +335,86 @@ export default function Meeting() {
     }
   }
 
+  // 책 검색 자동완성 useEffect
+  useEffect(() => {
+    const trimmed = bookQuery.trim();
+    if (trimmed === bookSuggestionsClosedFor) {
+      setShowBookSuggestions(false);
+      setBookSuggestionLoading(false);
+      return;
+    }
+    if (trimmed.length < 2) {
+      setBookSuggestions([]);
+      setShowBookSuggestions(false);
+      setBookSuggestionLoading(false);
+      setActiveBookSuggestionIdx(-1);
+      return;
+    }
+    const seq = bookSuggestionSeqRef.current + 1;
+    bookSuggestionSeqRef.current = seq;
+    setBookSuggestionLoading(true);
+    const timer = setTimeout(() => {
+      searchBooks(trimmed, { start: 1, maxResults: 6 })
+        .then(({ items }) => {
+          if (bookSuggestionSeqRef.current !== seq) return;
+          setBookSuggestions(items || []);
+          setShowBookSuggestions(true);
+          setActiveBookSuggestionIdx(-1);
+        })
+        .catch(() => {
+          if (bookSuggestionSeqRef.current !== seq) return;
+          setBookSuggestions([]);
+          setShowBookSuggestions(false);
+        })
+        .finally(() => {
+          if (bookSuggestionSeqRef.current === seq) setBookSuggestionLoading(false);
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [bookQuery, bookSuggestionsClosedFor]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 책 선택 핸들러
+  function handleBookSelect(book) {
+    const info = book.volumeInfo || {};
+    const title = info.title || '';
+    const author = info.authors?.[0] || '';
+    const displayName = author ? `${title} — ${author}` : title;
+    const totalPages = info.pageCount || null;
+    setBookQuery(displayName);
+    setMeetingForm(p => ({ ...p, currentBook: displayName, pageStart: '', pageEnd: '' }));
+    setSelectedBookTotalPages(totalPages);
+    setShowBookSuggestions(false);
+    setBookSuggestions([]);
+    setActiveBookSuggestionIdx(-1);
+    setBookSuggestionsClosedFor('');
+  }
+
   // 감상 게시글 삭제 (작성자 전용)
   async function handleDeleteMeetingPost() {
-    if (!window.confirm('게시글을 삭제할까요?')) return;
+    openConfirm('게시글을 삭제할까요?', '이 작업은 되돌릴 수 없어요.', async () => {
+      try {
+        await deleteDoc(doc(db, 'meetings', selectedMeeting.id, 'posts', selectedPost.id));
+        toast.success('게시글이 삭제됐어요.');
+        setSelectedPost(null);
+        setView('detail');
+      } catch {
+        toast.error('삭제 중 오류가 발생했어요.');
+      }
+    });
+  }
+
+  // 공지 삭제 (호스트 전용)
+  async function handleDeleteAnnouncement(rawAnns, index) {
+    const next = rawAnns.filter((_, i) => i !== index);
+    if (isMockMeeting) {
+      setSelectedMeeting(prev => ({ ...prev, announcements: next }));
+      toast.success('공지가 삭제됐어요.');
+      return;
+    }
     try {
-      await deleteDoc(doc(db, 'meetings', selectedMeeting.id, 'posts', selectedPost.id));
-      toast.success('게시글이 삭제됐어요.');
-      setSelectedPost(null);
-      setView('detail');
+      await updateDoc(doc(db, 'meetings', selectedMeeting.id), { announcements: next });
+      setSelectedMeeting(prev => ({ ...prev, announcements: next }));
+      toast.success('공지가 삭제됐어요.');
     } catch {
       toast.error('삭제 중 오류가 발생했어요.');
     }
@@ -363,7 +461,7 @@ export default function Meeting() {
       <>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button
-            onClick={() => setView('list')}
+            onClick={() => fromCommunity ? navigate('/community') : setView('list')}
             className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -410,15 +508,123 @@ export default function Meeting() {
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1.5">현재 읽는 책 *</p>
-            <Input
-              placeholder="예) 채식주의자 — 한강"
-              value={meetingForm.currentBook}
-              onChange={e => setMeetingForm(p => ({ ...p, currentBook: e.target.value }))}
-              className="h-11 bg-secondary border-none rounded-xl"
-            />
+            <div className="relative">
+              {bookSuggestionLoading ? (
+                <Loader2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary animate-spin z-10" />
+              ) : (
+                <SearchIcon size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" />
+              )}
+              <Input
+                placeholder="책 제목 또는 저자 검색..."
+                value={bookQuery}
+                onChange={e => {
+                  const v = e.target.value;
+                  setBookQuery(v);
+                  setMeetingForm(p => ({ ...p, currentBook: v }));
+                  setBookSuggestionsClosedFor('');
+                  setShowBookSuggestions(true);
+                }}
+                onFocus={() => {
+                  if (bookQuery.trim().length >= 2 && bookSuggestions.length > 0) setShowBookSuggestions(true);
+                }}
+                onBlur={() => setTimeout(() => setShowBookSuggestions(false), 120)}
+                onKeyDown={e => {
+                  const canNav = showBookSuggestions && bookSuggestions.length > 0;
+                  if (canNav && e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setActiveBookSuggestionIdx(prev => (prev + 1) % bookSuggestions.length);
+                  } else if (canNav && e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setActiveBookSuggestionIdx(prev => (prev <= 0 ? bookSuggestions.length - 1 : prev - 1));
+                  } else if (e.key === 'Escape') {
+                    setShowBookSuggestions(false);
+                    setActiveBookSuggestionIdx(-1);
+                  } else if (e.key === 'Enter' && canNav && activeBookSuggestionIdx >= 0) {
+                    e.preventDefault();
+                    handleBookSelect(bookSuggestions[activeBookSuggestionIdx]);
+                  }
+                }}
+                className="h-11 pl-9 bg-secondary border-none rounded-xl"
+              />
+              {showBookSuggestions && bookQuery.trim().length >= 2 && (
+                <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-xl border border-border/70 bg-card shadow-xl shadow-primary/10">
+                  <div className="max-h-[280px] overflow-y-auto py-1">
+                    {bookSuggestionLoading && bookSuggestions.length === 0 ? (
+                      <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+                        <Loader2 size={13} className="animate-spin text-primary" />
+                        도서를 검색 중이에요
+                      </div>
+                    ) : bookSuggestions.length > 0 ? (
+                      bookSuggestions.map((book, index) => {
+                        const info = book.volumeInfo || {};
+                        const title = info.title || '';
+                        const author = info.authors?.join(', ') || '';
+                        const cover = book._cover || '';
+                        return (
+                          <button
+                            key={book.id}
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onMouseEnter={() => setActiveBookSuggestionIdx(index)}
+                            onClick={() => handleBookSelect(book)}
+                            className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                              activeBookSuggestionIdx === index ? 'bg-primary/10' : 'hover:bg-secondary/50'
+                            }`}
+                          >
+                            {cover ? (
+                              <img src={cover} alt={title} className="w-8 h-11 rounded object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-8 h-11 rounded bg-secondary flex items-center justify-center flex-shrink-0">
+                                <BookOpen size={13} className="text-muted-foreground/40" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold line-clamp-1">{title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-1">{author}</p>
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="px-4 py-3 text-xs text-muted-foreground">검색 결과가 없어요</div>
+                    )}
+                  </div>
+                  <div className="border-t border-border/40 px-3 py-1.5">
+                    <button
+                      type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        setShowBookSuggestions(false);
+                        setActiveBookSuggestionIdx(-1);
+                        setBookSuggestionsClosedFor(bookQuery.trim());
+                      }}
+                      className="w-full rounded-lg py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors text-center"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1.5">읽을 범위</p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+              <span>시작 <span className="font-semibold text-foreground">{meetingForm.pageStart || 0}p</span></span>
+              <span>끝 <span className="font-semibold text-primary">{meetingForm.pageEnd || 0}p</span>
+                {selectedBookTotalPages ? ` / ${selectedBookTotalPages}p` : ''}
+              </span>
+            </div>
+            <Slider
+              value={[Number(meetingForm.pageStart) || 0, Number(meetingForm.pageEnd) || 0]}
+              min={0}
+              max={selectedBookTotalPages || 500}
+              step={1}
+              onValueChange={([start, end]) => {
+                setMeetingForm(p => ({ ...p, pageStart: start > 0 ? String(start) : '', pageEnd: end > 0 ? String(end) : '' }));
+              }}
+              className="py-1 mb-3"
+            />
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground flex-shrink-0">p.</span>
               <Input
@@ -443,12 +649,37 @@ export default function Meeting() {
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1.5">마감일</p>
-            <Input
-              type="date"
-              value={meetingForm.deadline}
-              onChange={e => setMeetingForm(p => ({ ...p, deadline: e.target.value }))}
-              className="h-11 bg-secondary border-none rounded-xl"
-            />
+            <Popover open={deadlinePickerOpen} onOpenChange={setDeadlinePickerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-11 w-full items-center gap-2 rounded-xl bg-secondary px-3 text-left text-sm transition-colors hover:bg-secondary/80"
+                >
+                  <CalendarDays size={15} className="shrink-0 text-muted-foreground" />
+                  <span className={meetingForm.deadline ? 'text-foreground' : 'text-muted-foreground'}>
+                    {meetingForm.deadline
+                      ? new Date(meetingForm.deadline + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+                      : '마감일 선택'}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarUI
+                  mode="single"
+                  locale={ko}
+                  selected={meetingForm.deadline ? new Date(meetingForm.deadline + 'T00:00:00') : undefined}
+                  onSelect={date => {
+                    if (date) {
+                      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+                      setMeetingForm(p => ({ ...p, deadline: local.toISOString().slice(0, 10) }));
+                      setDeadlinePickerOpen(false);
+                    }
+                  }}
+                  disabled={date => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1.5">최대 인원</p>
@@ -528,18 +759,18 @@ export default function Meeting() {
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-lg font-bold flex-1 line-clamp-1">감상 글</h1>
-          {isPostAuthor && (
-            <button
-              onClick={handleDeleteMeetingPost}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
         </div>
         <div className="px-4 pb-10 max-w-2xl">
-          <div className="book-card p-5 mb-4">
-            <div className="flex items-center gap-2.5 mb-4">
+          <div className="book-card p-5 mb-4 relative">
+            {isPostAuthor && (
+              <button
+                onClick={handleDeleteMeetingPost}
+                className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+            <div className="flex items-center gap-2.5 mb-4 pr-8">
               <Avatar name={selectedPost.authorName} />
               <div>
                 <p className="text-sm font-semibold">{selectedPost.authorName}</p>
@@ -590,7 +821,7 @@ export default function Meeting() {
               placeholder="댓글을 입력하세요..."
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAddComment()}
+              onKeyUp={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { handleAddComment(); } }}
               className="flex-1 h-10 bg-secondary border-none rounded-xl text-sm"
             />
             <button
@@ -602,6 +833,29 @@ export default function Meeting() {
             </button>
           </div>
         </div>
+
+        <Dialog open={confirmState.open} onOpenChange={open => !open && closeConfirm()}>
+          <DialogContent showCloseButton={false} className="max-w-[320px]">
+            <DialogHeader>
+              <DialogTitle>{confirmState.title}</DialogTitle>
+              <DialogDescription>{confirmState.body}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2 mt-2">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 h-9 rounded-xl border border-border text-sm hover:bg-secondary transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { confirmState.action?.(); closeConfirm(); }}
+                className="flex-1 h-9 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition-colors"
+              >
+                삭제
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     );
   }
@@ -632,18 +886,18 @@ export default function Meeting() {
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-lg font-bold flex-1 line-clamp-1">{selectedMeeting.title}</h1>
-          {isHost && (
-            <button
-              onClick={handleDeleteMeeting}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
         </div>
 
         <div className="px-4 pb-10 max-w-2xl">
-          <div className="book-card p-5 mb-5">
+          <div className="book-card p-5 mb-5 relative">
+            {isHost && (
+              <button
+                onClick={handleDeleteMeeting}
+                className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               {selectedMeeting.genre && (
                 <span className="text-[10px] font-semibold bg-primary/10 text-primary rounded-full px-2 py-0.5">
@@ -662,7 +916,7 @@ export default function Meeting() {
               )}
             </div>
             <h2
-              className="text-xl font-bold mb-2"
+              className="text-xl font-bold mb-2 pr-8"
               style={{ fontFamily: "'Noto Serif KR', serif" }}
             >
               {selectedMeeting.title}
@@ -742,20 +996,19 @@ export default function Meeting() {
                       value={annText}
                       onChange={e => setAnnText(e.target.value)}
                       placeholder="예) 4월 26일~5월 10일 동안 p.1~100을 읽겠습니다. 다들 화이팅!"
-                      className="min-h-[80px] bg-background border-amber-200 rounded-xl resize-none text-sm"
+                      className="min-h-[80px] bg-amber-500/5 border border-amber-300/50 rounded-xl resize-none text-sm focus-visible:ring-amber-400/40 placeholder:text-amber-700/40"
                     />
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
+                      <button
                         onClick={handleSaveAnnouncement}
                         disabled={submitting || !annText.trim()}
-                        className="flex-1 h-8 text-xs rounded-lg"
+                        className="flex-1 h-8 text-xs rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-semibold disabled:opacity-50 transition-colors"
                       >
                         저장
-                      </Button>
+                      </button>
                       <button
                         onClick={() => setEditingAnn(false)}
-                        className="px-3 h-8 text-xs rounded-lg border border-border hover:bg-secondary transition-colors"
+                        className="px-3 h-8 text-xs rounded-lg border border-amber-300/60 text-amber-700 hover:bg-amber-500/10 transition-colors"
                       >
                         취소
                       </button>
@@ -763,10 +1016,22 @@ export default function Meeting() {
                   </div>
                 ) : latestAnn ? (
                   <>
-                    <p className="text-[11px] text-muted-foreground mb-1">{formatTs(latestAnn.createdAt)}</p>
-                    <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                      {latestAnn.text}
-                    </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] text-muted-foreground mb-1">{formatTs(latestAnn.createdAt)}</p>
+                        <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                          {latestAnn.text}
+                        </p>
+                      </div>
+                      {isHost && (
+                        <button
+                          onClick={() => openConfirm('공지를 삭제할까요?', '이 작업은 되돌릴 수 없어요.', () => handleDeleteAnnouncement(rawAnns, 0))}
+                          className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 transition-colors"
+                        >
+                          <span className="text-[10px] font-bold leading-none">✕</span>
+                        </button>
+                      )}
+                    </div>
                     {prevAnns.length > 0 && (
                       <div className="mt-3">
                         <button
@@ -783,10 +1048,22 @@ export default function Meeting() {
                           <div className="mt-2 space-y-3">
                             {prevAnns.map((ann, i) => (
                               <div key={i} className="border-t border-amber-500/10 pt-2">
-                                <p className="text-[11px] text-muted-foreground mb-0.5">{formatTs(ann.createdAt)}</p>
-                                <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">
-                                  {ann.text}
-                                </p>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] text-muted-foreground mb-0.5">{formatTs(ann.createdAt)}</p>
+                                    <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">
+                                      {ann.text}
+                                    </p>
+                                  </div>
+                                  {isHost && (
+                                    <button
+                                      onClick={() => openConfirm('공지를 삭제할까요?', '이 작업은 되돌릴 수 없어요.', () => handleDeleteAnnouncement(rawAnns, i + 1))}
+                                      className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 transition-colors"
+                                    >
+                                      <span className="text-[10px] font-bold leading-none">✕</span>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -849,7 +1126,9 @@ export default function Meeting() {
                     </p>
                     <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                       <MessageSquare size={12} />
-                      <span>댓글 보기</span>
+                      <span>댓글 {isMockMeeting
+                        ? (MOCK_MEETING_POST_COMMENTS[post.id]?.length ?? 0)
+                        : (post.commentCount ?? 0)}개</span>
                       <ChevronRight size={12} className="ml-auto" />
                     </div>
                   </button>
@@ -858,6 +1137,29 @@ export default function Meeting() {
             )}
           </div>
         </div>
+
+        <Dialog open={confirmState.open} onOpenChange={open => !open && closeConfirm()}>
+          <DialogContent showCloseButton={false} className="max-w-[320px]">
+            <DialogHeader>
+              <DialogTitle>{confirmState.title}</DialogTitle>
+              <DialogDescription>{confirmState.body}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2 mt-2">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 h-9 rounded-xl border border-border text-sm hover:bg-secondary transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { confirmState.action?.(); closeConfirm(); }}
+                className="flex-1 h-9 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition-colors"
+              >
+                삭제
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     );
   }
