@@ -1,9 +1,7 @@
 // Booklog Community — 탭 기반 커뮤니티 허브
-import { useState } from "react";
-// ── TODO: 실제 데이터 전환 시 아래 주석 해제하고 mock 데이터 라인 제거 ──
-// import { useState, useEffect } from "react";
-// import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-// import { db } from "@/firebase/config";
+import { useState, useEffect } from "react";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { db } from "@/firebase/config";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -25,7 +23,10 @@ const BOOK_COVERS = [
   "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=400&h=180&fit=crop",
 ];
 
-const CATEGORIES = ["전체", "자유", "독후감", "질문"];
+const CATEGORIES = ["전체", "자유", "독후감", "질문", "내 게시글"];
+const MEETING_GENRES = ["소설", "에세이", "인문", "자기계발", "과학", "시", "역사", "기타"];
+const MEETING_FILTERS = ["전체", "참가 중", ...MEETING_GENRES];
+const PAGE_SIZE = 8;
 
 const CAT_STYLE = {
   자유: { bg: "bg-secondary", text: "text-secondary-foreground" },
@@ -56,43 +57,51 @@ export default function Community() {
   // location.state로 돌아온 탭 복원 (Meeting.jsx → back → Community)
   const defaultTab = location.state?.tab ?? "meeting";
 
+  const [meetingFilter, setMeetingFilter] = useState("전체");
   const [filterCat, setFilterCat] = useState("전체");
   const [imgErrors, setImgErrors] = useState({});
+  const [meetingPage, setMeetingPage] = useState(1);
+  const [boardPage, setBoardPage] = useState(1);
+  const [fbMeetings, setFbMeetings] = useState([]);
+  const [fbPosts, setFbPosts] = useState([]);
 
-  // ── UI 확인용: 항상 mock 데이터 사용 ──────────────────────────────────────
-  // TODO: 실제 데이터 전환 시 아래 mock 라인을 제거하고 Firebase 구독으로 교체
-  //
-  // const [meetings, setMeetings] = useState([]);
-  // const [posts, setPosts] = useState([]);
-  // const [loadingMeetings, setLoadingMeetings] = useState(true);
-  // const [loadingPosts, setLoadingPosts] = useState(true);
-  //
-  // useEffect(() => {
-  //   const q = query(collection(db, "meetings"), orderBy("createdAt", "desc"));
-  //   return onSnapshot(q,
-  //     snap => { setMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingMeetings(false); },
-  //     () => setLoadingMeetings(false)
-  //   );
-  // }, []);
-  //
-  // useEffect(() => {
-  //   const q = query(collection(db, "board"), orderBy("createdAt", "desc"));
-  //   return onSnapshot(q,
-  //     snap => { setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
-  //     () => setLoadingPosts(false)
-  //   );
-  // }, []);
-  //
-  // const effectiveMeetings = meetings;
-  // const effectivePosts = posts;
-  // ─────────────────────────────────────────────────────────────────────────
-  const effectiveMeetings = MOCK_COMMUNITY_MEETINGS;
-  const effectivePosts = MOCK_COMMUNITY_POSTS;
+  useEffect(() => {
+    const q = query(collection(db, "meetings"), orderBy("createdAt", "desc"));
+    return onSnapshot(q,
+      snap => setFbMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    );
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, "board"), orderBy("createdAt", "desc"));
+    return onSnapshot(q,
+      snap => setFbPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    );
+  }, []);
+
+  const effectiveMeetings = [...fbMeetings, ...MOCK_COMMUNITY_MEETINGS];
+  const effectivePosts = [...fbPosts, ...MOCK_COMMUNITY_POSTS];
+
+  const filteredMeetings =
+    meetingFilter === "전체" ? effectiveMeetings :
+    meetingFilter === "참가 중" ? effectiveMeetings.filter(m => m.members?.includes(user?.uid)) :
+    effectiveMeetings.filter(m => m.genre === meetingFilter);
 
   const filteredPosts =
-    filterCat === "전체"
-      ? effectivePosts
-      : effectivePosts.filter(p => p.category === filterCat);
+    filterCat === "전체" ? effectivePosts :
+    filterCat === "내 게시글" ? effectivePosts.filter(p => p.authorUid === user?.uid) :
+    effectivePosts.filter(p => p.category === filterCat);
+
+  const totalMeetingPages = Math.ceil(filteredMeetings.length / PAGE_SIZE);
+  const pagedMeetings = filteredMeetings.slice(
+    (meetingPage - 1) * PAGE_SIZE, meetingPage * PAGE_SIZE
+  );
+  const totalBoardPages = Math.ceil(filteredPosts.length / PAGE_SIZE);
+  const pagedPosts = filteredPosts.slice(
+    (boardPage - 1) * PAGE_SIZE, boardPage * PAGE_SIZE
+  );
 
   return (
     <>
@@ -124,9 +133,9 @@ export default function Community() {
 
           {/* ── 독서 모임 탭 */}
           <TabsContent value="meeting" className="mt-0">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">
-                {`${effectiveMeetings.length}개 모임 운영 중`}
+                {`${filteredMeetings.length}개 모임`}
               </p>
               <button
                 onClick={() =>
@@ -140,19 +149,41 @@ export default function Community() {
               </button>
             </div>
 
-            {effectiveMeetings.length === 0 ? (
+            {/* 모임 필터 칩 */}
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide mb-4">
+              {MEETING_FILTERS.map(f => (
+                <button
+                  key={f}
+                  onClick={() => { setMeetingFilter(f); setMeetingPage(1); }}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    meetingFilter === f
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            {filteredMeetings.length === 0 ? (
               <div className="flex flex-col items-center pt-20 text-center">
                 <p className="text-5xl mb-4">📚</p>
                 <p className="text-base font-semibold mb-1">
-                  아직 개설된 모임이 없어요
+                  {meetingFilter === "전체"
+                    ? "아직 개설된 모임이 없어요"
+                    : meetingFilter === "참가 중"
+                      ? "참가 중인 모임이 없어요"
+                      : `${meetingFilter} 장르 모임이 없어요`}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  첫 번째 독서 모임을 만들어보세요!
+                  {meetingFilter === "전체" && "첫 번째 독서 모임을 만들어보세요!"}
                 </p>
               </div>
             ) : (
+              <>
               <div className="grid grid-cols-2 gap-3 stagger-children">
-                {effectiveMeetings.map((meeting, idx) => {
+                {pagedMeetings.map((meeting, idx) => {
                   const memberCount = meeting.members?.length ?? 0;
                   const isJoined = meeting.members?.includes(user?.uid);
                   const isFull = memberCount >= (meeting.maxMembers || 10);
@@ -257,6 +288,24 @@ export default function Community() {
                   );
                 })}
               </div>
+              {totalMeetingPages > 1 && (
+                <div className="mt-4 flex items-center justify-center gap-1">
+                  {Array.from({ length: totalMeetingPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      onClick={() => setMeetingPage(page)}
+                      className={`h-7 w-7 rounded-lg text-xs font-semibold transition-colors ${
+                        meetingPage === page
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+              )}
+              </>
             )}
           </TabsContent>
 
@@ -282,7 +331,7 @@ export default function Community() {
               {CATEGORIES.map(cat => (
                 <button
                   key={cat}
-                  onClick={() => setFilterCat(cat)}
+                  onClick={() => { setFilterCat(cat); setBoardPage(1); }}
                   className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                     filterCat === cat
                       ? "bg-primary text-primary-foreground"
@@ -307,8 +356,9 @@ export default function Community() {
                 </p>
               </div>
             ) : (
+              <>
               <div className="space-y-3 stagger-children">
-                {filteredPosts.map(post => {
+                {pagedPosts.map(post => {
                   const isLiked = post.likes?.includes(user?.uid);
                   const likeCount = post.likes?.length ?? 0;
                   const commentCount = post.commentCount ?? 0;
@@ -319,7 +369,7 @@ export default function Community() {
                       key={post.id}
                       onClick={() =>
                         navigate("/community/board", {
-                          state: { view: "detail", postId: post.id },
+                          state: { view: "detail", postId: post.id, post },
                         })
                       }
                       className="book-card p-4 cursor-pointer hover:shadow-md transition-all"
@@ -374,6 +424,24 @@ export default function Community() {
                   );
                 })}
               </div>
+              {totalBoardPages > 1 && (
+                <div className="mt-4 flex items-center justify-center gap-1">
+                  {Array.from({ length: totalBoardPages }, (_, i) => i + 1).map(page => (
+                    <button
+                      key={page}
+                      onClick={() => setBoardPage(page)}
+                      className={`h-7 w-7 rounded-lg text-xs font-semibold transition-colors ${
+                        boardPage === page
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+              )}
+              </>
             )}
           </TabsContent>
         </Tabs>

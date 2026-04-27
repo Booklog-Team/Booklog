@@ -11,6 +11,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
+function formatDateShort(dateStr) {
+  if (!dateStr) return null;
+  const parts = String(dateStr).split("-");
+  if (parts.length < 3) return null;
+  return `${parseInt(parts[1])}월 ${parseInt(parts[2])}일`;
+}
+
+function getCardDateText(book) {
+  if (book.status === "done" && book.lastReadDate)
+    return { text: `완독 ${formatDateShort(book.lastReadDate)}`, cls: "text-emerald-600/80" };
+  if (book.status === "reading" && book.lastReadDate)
+    return { text: `마지막 기록 ${formatDateShort(book.lastReadDate)}`, cls: "text-muted-foreground/70" };
+  if ((book.status === "reading" || book.status === "want") && book.addedAt)
+    return { text: `등록 ${formatDateShort(book.addedAt)}`, cls: "text-muted-foreground/70" };
+  return { text: " ", cls: "" };
+}
+
 /**
  * ShelfCard
  * @param {Object} book - 서재 도서 객체
@@ -81,11 +98,13 @@ export default function ShelfCard({
     }
   };
 
-  // Compact variant (2-column list: image + status + title + author + progress)
+  // Compact variant (2-column list: image + status + title + author + date + progress)
   if (variant === "compact") {
+    const dateInfo = getCardDateText(book);
+    const displayPage = book.status === "done" ? book.totalPage : book.currentPage || 0;
     return (
       <div
-        className="p-3 rounded-xl bg-card border border-border/50 hover:border-border transition-colors cursor-pointer"
+        className="flex flex-col p-3 rounded-xl bg-card border border-border/50 hover:border-border transition-colors cursor-pointer"
         onClick={onClick}
       >
         <div className="flex gap-2.5 items-start">
@@ -98,30 +117,33 @@ export default function ShelfCard({
             <span className={`text-[10px] font-bold uppercase tracking-wide ${statusStyle.text}`}>
               {statusStyle.label}
             </span>
-            <h3 className="font-bold text-xs leading-snug line-clamp-2 mt-0.5 mb-0.5">
+            <h3 className="font-bold text-xs leading-snug line-clamp-1 mt-0.5">
               {book.title}
             </h3>
             <p className="text-[10px] text-muted-foreground line-clamp-1">
               {book.author}
             </p>
+            <p className={`text-[10px] mt-0.5 ${dateInfo.cls}`}>
+              {dateInfo.text}
+            </p>
           </div>
         </div>
-        {book.totalPage > 0 && (
-          <div className="mt-2 space-y-1">
-            <div className="flex justify-between text-[10px]">
-              <span className="text-muted-foreground">
-                {book.status === "done" ? book.totalPage : book.currentPage}p / {book.totalPage}p
-              </span>
-              <span className="font-bold text-primary">{progress}%</span>
-            </div>
-            <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
+        <div className="mt-2 space-y-1">
+          <div className="flex justify-between text-[10px]">
+            <span className="text-muted-foreground">
+              {book.totalPage > 0 ? `${displayPage}p / ${book.totalPage}p` : "페이지 미등록"}
+            </span>
+            <span className="font-bold text-primary">
+              {book.totalPage > 0 ? `${progress}%` : ""}
+            </span>
           </div>
-        )}
+          <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
       </div>
     );
   }
