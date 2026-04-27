@@ -17,28 +17,45 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { MOCK_BOOKS, MOCK_POINT_HISTORY } from '@/lib/mockData';
 
-const PROFILE_BG =
-  'https://d2xsxph8kpxj0f.cloudfront.net/310519663584969128/K9LDMhfUcVKdtMjF2S9GdE/booklog-profile-bg-Sfmo955ETw2dHjqsmMB9Wh.webp';
+function getHeatLevel(count) {
+  if (!count) return 0;
+  if (count === 1) return 2;
+  if (count === 2) return 3;
+  return 4;
+}
 
-const CHART_COLORS = [
-  'var(--color-primary)',
-  'oklch(0.72 0.1 80)',
-  'var(--color-accent-foreground)',
+const GENRE_COLORS = [
+  'var(--chart-genre-1)',
+  'var(--chart-genre-2)',
+  'var(--chart-genre-3)',
+  'var(--chart-genre-4)',
+  'var(--chart-genre-5)',
 ];
 
 const MONTH_BAR_COLORS = {
-  current: 'var(--color-primary)',
-  previous: 'oklch(0.74 0.08 72)',
-  empty: 'var(--color-secondary)',
+  current:  'var(--color-primary)',
+  previous: 'var(--chart-bar-prev)',
+  empty:    'var(--chart-bar-empty)',
 };
 
-const GENRE_COLORS = [
-  'oklch(0.68 0.12 38)',
-  'oklch(0.72 0.09 145)',
-  'oklch(0.82 0.11 82)',
-  'oklch(0.78 0.10 55)',
-  'oklch(0.76 0.08 190)',
-];
+const CHART_TOOLTIP_STYLE = {
+  background: 'var(--popover)',
+  color: 'var(--popover-foreground)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  boxShadow: '0 14px 36px color-mix(in oklch, var(--foreground) 18%, transparent)',
+  fontSize: 12,
+};
+
+const CHART_TOOLTIP_LABEL_STYLE = {
+  color: 'var(--popover-foreground)',
+  fontWeight: 700,
+};
+
+const CHART_TOOLTIP_ITEM_STYLE = {
+  color: 'var(--popover-foreground)',
+  fontWeight: 600,
+};
 
 const GENRE_LIST = [
   { id: '소설',    emoji: '📖', label: '소설'    },
@@ -225,7 +242,6 @@ export default function Profile() {
   const [editNickname, setEditNickname] = useState('');
   const [saving, setSaving]             = useState(false);
   const [loggingOut, setLoggingOut]     = useState(false);
-  const [bgErr, setBgErr]               = useState(false);
   const [activeModal, setActiveModal]   = useState(null); // null | 'books' | 'done' | 'streak' | 'pages' | 'points'
   const [activeBar, setActiveBar]       = useState(null); // null | '완독' | '읽는 중' | '읽고 싶음'
   const [genreEditOpen, setGenreEditOpen] = useState(false);
@@ -268,12 +284,20 @@ export default function Profile() {
   const streak        = calculateStreak(streakShelf);
   const longestStreak = calculateLongestStreak(streakShelf);
 
-  // 독서 날짜 집합 (미래 날짜 제외, streakShelf 기준)
-  const allReadDates = useMemo(() => {
+  // 날짜 집합 + 날짜별 체크 수 — 단일 패스
+  const { allReadDates, readCountByDate } = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
-    const s = new Set();
-    streakShelf.forEach(b => (b.checkedDates || []).forEach(d => { if (d <= todayStr) s.add(d); }));
-    return s;
+    const dates = new Set();
+    const counts = {};
+    streakShelf.forEach(b => {
+      (b.checkedDates || []).forEach(d => {
+        if (d <= todayStr) {
+          dates.add(d);
+          counts[d] = (counts[d] || 0) + 1;
+        }
+      });
+    });
+    return { allReadDates: dates, readCountByDate: counts };
   }, [streakShelf]);
 
   // 이번 달 독서한 날
@@ -475,7 +499,7 @@ export default function Profile() {
     {
       key: 'pages', label: '기록 페이지',
       value: shelfLoading ? '…' : (totalPages > 999 ? `${(totalPages / 1000).toFixed(1)}k` : `${totalPages}p`),
-      icon: TrendingUp, color: 'text-accent-foreground',
+      icon: TrendingUp, color: '[color:var(--stat-color-2)]',
     },
   ];
 
@@ -717,20 +741,29 @@ export default function Profile() {
               <div className="grid grid-cols-7 gap-1">
                 {cells.map((date, i) => {
                   if (!date) return <div key={`pad-${i}`} />;
-                  const read    = allReadDates.has(date);
+                  const count   = readCountByDate[date] || 0;
+                  const level   = getHeatLevel(count);
                   const isToday = date === today;
                   const day     = new Date(date).getDate();
+                  const isHigh  = level >= 3;
                   return (
                     <div
                       key={date}
-                      title={date}
+                      title={`${date}${count ? ` — ${count}권 체크` : ''}`}
                       className={[
-                        'aspect-square rounded-full flex items-center justify-center text-[10px] font-medium transition-colors',
-                        read && isToday  ? 'bg-primary/75 text-primary-foreground font-bold border border-primary/45 shadow-sm ring-2 ring-primary/45 ring-offset-1'
-                        : read           ? 'bg-primary/18 text-primary font-semibold border border-primary/25 shadow-[0_1px_4px_rgba(184,92,56,0.18)]'
-                        : isToday        ? 'bg-primary/15 text-primary font-bold ring-2 ring-primary/40 ring-offset-1'
-                        :                  'bg-secondary/50 text-muted-foreground/50',
+                        'aspect-square rounded-full flex items-center justify-center text-[10px] font-medium transition-all duration-200',
+                        isToday ? 'ring-2 ring-primary/50 ring-offset-1 shadow-sm' : '',
+                        isHigh  ? 'font-semibold' : '',
                       ].join(' ')}
+                      style={{
+                        backgroundColor: `var(--heatmap-${level})`,
+                        color: isHigh
+                          ? 'var(--heatmap-text)'
+                          : level >= 1
+                            ? 'var(--foreground)'
+                            : undefined,
+                        border: `1px solid color-mix(in oklch, var(--heatmap-${level}) 60%, var(--foreground) 12%)`,
+                      }}
                     >
                       {day}
                     </div>
@@ -739,9 +772,24 @@ export default function Profile() {
               </div>
             );
           })()}
-          <p className="text-[10px] text-muted-foreground mt-3 text-center">
-            채워진 날은 독서 기록이 있는 날이에요
-          </p>
+          {/* 히트맵 범례 */}
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-[10px] text-muted-foreground">채워진 날은 독서 기록이 있는 날이에요</p>
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-muted-foreground/70">적음</span>
+              {[0, 1, 2, 3, 4].map(lv => (
+                <span
+                  key={lv}
+                  className="w-2.5 h-2.5 rounded-sm transition-colors duration-200"
+                  style={{
+                    backgroundColor: `var(--heatmap-${lv})`,
+                    border: '1px solid rgba(0,0,0,0.10)',
+                  }}
+                />
+              ))}
+              <span className="text-[9px] text-muted-foreground/70">많음</span>
+            </div>
+          </div>
         </div>
       ),
     },
@@ -843,32 +891,20 @@ export default function Profile() {
   // ── 메인 화면 ──────────────────────────────────────────────────────────
   return (
     <>
-      {/* 프로필 배경 헤더 */}
+      {/* 프로필 배경 헤더 (z-0) */}
       <div
-        className="relative mt-6 mx-4 rounded-2xl overflow-hidden"
-        style={{
-          background: bgErr
-            ? 'linear-gradient(135deg, #5c3a25 0%, #3d2b1f 100%)'
-            : undefined,
-        }}
+        className="relative z-0 mt-6 mx-4 rounded-2xl overflow-hidden pointer-events-none"
+        style={{ background: 'var(--profile-banner-gradient)' }}
       >
-        {bgErr ? (
-          <div className="w-full h-44" />
-        ) : (
-          <img
-            src={PROFILE_BG} alt="프로필 배경"
-            className="w-full h-44 object-cover"
-            onError={() => setBgErr(true)}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/90" />
+        <div className="w-full h-36" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/10 to-background" />
       </div>
 
-      {/* 아바타 + 이름 + 장르 */}
-      <div className="px-4 -mt-10 mb-5 animate-fade-in-up">
+      {/* 아바타 + 이름 + 장르 (z-10: 배너 위) */}
+      <div className="relative z-10 px-4 -mt-16 mb-5 animate-fade-in-up">
         {/* 아바타 · 이름 · 수정 버튼 행 */}
         <div className="flex items-end gap-3 mb-3">
-          <AvatarImg src={user?.photoURL} name={displayName} size={76} />
+          <AvatarImg src={user?.photoURL} name={displayName} size={76} className="bg-background" />
           <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1
@@ -884,7 +920,7 @@ export default function Profile() {
             </div>
             <button
               onClick={() => setView('edit')}
-              className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary border border-border/70 rounded-full px-2.5 py-1 transition-colors mt-0.5"
+              className="flex-shrink-0 flex items-center gap-1 text-xs bg-muted text-muted-foreground hover:text-primary border border-border rounded-full px-2.5 py-1 transition-colors mt-0.5"
               aria-label="개인정보 수정"
             >
               <Edit3 size={11} />
@@ -894,7 +930,7 @@ export default function Profile() {
         </div>
 
         {/* 선호 장르 박스 */}
-        <div className="bg-secondary/50 rounded-xl px-3 py-2.5">
+        <div className="bg-secondary/60 backdrop-blur-sm rounded-xl px-3 py-2.5">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-muted-foreground">선호 장르</p>
             <button
@@ -975,17 +1011,14 @@ export default function Profile() {
                   >
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 11, fill: 'oklch(0.55 0.025 60)' }}
+                      tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                       axisLine={false} tickLine={false}
                     />
                     <YAxis hide />
                     <Tooltip
-                      contentStyle={{
-                        background: 'var(--card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                      itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                       formatter={v => [`${v}권`, '독서량']}
                     />
                     <Bar dataKey="count" radius={[6, 6, 0, 0]} cursor="pointer" minPointSize={6}>
@@ -1087,12 +1120,9 @@ export default function Profile() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{
-                          background: 'var(--card)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
+                        contentStyle={CHART_TOOLTIP_STYLE}
+                        labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                        itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                         formatter={(v, name) => [`${v}권`, name]}
                       />
                     </PieChart>

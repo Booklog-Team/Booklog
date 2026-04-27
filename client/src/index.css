@@ -14,6 +14,11 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-heatmap-0: var(--heatmap-0);
+  --color-heatmap-1: var(--heatmap-1);
+  --color-heatmap-2: var(--heatmap-2);
+  --color-heatmap-3: var(--heatmap-3);
+  --color-heatmap-4: var(--heatmap-4);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -100,6 +105,32 @@
   --sidebar-accent-foreground: oklch(0.35 0.04 55);
   --sidebar-border: oklch(0.88 0.012 70);
   --sidebar-ring: oklch(0.55 0.13 40);
+
+  /* Heatmap — 따뜻한 서재: 테라코타 농도 */
+  --heatmap-0: oklch(0.93 0.010 75);
+  --heatmap-1: oklch(0.85 0.06 42);
+  --heatmap-2: oklch(0.72 0.10 40);
+  --heatmap-3: oklch(0.60 0.12 40);
+  --heatmap-4: oklch(0.48 0.14 40);
+  --heatmap-text: oklch(0.98 0.005 75);
+
+  /* 장르 파이 차트 — 테라코타·모스그린 계열 */
+  --chart-genre-1: oklch(0.55 0.13 40);
+  --chart-genre-2: oklch(0.48 0.10 150);
+  --chart-genre-3: oklch(0.72 0.10 80);
+  --chart-genre-4: oklch(0.54 0.09 220);
+  --chart-genre-5: oklch(0.62 0.12 30);
+
+  /* 월별 막대 (이전 달 · 빈 달) */
+  --chart-bar-prev: oklch(0.74 0.08 72);
+  --chart-bar-empty: var(--secondary);
+
+  /* 통계 수치 강조색 */
+  --stat-color-1: oklch(0.55 0.13 40);   /* primary 계열 */
+  --stat-color-2: oklch(0.52 0.12 155);  /* 에메랄드 계열 */
+
+  --profile-banner-gradient:
+    linear-gradient(160deg, oklch(0.35 0.12 38) 0%, oklch(0.52 0.13 42) 45%, oklch(0.70 0.09 60) 100%);
 }
 
 @layer base {
@@ -109,6 +140,14 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  /* smooth theme transitions */
+  *, *::before, *::after {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
+  }
+  /* but not animations */
+  .animate-fade-in-up, .animate-streak, .scale-in {
+    transition: none;
   }
   h1, h2, h3 {
     font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -124,6 +163,312 @@
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
   }
+}
+
+/* ─── Theme: 숲속 산책 (Forest Walk) ──────────────────────────── */
+[data-theme="forest"] {
+  --background: oklch(0.975 0.010 143);
+  --foreground: oklch(0.18 0.05 148);
+  --card: oklch(0.998 0.004 140);
+  --card-foreground: oklch(0.18 0.05 148);
+  --popover: oklch(0.998 0.004 140);
+  --popover-foreground: oklch(0.18 0.05 148);
+  --primary: oklch(0.44 0.12 148);
+  --primary-foreground: oklch(0.97 0.006 140);
+  --secondary: oklch(0.91 0.018 138);
+  --secondary-foreground: oklch(0.30 0.06 148);
+  --muted: oklch(0.93 0.012 142);
+  --muted-foreground: oklch(0.52 0.04 148);
+  --accent: oklch(0.87 0.07 105);
+  --accent-foreground: oklch(0.35 0.10 100);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.87 0.014 142);
+  --input: oklch(0.87 0.014 142);
+  --ring: oklch(0.44 0.12 148);
+  --chart-1: oklch(0.44 0.12 148);
+  --chart-2: oklch(0.55 0.10 100);
+  --chart-3: oklch(0.62 0.12 80);
+  --chart-4: oklch(0.50 0.08 165);
+  --chart-5: oklch(0.48 0.12 130);
+  --sidebar: oklch(0.964 0.014 143);
+  --sidebar-foreground: oklch(0.18 0.05 148);
+  --sidebar-primary: oklch(0.44 0.12 148);
+  --sidebar-primary-foreground: oklch(0.97 0.006 140);
+  --sidebar-accent: oklch(0.91 0.018 138);
+  --sidebar-accent-foreground: oklch(0.30 0.06 148);
+  --sidebar-border: oklch(0.87 0.014 142);
+  --sidebar-ring: oklch(0.44 0.12 148);
+  --page-bg-gradient:
+    radial-gradient(ellipse 65% 45% at 10% 15%, oklch(0.80 0.14 143 / 0.30) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 65% at 88% 82%, oklch(0.74 0.16 150 / 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 40% at 55% 50%, oklch(0.91 0.06 130 / 0.18) 0%, transparent 55%);
+
+  /* Heatmap — 숲속 산책: 초록 농도 */
+  --heatmap-0: oklch(0.92 0.010 140);
+  --heatmap-1: oklch(0.82 0.07 147);
+  --heatmap-2: oklch(0.68 0.10 148);
+  --heatmap-3: oklch(0.54 0.12 148);
+  --heatmap-4: oklch(0.42 0.13 149);
+  --heatmap-text: oklch(0.97 0.006 140);
+
+  --chart-genre-1: oklch(0.44 0.12 148);
+  --chart-genre-2: oklch(0.60 0.10 100);
+  --chart-genre-3: oklch(0.55 0.08 170);
+  --chart-genre-4: oklch(0.68 0.08 120);
+  --chart-genre-5: oklch(0.40 0.10 180);
+
+  --chart-bar-prev: oklch(0.68 0.08 120);
+  --chart-bar-empty: oklch(0.84 0.028 142);
+
+  --stat-color-1: oklch(0.44 0.12 148);
+  --stat-color-2: oklch(0.50 0.10 165);
+  --profile-banner-gradient:
+    linear-gradient(160deg, oklch(0.25 0.12 150) 0%, oklch(0.38 0.14 148) 45%, oklch(0.55 0.11 142) 100%);
+}
+
+/* ─── Theme: 모닝 카페 (Morning Cafe) ────────────────────────── */
+[data-theme="cafe"] {
+  --background: oklch(0.982 0.012 78);
+  --foreground: oklch(0.20 0.04 48);
+  --card: oklch(1 0.006 76);
+  --card-foreground: oklch(0.20 0.04 48);
+  --popover: oklch(1 0.006 76);
+  --popover-foreground: oklch(0.20 0.04 48);
+  --primary: oklch(0.46 0.08 48);
+  --primary-foreground: oklch(0.97 0.006 78);
+  --secondary: oklch(0.92 0.020 73);
+  --secondary-foreground: oklch(0.35 0.05 50);
+  --muted: oklch(0.94 0.014 76);
+  --muted-foreground: oklch(0.56 0.03 60);
+  --accent: oklch(0.87 0.09 85);
+  --accent-foreground: oklch(0.38 0.10 80);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.88 0.016 72);
+  --input: oklch(0.88 0.016 72);
+  --ring: oklch(0.46 0.08 48);
+  --chart-1: oklch(0.46 0.08 48);
+  --chart-2: oklch(0.65 0.12 82);
+  --chart-3: oklch(0.60 0.10 60);
+  --chart-4: oklch(0.52 0.07 40);
+  --chart-5: oklch(0.70 0.10 90);
+  --sidebar: oklch(0.972 0.016 78);
+  --sidebar-foreground: oklch(0.20 0.04 48);
+  --sidebar-primary: oklch(0.46 0.08 48);
+  --sidebar-primary-foreground: oklch(0.97 0.006 78);
+  --sidebar-accent: oklch(0.92 0.020 73);
+  --sidebar-accent-foreground: oklch(0.35 0.05 50);
+  --sidebar-border: oklch(0.88 0.016 72);
+  --sidebar-ring: oklch(0.46 0.08 48);
+  --page-bg-gradient:
+    radial-gradient(ellipse 75% 55% at 20% 80%, oklch(0.80 0.13 68 / 0.28) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 75% at 82% 15%, oklch(0.87 0.10 85 / 0.22) 0%, transparent 60%);
+
+  /* Heatmap — 모닝 카페: 커피 농도 */
+  --heatmap-0: oklch(0.93 0.012 73);
+  --heatmap-1: oklch(0.82 0.06 62);
+  --heatmap-2: oklch(0.67 0.08 55);
+  --heatmap-3: oklch(0.54 0.09 52);
+  --heatmap-4: oklch(0.40 0.09 48);
+  --heatmap-text: oklch(0.97 0.006 78);
+
+  --chart-genre-1: oklch(0.46 0.08 48);
+  --chart-genre-2: oklch(0.65 0.12 82);
+  --chart-genre-3: oklch(0.72 0.10 68);
+  --chart-genre-4: oklch(0.58 0.08 55);
+  --chart-genre-5: oklch(0.78 0.09 90);
+
+  --chart-bar-prev: oklch(0.72 0.10 68);
+  --chart-bar-empty: oklch(0.86 0.030 73);
+
+  --stat-color-1: oklch(0.46 0.08 48);
+  --stat-color-2: oklch(0.52 0.09 148);
+  --profile-banner-gradient:
+    linear-gradient(160deg, oklch(0.22 0.08 45) 0%, oklch(0.38 0.10 50) 40%, oklch(0.58 0.09 65) 100%);
+}
+
+/* ─── Theme: 고요한 밤 (Quiet Night) ─────────────────────────── */
+[data-theme="night"] {
+  --background: oklch(0.15 0.016 52);
+  --foreground: oklch(0.92 0.015 70);
+  --card: oklch(0.19 0.016 52);
+  --card-foreground: oklch(0.92 0.015 70);
+  --popover: oklch(0.19 0.016 52);
+  --popover-foreground: oklch(0.92 0.015 70);
+  --primary: oklch(0.72 0.12 42);
+  --primary-foreground: oklch(0.15 0.016 52);
+  --secondary: oklch(0.24 0.018 52);
+  --secondary-foreground: oklch(0.80 0.015 70);
+  --muted: oklch(0.22 0.014 55);
+  --muted-foreground: oklch(0.65 0.020 62);
+  --accent: oklch(0.75 0.12 88);
+  --accent-foreground: oklch(0.18 0.015 80);
+  --destructive: oklch(0.65 0.22 27);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.28 0.016 52);
+  --input: oklch(0.28 0.016 52);
+  --ring: oklch(0.72 0.12 42);
+  --chart-1: oklch(0.72 0.12 42);
+  --chart-2: oklch(0.75 0.12 88);
+  --chart-3: oklch(0.68 0.10 200);
+  --chart-4: oklch(0.65 0.14 30);
+  --chart-5: oklch(0.70 0.10 150);
+  --sidebar: oklch(0.12 0.014 52);
+  --sidebar-foreground: oklch(0.85 0.015 70);
+  --sidebar-primary: oklch(0.72 0.12 42);
+  --sidebar-primary-foreground: oklch(0.15 0.016 52);
+  --sidebar-accent: oklch(0.24 0.018 52);
+  --sidebar-accent-foreground: oklch(0.80 0.015 70);
+  --sidebar-border: oklch(0.24 0.016 52);
+  --sidebar-ring: oklch(0.72 0.12 42);
+  --page-bg-gradient:
+    radial-gradient(ellipse 55% 70% at 50% 105%, oklch(0.62 0.12 58 / 0.18) 0%, transparent 65%),
+    radial-gradient(ellipse 35% 45% at 22% 28%, oklch(0.60 0.08 55 / 0.10) 0%, transparent 50%);
+
+  /* Heatmap — 고요한 밤: 앰버 램프빛 (어두운 배경 위) */
+  --heatmap-0: oklch(0.22 0.016 52);
+  --heatmap-1: oklch(0.36 0.08 45);
+  --heatmap-2: oklch(0.50 0.10 43);
+  --heatmap-3: oklch(0.63 0.12 42);
+  --heatmap-4: oklch(0.76 0.13 42);
+  --heatmap-text: oklch(0.15 0.016 52);
+
+  --chart-genre-1: oklch(0.72 0.12 42);
+  --chart-genre-2: oklch(0.75 0.12 88);
+  --chart-genre-3: oklch(0.68 0.10 200);
+  --chart-genre-4: oklch(0.80 0.10 55);
+  --chart-genre-5: oklch(0.65 0.14 30);
+
+  --chart-bar-prev: oklch(0.50 0.08 45);
+  --chart-bar-empty: oklch(0.34 0.028 52);
+
+  --stat-color-1: oklch(0.78 0.13 42);
+  --stat-color-2: oklch(0.72 0.10 165);
+  --profile-banner-gradient:
+    linear-gradient(160deg, oklch(0.10 0.014 52) 0%, oklch(0.20 0.020 50) 50%, oklch(0.38 0.10 45) 100%);
+}
+
+/* ─── Theme: 오션 뷰 (Ocean View) ────────────────────────────── */
+[data-theme="ocean"] {
+  --background: oklch(0.976 0.009 225);
+  --foreground: oklch(0.20 0.04 228);
+  --card: oklch(1 0.004 220);
+  --card-foreground: oklch(0.20 0.04 228);
+  --popover: oklch(1 0.004 220);
+  --popover-foreground: oklch(0.20 0.04 228);
+  --primary: oklch(0.50 0.16 224);
+  --primary-foreground: oklch(0.98 0.005 225);
+  --secondary: oklch(0.91 0.020 215);
+  --secondary-foreground: oklch(0.32 0.06 225);
+  --muted: oklch(0.93 0.014 220);
+  --muted-foreground: oklch(0.55 0.04 225);
+  --accent: oklch(0.85 0.08 190);
+  --accent-foreground: oklch(0.35 0.10 190);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.87 0.016 218);
+  --input: oklch(0.87 0.016 218);
+  --ring: oklch(0.50 0.16 224);
+  --chart-1: oklch(0.50 0.16 224);
+  --chart-2: oklch(0.55 0.12 190);
+  --chart-3: oklch(0.65 0.10 260);
+  --chart-4: oklch(0.60 0.14 200);
+  --chart-5: oklch(0.48 0.18 240);
+  --sidebar: oklch(0.965 0.012 225);
+  --sidebar-foreground: oklch(0.20 0.04 228);
+  --sidebar-primary: oklch(0.50 0.16 224);
+  --sidebar-primary-foreground: oklch(0.98 0.005 225);
+  --sidebar-accent: oklch(0.91 0.020 215);
+  --sidebar-accent-foreground: oklch(0.32 0.06 225);
+  --sidebar-border: oklch(0.87 0.016 218);
+  --sidebar-ring: oklch(0.50 0.16 224);
+  --page-bg-gradient:
+    radial-gradient(ellipse 85% 50% at 50% 0%, oklch(0.74 0.14 228 / 0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 65% 60% at 92% 85%, oklch(0.72 0.11 192 / 0.18) 0%, transparent 55%);
+
+  /* Heatmap — 오션 뷰: 오션 블루 농도 */
+  --heatmap-0: oklch(0.92 0.012 218);
+  --heatmap-1: oklch(0.80 0.08 224);
+  --heatmap-2: oklch(0.65 0.12 224);
+  --heatmap-3: oklch(0.53 0.15 224);
+  --heatmap-4: oklch(0.42 0.17 224);
+  --heatmap-text: oklch(0.98 0.005 225);
+
+  --chart-genre-1: oklch(0.50 0.16 224);
+  --chart-genre-2: oklch(0.55 0.12 190);
+  --chart-genre-3: oklch(0.60 0.12 255);
+  --chart-genre-4: oklch(0.58 0.14 200);
+  --chart-genre-5: oklch(0.48 0.18 240);
+
+  --chart-bar-prev: oklch(0.68 0.10 200);
+  --chart-bar-empty: oklch(0.84 0.030 218);
+
+  --stat-color-1: oklch(0.50 0.16 224);
+  --stat-color-2: oklch(0.52 0.12 190);
+  --profile-banner-gradient:
+    linear-gradient(160deg, oklch(0.22 0.16 224) 0%, oklch(0.38 0.18 222) 45%, oklch(0.55 0.14 218) 100%);
+}
+
+/* ─── Theme: 미드나잇 (Midnight) ─────────────────────────────── */
+[data-theme="midnight"] {
+  --background: oklch(0.13 0.026 252);
+  --foreground: oklch(0.91 0.012 230);
+  --card: oklch(0.17 0.026 252);
+  --card-foreground: oklch(0.91 0.012 230);
+  --popover: oklch(0.17 0.026 252);
+  --popover-foreground: oklch(0.91 0.012 230);
+  --primary: oklch(0.63 0.18 252);
+  --primary-foreground: oklch(0.13 0.026 252);
+  --secondary: oklch(0.21 0.028 252);
+  --secondary-foreground: oklch(0.78 0.014 230);
+  --muted: oklch(0.22 0.024 252);
+  --muted-foreground: oklch(0.70 0.018 230);   /* 밝게: 어두운 배경 위 가독성 */
+  --accent: oklch(0.68 0.14 198);
+  --accent-foreground: oklch(0.12 0.024 200);
+  --destructive: oklch(0.65 0.22 27);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.30 0.028 252);             /* 더 선명한 테두리 */
+  --input: oklch(0.30 0.028 252);
+  --ring: oklch(0.63 0.18 252);
+  --chart-1: oklch(0.63 0.18 252);
+  --chart-2: oklch(0.68 0.14 198);
+  --chart-3: oklch(0.70 0.15 270);
+  --chart-4: oklch(0.65 0.16 215);
+  --chart-5: oklch(0.58 0.20 280);
+  --sidebar: oklch(0.10 0.022 252);
+  --sidebar-foreground: oklch(0.85 0.012 230);
+  --sidebar-primary: oklch(0.63 0.18 252);
+  --sidebar-primary-foreground: oklch(0.13 0.026 252);
+  --sidebar-accent: oklch(0.21 0.028 252);
+  --sidebar-accent-foreground: oklch(0.78 0.014 230);
+  --sidebar-border: oklch(0.22 0.022 252);
+  --sidebar-ring: oklch(0.63 0.18 252);
+  --page-bg-gradient:
+    radial-gradient(ellipse 65% 55% at 72% 28%, oklch(0.55 0.18 252 / 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 65% at 18% 82%, oklch(0.60 0.15 198 / 0.16) 0%, transparent 55%);
+
+  /* Heatmap — 미드나잇: 인디고 빛 농도 (dark bg 위 대비 확보) */
+  --heatmap-0: oklch(0.26 0.030 252);   /* 배경보다 밝게 — 빈 셀도 식별 가능 */
+  --heatmap-1: oklch(0.38 0.14 252);
+  --heatmap-2: oklch(0.50 0.18 252);
+  --heatmap-3: oklch(0.62 0.20 252);
+  --heatmap-4: oklch(0.75 0.20 252);
+  --heatmap-text: oklch(0.10 0.020 252);
+
+  --chart-genre-1: oklch(0.68 0.20 252);
+  --chart-genre-2: oklch(0.72 0.16 198);
+  --chart-genre-3: oklch(0.74 0.17 270);
+  --chart-genre-4: oklch(0.70 0.18 215);
+  --chart-genre-5: oklch(0.76 0.14 300);
+
+  --chart-bar-prev: oklch(0.58 0.16 270);
+  --chart-bar-empty: oklch(0.35 0.050 252);
+
+  --stat-color-1: oklch(0.72 0.18 252);
+  --stat-color-2: oklch(0.78 0.16 198);
+  --profile-banner-gradient:
+    linear-gradient(160deg, oklch(0.08 0.022 252) 0%, oklch(0.18 0.030 255) 45%, oklch(0.38 0.18 248) 100%);
 }
 
 @layer components {
@@ -152,6 +497,13 @@
       padding-left: 2rem;
       padding-right: 2rem;
     }
+  }
+
+  /* Themed page background with atmospheric gradient */
+  .page-layout-bg {
+    background-color: var(--background);
+    background-image: var(--page-bg-gradient, none);
+    background-attachment: fixed;
   }
 
   /* Booklog custom utilities */
