@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import confetti from "canvas-confetti";
+import { toast } from "sonner";
 import { MOCK_BOOKS, READING_CALENDAR } from "@/lib/mockData";
 import {
   Plus,
@@ -129,12 +131,28 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
 
   const progress = bookProgress(book);
 
+  const fireCompletionConfetti = () => {
+    const colors = ["#ff6b9d", "#c084fc", "#60a5fa", "#34d399", "#fbbf24", "#f97316"];
+    const burst = (origin, angle) =>
+      confetti({ particleCount: 60, angle, spread: 70, origin, colors, scalar: 1.1 });
+
+    burst({ x: 0.5, y: 0.6 }, 90);
+    setTimeout(() => { burst({ x: 0.2, y: 0.7 }, 60); burst({ x: 0.8, y: 0.7 }, 120); }, 250);
+    setTimeout(() => { burst({ x: 0.35, y: 0.55 }, 75); burst({ x: 0.65, y: 0.55 }, 105); }, 550);
+    setTimeout(() => { burst({ x: 0.5, y: 0.5 }, 90); }, 850);
+  };
+
   const handleSave = async () => {
     if (selected === book.status) { onClose(); return; }
+    const isFirstCompletion = selected === "done" && book.status !== "done";
     setSaving(true);
     try {
       if (!selected) { await onDelete(book.id); }
       else { await onStatusChange(book.id, selected); }
+      if (isFirstCompletion) {
+        fireCompletionConfetti();
+        toast.success("🎉 완독을 축하드려요!");
+      }
       onClose();
     } catch (error) {
       console.error(error);
