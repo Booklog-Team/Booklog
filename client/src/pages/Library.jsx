@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import confetti from "canvas-confetti";
+import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { MOCK_BOOKS, READING_CALENDAR } from "@/lib/mockData";
 import {
@@ -27,21 +29,24 @@ const READING_STATUS_OPTS = [
     value: "want",
     label: "읽고 싶음",
     emoji: "🔖",
-    inactive: "bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100",
+    inactive:
+      "bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100",
     active: "bg-amber-400 text-white border border-amber-400",
   },
   {
     value: "reading",
     label: "읽는 중",
     emoji: "📖",
-    inactive: "bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10",
+    inactive:
+      "bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10",
     active: "bg-primary text-primary-foreground border border-primary",
   },
   {
     value: "done",
     label: "완독",
     emoji: "✅",
-    inactive: "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100",
+    inactive:
+      "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100",
     active: "bg-emerald-500 text-white border border-emerald-500",
   },
 ];
@@ -65,7 +70,7 @@ function getHeatStyle(level) {
   if (level === 0) return {};
   return {
     backgroundColor: `var(--heatmap-${level})`,
-    color: level >= 3 ? 'var(--heatmap-text)' : 'var(--foreground)',
+    color: level >= 3 ? "var(--heatmap-text)" : "var(--foreground)",
   };
 }
 
@@ -81,12 +86,16 @@ function calculateStreak(shelf) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const all = new Set();
   shelf.forEach(b =>
-    (b.checkedDates || []).forEach(d => { if (d <= todayStr) all.add(d); })
+    (b.checkedDates || []).forEach(d => {
+      if (d <= todayStr) all.add(d);
+    })
   );
   if (!all.size) return 0;
 
   const sorted = [...all].sort().reverse();
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86_400_000)
+    .toISOString()
+    .slice(0, 10);
 
   if (sorted[0] !== todayStr && sorted[0] !== yesterday) return 0;
 
@@ -128,12 +137,56 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
 
   const progress = bookProgress(book);
 
+  const fireCompletionConfetti = () => {
+    const colors = [
+      "#ff6b9d",
+      "#c084fc",
+      "#60a5fa",
+      "#34d399",
+      "#fbbf24",
+      "#f97316",
+    ];
+    const burst = (origin, angle) =>
+      confetti({
+        particleCount: 60,
+        angle,
+        spread: 70,
+        origin,
+        colors,
+        scalar: 1.1,
+      });
+
+    burst({ x: 0.5, y: 0.6 }, 90);
+    setTimeout(() => {
+      burst({ x: 0.2, y: 0.7 }, 60);
+      burst({ x: 0.8, y: 0.7 }, 120);
+    }, 250);
+    setTimeout(() => {
+      burst({ x: 0.35, y: 0.55 }, 75);
+      burst({ x: 0.65, y: 0.55 }, 105);
+    }, 550);
+    setTimeout(() => {
+      burst({ x: 0.5, y: 0.5 }, 90);
+    }, 850);
+  };
+
   const handleSave = async () => {
-    if (selected === book.status) { onClose(); return; }
+    if (selected === book.status) {
+      onClose();
+      return;
+    }
+    const isFirstCompletion = selected === "done" && book.status !== "done";
     setSaving(true);
     try {
-      if (!selected) { await onDelete(book.id); }
-      else { await onStatusChange(book.id, selected); }
+      if (!selected) {
+        await onDelete(book.id);
+      } else {
+        await onStatusChange(book.id, selected);
+      }
+      if (isFirstCompletion) {
+        fireCompletionConfetti();
+        toast.success("🎉 완독을 축하드려요!");
+      }
       onClose();
     } catch (error) {
       console.error(error);
@@ -174,17 +227,23 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
             <h4 className="mb-0.5 line-clamp-2 text-sm font-bold leading-snug">
               {book.title}
             </h4>
-            <p className="line-clamp-1 text-xs text-muted-foreground">{book.author}</p>
+            <p className="line-clamp-1 text-xs text-muted-foreground">
+              {book.author}
+            </p>
             {book.totalPage > 0 && (
               <div className="mt-2 space-y-1">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">
-                    {book.status === "done" ? book.totalPage : book.currentPage}p / {book.totalPage}p
+                    {book.status === "done" ? book.totalPage : book.currentPage}
+                    p / {book.totalPage}p
                   </span>
                   <span className="font-bold text-primary">{progress}%</span>
                 </div>
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${progress}%` }} />
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${progress}%` }}
+                  />
                 </div>
               </div>
             )}
@@ -201,7 +260,9 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
             {READING_STATUS_OPTS.map(opt => (
               <button
                 key={opt.value}
-                onClick={() => setSelected(prev => (prev === opt.value ? null : opt.value))}
+                onClick={() =>
+                  setSelected(prev => (prev === opt.value ? null : opt.value))
+                }
                 className={`flex flex-col items-center justify-center gap-1.5 rounded-xl py-3 text-xs font-bold transition-all ${
                   selected === opt.value ? opt.active : opt.inactive
                 }`}
@@ -223,7 +284,10 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
 
         <div className="flex gap-3 px-5 pb-6">
           <button
-            onClick={() => { navigate(`/book/${book.id}`); onClose(); }}
+            onClick={() => {
+              navigate(`/book/${book.id}`);
+              onClose();
+            }}
             className="h-12 w-28 flex-shrink-0 rounded-xl border border-border text-xs font-bold text-muted-foreground transition-all hover:bg-secondary"
           >
             상세 보기 →
@@ -245,7 +309,8 @@ function ReadingBookPopup({ book, onClose, onStatusChange, onDelete }) {
 export default function Library() {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const { books, mainBook, loading, error, removeBook, updateStatus } = useShelf();
+  const { books, mainBook, loading, error, removeBook, updateStatus } =
+    useShelf();
 
   const today = new Date();
   const [activeTab, setActiveTab] = useState("all");
@@ -303,13 +368,17 @@ export default function Library() {
     let totalPages = 0;
 
     calendarBooks.forEach(book => {
-      const bookMonthDates = (book.checkedDates || []).filter(d => d.startsWith(prefix));
+      const bookMonthDates = (book.checkedDates || []).filter(d =>
+        d.startsWith(prefix)
+      );
       bookMonthDates.forEach(d => daysSet.add(d));
       if (bookMonthDates.length > 0) {
         const totalChecked = (book.checkedDates || []).length || 1;
         const pagesEarned =
-          book.status === "done" ? (book.totalPage || 0) : (book.currentPage || 0);
-        totalPages += Math.round((pagesEarned / totalChecked) * bookMonthDates.length);
+          book.status === "done" ? book.totalPage || 0 : book.currentPage || 0;
+        totalPages += Math.round(
+          (pagesEarned / totalChecked) * bookMonthDates.length
+        );
       }
     });
 
@@ -341,7 +410,9 @@ export default function Library() {
 
   const booksOnDate = useMemo(() => {
     if (!selectedDate) return [];
-    return calendarBooks.filter(b => (b.checkedDates || []).includes(selectedDate));
+    return calendarBooks.filter(b =>
+      (b.checkedDates || []).includes(selectedDate)
+    );
   }, [selectedDate, calendarBooks]);
 
   const featuredProgress = bookProgress(featured);
@@ -354,7 +425,6 @@ export default function Library() {
   return (
     <>
       <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6 lg:px-8">
-
         {/* 페이지 헤더 */}
         <motion.div
           className="mb-6 flex items-start justify-between gap-4"
@@ -365,10 +435,14 @@ export default function Library() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">내 서재</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {profile?.nickname ? `${profile.nickname}님의` : "나의"} 독서 흐름을 한눈에 확인해보세요.
+              {profile?.nickname ? `${profile.nickname}님의` : "나의"} 독서
+              흐름을 한눈에 확인해보세요.
             </p>
           </div>
-          <Button onClick={() => navigate("/search")} className="shrink-0 rounded-xl">
+          <Button
+            onClick={() => navigate("/search")}
+            className="shrink-0 rounded-xl"
+          >
             <Plus size={16} className="mr-1.5" />책 추가
           </Button>
         </motion.div>
@@ -386,10 +460,8 @@ export default function Library() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.1 }}
         >
-
           {/* ── 왼쪽 열 ── */}
           <div className="flex flex-col lg:h-0 lg:min-h-full">
-
             {/* 레이블 — 날짜 선택 시 텍스트 교체 */}
             <div className="mb-3 flex items-center gap-1.5">
               {selectedDate && (
@@ -412,7 +484,9 @@ export default function Library() {
                 booksOnDate.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
                     <BookOpen size={28} className="text-muted-foreground/30" />
-                    <p className="text-sm text-muted-foreground">이 날은 독서 기록이 없어요</p>
+                    <p className="text-sm text-muted-foreground">
+                      이 날은 독서 기록이 없어요
+                    </p>
                     <p className="text-xs text-muted-foreground/60">
                       달력에서 다른 날짜를 선택해보세요
                     </p>
@@ -444,18 +518,30 @@ export default function Library() {
                                     ? "완독"
                                     : "읽고 싶음"}
                               </p>
-                              <h4 className="line-clamp-1 text-sm font-bold">{book.title}</h4>
-                              <p className="mb-1.5 text-[11px] text-muted-foreground">{book.author}</p>
+                              <h4 className="line-clamp-1 text-sm font-bold">
+                                {book.title}
+                              </h4>
+                              <p className="mb-1.5 text-[11px] text-muted-foreground">
+                                {book.author}
+                              </p>
                               {book.totalPage > 0 && (
                                 <div className="space-y-1">
                                   <div className="flex justify-between text-[10px]">
                                     <span className="text-muted-foreground">
-                                      {book.status === "done" ? book.totalPage : book.currentPage || 0}p / {book.totalPage}p
+                                      {book.status === "done"
+                                        ? book.totalPage
+                                        : book.currentPage || 0}
+                                      p / {book.totalPage}p
                                     </span>
-                                    <span className="font-bold text-primary">{prog}%</span>
+                                    <span className="font-bold text-primary">
+                                      {prog}%
+                                    </span>
                                   </div>
                                   <div className="progress-bar">
-                                    <div className="progress-fill" style={{ width: `${prog}%` }} />
+                                    <div
+                                      className="progress-fill"
+                                      style={{ width: `${prog}%` }}
+                                    />
                                   </div>
                                 </div>
                               )}
@@ -510,7 +596,9 @@ export default function Library() {
                           <h3 className="line-clamp-2 text-lg font-bold leading-snug">
                             {featured.title}
                           </h3>
-                          <p className="mt-0.5 text-xs text-muted-foreground">{featured.author}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {featured.author}
+                          </p>
 
                           {featured.lastReadDate && (
                             <p className="mt-1.5 text-xs text-muted-foreground">
@@ -530,7 +618,9 @@ export default function Library() {
                                     : featured.currentPage || 0}
                                   p / {featured.totalPage}p
                                 </span>
-                                <span className="font-bold text-primary">{featuredProgress}%</span>
+                                <span className="font-bold text-primary">
+                                  {featuredProgress}%
+                                </span>
                               </div>
                               <div className="progress-bar">
                                 <div
@@ -562,9 +652,18 @@ export default function Library() {
                     </div>
                   ) : (
                     <div className="shrink-0 flex flex-col items-center justify-center gap-3 p-8 text-center">
-                      <BookOpen size={32} className="text-muted-foreground/30" />
-                      <p className="text-sm text-muted-foreground">아직 서재에 등록된 책이 없어요</p>
-                      <Button variant="outline" size="sm" onClick={() => navigate("/search")}>
+                      <BookOpen
+                        size={32}
+                        className="text-muted-foreground/30"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        아직 서재에 등록된 책이 없어요
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate("/search")}
+                      >
                         <Plus size={14} className="mr-1" />책 추가하기
                       </Button>
                     </div>
@@ -591,7 +690,10 @@ export default function Library() {
                     {loading ? (
                       <div className="flex-1 min-h-0 space-y-1.5 overflow-hidden px-3 pb-1">
                         {[1, 2].map(i => (
-                          <div key={i} className="flex items-center gap-3 rounded-xl p-2">
+                          <div
+                            key={i}
+                            className="flex items-center gap-3 rounded-xl p-2"
+                          >
                             <Skeleton className="h-12 w-9 shrink-0 rounded-lg" />
                             <div className="flex-1 space-y-1.5">
                               <Skeleton className="h-3 w-3/4" />
@@ -602,7 +704,9 @@ export default function Library() {
                       </div>
                     ) : readingBooks.length === 0 ? (
                       <div className="flex flex-1 min-h-0 items-center justify-center px-4 py-4">
-                        <p className="text-xs text-muted-foreground">읽고 있는 책이 없어요</p>
+                        <p className="text-xs text-muted-foreground">
+                          읽고 있는 책이 없어요
+                        </p>
                       </div>
                     ) : (
                       <div className="flex-1 min-h-0 overflow-y-auto px-3">
@@ -610,7 +714,9 @@ export default function Library() {
                           {readingBooks.map(book => {
                             const prog =
                               book.totalPage && book.currentPage
-                                ? Math.round((book.currentPage / book.totalPage) * 100)
+                                ? Math.round(
+                                    (book.currentPage / book.totalPage) * 100
+                                  )
                                 : 0;
                             return (
                               <div
@@ -627,14 +733,19 @@ export default function Library() {
                                   <h4 className="line-clamp-1 text-sm font-semibold">
                                     {book.title}
                                   </h4>
-                                  <p className="text-[11px] text-muted-foreground">{book.author}</p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    {book.author}
+                                  </p>
                                   {book.totalPage > 0 && (
                                     <div className="mt-1 space-y-0.5">
                                       <div className="flex justify-between text-[10px]">
                                         <span className="text-muted-foreground">
-                                          {book.currentPage || 0}p / {book.totalPage}p
+                                          {book.currentPage || 0}p /{" "}
+                                          {book.totalPage}p
                                         </span>
-                                        <span className="font-bold text-primary">{prog}%</span>
+                                        <span className="font-bold text-primary">
+                                          {prog}%
+                                        </span>
                                       </div>
                                       <div className="progress-bar">
                                         <div
@@ -658,8 +769,7 @@ export default function Library() {
                         className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-secondary py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
                         onClick={() => navigate("/search")}
                       >
-                        <Plus size={13} />
-                        책 추가하기
+                        <Plus size={13} />책 추가하기
                       </button>
                     </div>
                   </div>
@@ -679,8 +789,12 @@ export default function Library() {
               <div className="mb-4 flex items-center justify-between">
                 <button
                   onClick={() => {
-                    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
-                    else { setCalMonth(m => m - 1); }
+                    if (calMonth === 0) {
+                      setCalMonth(11);
+                      setCalYear(y => y - 1);
+                    } else {
+                      setCalMonth(m => m - 1);
+                    }
                   }}
                   className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-secondary"
                 >
@@ -689,8 +803,12 @@ export default function Library() {
                 <span className="text-sm font-semibold">{monthName}</span>
                 <button
                   onClick={() => {
-                    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
-                    else { setCalMonth(m => m + 1); }
+                    if (calMonth === 11) {
+                      setCalMonth(0);
+                      setCalYear(y => y + 1);
+                    } else {
+                      setCalMonth(m => m + 1);
+                    }
                   }}
                   className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-secondary"
                 >
@@ -734,7 +852,9 @@ export default function Library() {
                   return (
                     <div
                       key={dateKey}
-                      onClick={() => setSelectedDate(isSelected ? null : dateKey)}
+                      onClick={() =>
+                        setSelectedDate(isSelected ? null : dateKey)
+                      }
                       className={`relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg text-xs transition-all duration-200 ${
                         isSelected
                           ? "font-bold ring-2 ring-primary ring-offset-1"
@@ -746,7 +866,10 @@ export default function Library() {
                       }`}
                       style={
                         isSelected
-                          ? { backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)' }
+                          ? {
+                              backgroundColor: "var(--primary)",
+                              color: "var(--primary-foreground)",
+                            }
                           : level > 0
                             ? heatStyle
                             : undefined
@@ -756,7 +879,9 @@ export default function Library() {
                       {level > 0 && !isSelected && (
                         <span
                           className="absolute bottom-0.5 h-1 w-1 rounded-full"
-                          style={{ backgroundColor: `var(--heatmap-${Math.min(level + 1, 4)})` }}
+                          style={{
+                            backgroundColor: `var(--heatmap-${Math.min(level + 1, 4)})`,
+                          }}
                         />
                       )}
                       {isToday && level === 0 && !isSelected && (
@@ -777,43 +902,66 @@ export default function Library() {
                 {/* 독서한 날 · 총 페이지 · 일 평균 */}
                 <div className="mb-3 grid grid-cols-3 divide-x divide-border/40 rounded-xl bg-secondary/50 py-3">
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className="text-[10px] text-muted-foreground">독서한 날</span>
-                    <span className="text-xl font-bold leading-none" style={{ color: 'var(--stat-color-1)' }}>
+                    <span className="text-[10px] text-muted-foreground">
+                      독서한 날
+                    </span>
+                    <span
+                      className="text-xl font-bold leading-none"
+                      style={{ color: "var(--stat-color-1)" }}
+                    >
                       {monthStats.readingDays}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">일</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      일
+                    </span>
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className="text-[10px] text-muted-foreground">총 페이지</span>
-                    <span className="text-xl font-bold leading-none" style={{ color: 'var(--stat-color-2)' }}>
+                    <span className="text-[10px] text-muted-foreground">
+                      총 페이지
+                    </span>
+                    <span
+                      className="text-xl font-bold leading-none"
+                      style={{ color: "var(--stat-color-2)" }}
+                    >
                       {monthStats.totalPages.toLocaleString()}
                     </span>
                     <span className="text-[10px] text-muted-foreground">p</span>
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
-                    <span className="text-[10px] text-muted-foreground">일 평균</span>
-                    <span className="text-xl font-bold leading-none" style={{ color: 'var(--stat-color-1)' }}>
+                    <span className="text-[10px] text-muted-foreground">
+                      일 평균
+                    </span>
+                    <span
+                      className="text-xl font-bold leading-none"
+                      style={{ color: "var(--stat-color-1)" }}
+                    >
                       {monthStats.avgPages}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">p/일</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      p/일
+                    </span>
                   </div>
                 </div>
 
                 {/* 독서량 강도 범례 + 연속 독서 */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
-                    <span className="mr-0.5 text-[10px] text-muted-foreground">적음</span>
+                    <span className="mr-0.5 text-[10px] text-muted-foreground">
+                      적음
+                    </span>
                     {[0, 1, 2, 3, 4].map(l => (
                       <div
                         key={l}
                         className="h-3 w-3 rounded transition-colors duration-200"
                         style={{
                           backgroundColor: `var(--heatmap-${l})`,
-                          border: '1px solid rgba(128,128,128,0.18)',
+                          border: "1px solid rgba(128,128,128,0.18)",
                         }}
                       />
                     ))}
-                    <span className="ml-0.5 text-[10px] text-muted-foreground">많음</span>
+                    <span className="ml-0.5 text-[10px] text-muted-foreground">
+                      많음
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Flame size={12} className="text-amber-500" />
@@ -869,9 +1017,11 @@ export default function Library() {
                 >
                   {tab.label}
                   <span className="ml-1 text-[10px] text-muted-foreground">
-                    ({tab.value === "all"
+                    (
+                    {tab.value === "all"
                       ? books.length
-                      : books.filter(b => b.status === tab.value).length})
+                      : books.filter(b => b.status === tab.value).length}
+                    )
                   </span>
                 </TabsTrigger>
               ))}
@@ -892,7 +1042,9 @@ export default function Library() {
                     </div>
                   ) : tabBooks.length === 0 ? (
                     <div className="py-16 text-center">
-                      <p className="text-sm text-muted-foreground">아직 책이 없어요</p>
+                      <p className="text-sm text-muted-foreground">
+                        아직 책이 없어요
+                      </p>
                       <Button
                         variant="outline"
                         size="sm"

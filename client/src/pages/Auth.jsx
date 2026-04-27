@@ -88,14 +88,18 @@ export default function Auth() {
     const snap = await getDoc(doc(db, 'users', fbAuth.currentUser.uid));
     const isOnboarded = snap.exists() ? snap.data().isOnboarded : false;
 
+    // 온보딩 미완료면 항상 온보딩 먼저 (from 경로 무시)
+    if (!isOnboarded) {
+      navigate('/onboarding', { replace: true });
+      return;
+    }
+
     // 로그인 전 접근하려 했던 페이지가 있으면 그곳으로
     const from = location.state?.from?.pathname;
     if (from && from !== '/auth') {
       navigate(from, { replace: true });
-    } else if (isOnboarded) {
-      navigate('/', { replace: true });
     } else {
-      navigate('/onboarding', { replace: true });
+      navigate('/', { replace: true });
     }
   };
 
