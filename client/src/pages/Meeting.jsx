@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { usePoint } from '@/contexts/PointContext';
 import {
   MOCK_COMMUNITY_MEETINGS,
   MOCK_MEETING_POSTS,
@@ -64,6 +65,7 @@ export default function Meeting() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile } = useAuth();
+  const { addPoint } = usePoint();
   const myName = profile?.nickname || user?.email?.split('@')[0] || '독서인';
 
   const [view, setView]                         = useState('list');
@@ -245,6 +247,7 @@ export default function Meeting() {
         createdAt:  serverTimestamp(),
       });
       toast.success('게시글이 등록됐어요!');
+      addPoint('meeting_post').catch(() => {});
       setPostContent('');
       setView('detail');
     } catch {
