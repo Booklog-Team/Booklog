@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import BookCard from "@/components/BookCard";
 import { getBookDetail, searchBooks, getHighQualityCover } from "@/utils/api";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, arrayUnion } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePoint } from "@/contexts/PointContext";
@@ -239,9 +239,10 @@ export default function BookDetail() {
 
     setSaving(true);
     const isFirstCompletion = status === "done" && savedStatus !== "done";
+    const today = new Date().toISOString().slice(0, 10);
     try {
       const info = book.volumeInfo || {};
-      await setDoc(doc(db, "users", user.uid, "shelf", id), {
+      const payload = {
         title:       info.title || "제목 없음",
         author:      info.authors?.[0] || "",
         thumbnail:   book._cover || "",
@@ -250,8 +251,12 @@ export default function BookDetail() {
         totalPage:   info.pageCount || 0,
         memo,
         rating,
-        lastReadDate: new Date().toISOString().slice(0, 10),
-      }, { merge: true });
+        lastReadDate: today,
+      };
+      if (status === "reading" || status === "done") {
+        payload.checkedDates = arrayUnion(today);
+      }
+      await setDoc(doc(db, "users", user.uid, "shelf", id), payload, { merge: true });
       setSavedStatus(status);
       if (isFirstCompletion) {
         fireCompletionConfetti();
