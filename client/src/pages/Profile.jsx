@@ -15,7 +15,7 @@ import { auth, db } from '@/firebase/config';
 import { logout } from '@/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { MOCK_BOOKS, MOCK_POINT_HISTORY } from '@/lib/mockData';
+import { MOCK_BOOKS } from '@/lib/mockData';
 
 function getHeatLevel(count) {
   if (!count) return 0;
@@ -67,16 +67,6 @@ const GENRE_LIST = [
   { id: '역사',    emoji: '🏺', label: '역사'    },
   { id: '아동',    emoji: '🎠', label: '아동'    },
 ];
-
-const POINT_CAT_STYLE = {
-  '출석 체크':        { color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
-  '연속 독서 보너스': { color: 'text-orange-500',  bg: 'bg-orange-500/10'  },
-  '감상 글 작성':     { color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  '완독 보상':        { color: 'text-amber-500',   bg: 'bg-amber-500/10'   },
-  '독서 모임 참여':   { color: 'text-violet-600',  bg: 'bg-violet-500/10'  },
-  '댓글 작성':        { color: 'text-teal-500',    bg: 'bg-teal-500/10'    },
-  '책 등록':          { color: 'text-primary',     bg: 'bg-primary/10'     },
-};
 
 const monthKeyFromDate = (date) => {
   const year = date.getFullYear();
@@ -132,11 +122,6 @@ function fmtDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-}
-
-function fmtMonth(yyyyMM) {
-  const [y, m] = yyyyMM.split('-');
-  return `${y}년 ${Number(m)}월`;
 }
 
 // ─── 서브 컴포넌트 ─────────────────────────────────────────────────────────
@@ -393,25 +378,12 @@ export default function Profile() {
       })
     : '';
 
-  // 포인트 (실제 데이터 없으면 mock 합계)
-  const mockPointTotal = MOCK_POINT_HISTORY.reduce((s, p) => s + p.points, 0);
-  const displayPoints  = (profile?.totalPoints ?? 0) > 0 ? profile.totalPoints : mockPointTotal;
+  const displayPoints = profile?.totalPoints ?? 0;
 
   // 바 차트 클릭 — 선택된 카테고리 책 목록
   const activeMonthData = activeBar ? monthlyReadingData.find(month => month.key === activeBar) : null;
   const activeBarBooks  = activeMonthData?.books || [];
   const activeGenreBooks = activeGenre ? genreShelf.filter(b => (b.genre || []).includes(activeGenre)) : [];
-
-  // 포인트 내역 월별 그룹
-  const pointsByMonth = useMemo(() => {
-    const map = {};
-    MOCK_POINT_HISTORY.forEach(p => {
-      const month = p.date.slice(0, 7);
-      if (!map[month]) map[month] = [];
-      map[month].push(p);
-    });
-    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-  }, []);
 
   // ── 프로필 저장 ────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -839,49 +811,32 @@ export default function Profile() {
       ),
     },
 
-    // ── 포인트 내역 ───────────────────────────────────────────────────────
+    // ── 포인트 ───────────────────────────────────────────────────────────
     points: {
-      title: '포인트 내역',
+      title: '포인트',
       content: (
         <div>
-          {/* 합계 */}
           <div className="flex items-baseline gap-1.5 mb-6">
             <p className="text-3xl font-bold text-amber-500">{displayPoints.toLocaleString()}</p>
             <span className="text-base font-semibold text-amber-600">P</span>
             <span className="text-xs text-muted-foreground ml-1">누적 포인트</span>
           </div>
-
-          {/* 월별 내역 */}
-          <div className="space-y-6">
-            {pointsByMonth.map(([month, entries]) => (
-              <div key={month}>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">{fmtMonth(month)}</p>
-                <div>
-                  {entries.map(entry => {
-                    const catStyle = POINT_CAT_STYLE[entry.category] ?? { color: 'text-primary', bg: 'bg-primary/10' };
-                    return (
-                      <div key={entry.id} className="py-2.5 border-b border-border/30 last:border-0 space-y-1">
-                        {/* 1행: 카테고리 태그 + 포인트 */}
-                        <div className="flex items-center justify-between">
-                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap ${catStyle.bg} ${catStyle.color}`}>
-                            {entry.category}
-                          </span>
-                          <span className="text-sm font-bold text-amber-500">+{entry.points}P</span>
-                        </div>
-                        {/* 2행: 상세 내역 + 날짜 — 태그 좌측 패딩만큼 들여쓰기 */}
-                        <div className="flex items-center justify-between gap-3 pl-2.5">
-                          <p className="text-xs text-foreground/75 line-clamp-1 flex-1">{entry.detail}</p>
-                          <p className="text-[11px] text-muted-foreground flex-shrink-0">{fmtDate(entry.date)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          <p className="text-xs font-semibold text-muted-foreground mb-3">적립 방법</p>
+          <div>
+            {[
+              { label: '오늘 독서 체크', pts: 10 },
+              { label: '독서 메모 저장', pts: 5 },
+              { label: '독서 모임 감상 작성', pts: 5 },
+              { label: '자유 게시판 글 작성', pts: 3 },
+            ].map(({ label, pts }) => (
+              <div key={label} className="flex items-center justify-between py-2.5 border-b border-border/30 last:border-0">
+                <p className="text-sm text-foreground/80">{label}</p>
+                <span className="text-sm font-bold text-amber-500">+{pts}P</span>
               </div>
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground text-center mt-5">
-            포인트는 독서 활동을 통해 적립돼요
+            각 활동당 하루 1회 적립돼요
           </p>
         </div>
       ),

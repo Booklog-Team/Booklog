@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BookOpen, Home, Search, User, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { MOCK_POINT_HISTORY } from '@/lib/mockData';
 import ThemeSelector from './ThemeSelector';
 
 const NAV_ITEMS = [
@@ -40,8 +39,7 @@ export default function SideNav() {
   const location = useLocation();
   const { user, profile } = useAuth();
   const displayName = profile?.nickname || user?.displayName || user?.email?.split('@')[0] || '독서인';
-  const mockPointTotal = MOCK_POINT_HISTORY.reduce((sum, item) => sum + item.points, 0);
-  const points = (profile?.totalPoints ?? 0) > 0 ? profile.totalPoints : mockPointTotal;
+  const points = profile?.totalPoints ?? 0;
 
   return (
     <aside
