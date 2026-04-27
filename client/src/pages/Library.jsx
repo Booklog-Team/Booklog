@@ -60,14 +60,12 @@ function getColorLevel(count) {
   return 4;
 }
 
-function getLevelColor(level) {
-  switch (level) {
-    case 1: return "bg-orange-400/20";
-    case 2: return "bg-orange-400/40";
-    case 3: return "bg-orange-400/60";
-    case 4: return "bg-orange-400/80";
-    default: return "";
-  }
+function getHeatStyle(level) {
+  if (level === 0) return {};
+  return {
+    backgroundColor: `var(--heatmap-${level})`,
+    color: level >= 3 ? 'var(--heatmap-text)' : 'var(--foreground)',
+  };
 }
 
 function getDaysInMonth(year, month) {
@@ -715,27 +713,37 @@ export default function Library() {
                   const dateKey = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(cell.day).padStart(2, "0")}`;
                   const count = monthCalendarData[dateKey] || 0;
                   const level = getColorLevel(count);
-                  const levelColor = getLevelColor(level);
                   const isToday = dateKey === todayStr;
                   const isSelected = dateKey === selectedDate;
+                  const heatStyle = getHeatStyle(level);
 
                   return (
                     <div
                       key={dateKey}
                       onClick={() => setSelectedDate(isSelected ? null : dateKey)}
-                      className={`relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg text-xs transition-all ${
+                      className={`relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg text-xs transition-all duration-200 ${
                         isSelected
-                          ? "bg-primary font-bold text-primary-foreground ring-2 ring-primary ring-offset-1"
+                          ? "font-bold ring-2 ring-primary ring-offset-1"
                           : level > 0
-                            ? `${levelColor} font-semibold ${level >= 3 ? "text-white" : "text-orange-600"} hover:opacity-80`
+                            ? "font-semibold hover:opacity-80"
                             : isToday
                               ? "bg-secondary font-semibold text-foreground ring-1 ring-primary/30"
                               : "text-muted-foreground hover:bg-secondary/60"
                       }`}
+                      style={
+                        isSelected
+                          ? { backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)' }
+                          : level > 0
+                            ? heatStyle
+                            : undefined
+                      }
                     >
                       <span>{cell.day}</span>
                       {level > 0 && !isSelected && (
-                        <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-orange-400/60" />
+                        <span
+                          className="absolute bottom-0.5 h-1 w-1 rounded-full"
+                          style={{ backgroundColor: `var(--heatmap-${Math.min(level + 1, 4)})` }}
+                        />
                       )}
                       {isToday && level === 0 && !isSelected && (
                         <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />
@@ -756,21 +764,21 @@ export default function Library() {
                 <div className="mb-3 grid grid-cols-3 divide-x divide-border/40 rounded-xl bg-secondary/50 py-3">
                   <div className="flex flex-col items-center gap-0.5">
                     <span className="text-[10px] text-muted-foreground">독서한 날</span>
-                    <span className="text-xl font-bold leading-none text-orange-500">
+                    <span className="text-xl font-bold leading-none" style={{ color: 'var(--stat-color-1)' }}>
                       {monthStats.readingDays}
                     </span>
                     <span className="text-[10px] text-muted-foreground">일</span>
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
                     <span className="text-[10px] text-muted-foreground">총 페이지</span>
-                    <span className="text-xl font-bold leading-none text-emerald-600">
+                    <span className="text-xl font-bold leading-none" style={{ color: 'var(--stat-color-2)' }}>
                       {monthStats.totalPages.toLocaleString()}
                     </span>
                     <span className="text-[10px] text-muted-foreground">p</span>
                   </div>
                   <div className="flex flex-col items-center gap-0.5">
                     <span className="text-[10px] text-muted-foreground">일 평균</span>
-                    <span className="text-xl font-bold leading-none text-orange-500">
+                    <span className="text-xl font-bold leading-none" style={{ color: 'var(--stat-color-1)' }}>
                       {monthStats.avgPages}
                     </span>
                     <span className="text-[10px] text-muted-foreground">p/일</span>
@@ -781,8 +789,15 @@ export default function Library() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span className="mr-0.5 text-[10px] text-muted-foreground">적음</span>
-                    {[1, 2, 3, 4].map(l => (
-                      <div key={l} className={`h-3 w-3 rounded ${getLevelColor(l)}`} />
+                    {[0, 1, 2, 3, 4].map(l => (
+                      <div
+                        key={l}
+                        className="h-3 w-3 rounded transition-colors duration-200"
+                        style={{
+                          backgroundColor: `var(--heatmap-${l})`,
+                          border: '1px solid rgba(128,128,128,0.18)',
+                        }}
+                      />
                     ))}
                     <span className="ml-0.5 text-[10px] text-muted-foreground">많음</span>
                   </div>

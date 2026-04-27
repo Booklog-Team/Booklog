@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import confetti from "canvas-confetti";
 import {
   ArrowLeft, Star, ChevronDown, Check,
   BookOpen, PenLine, Loader2, AlertCircle, ShoppingCart, Share2, Clock, MapPin,
@@ -180,6 +181,7 @@ export default function BookDetail() {
   const [saving, setSaving]     = useState(false);
 
   const [status, setStatus]           = useState(null);
+  const [savedStatus, setSavedStatus] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [memo, setMemo]               = useState("");
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -201,6 +203,7 @@ export default function BookDetail() {
       setIsLoading(true);
       setError(null);
       setStatus(null);
+      setSavedStatus(null);
       setCurrentPage(0);
       setMemo("");
       setRating(0);
@@ -222,7 +225,7 @@ export default function BookDetail() {
             .then((snap) => {
               if (!cancelled && snap.exists()) {
                 const d = snap.data();
-                if (d.status)      setStatus(d.status);
+                if (d.status)      { setStatus(d.status); setSavedStatus(d.status); }
                 if (d.currentPage) setCurrentPage(d.currentPage);
                 if (d.memo)        setMemo(d.memo);
                 if (d.rating)      setRating(d.rating);
@@ -262,12 +265,25 @@ export default function BookDetail() {
     return () => { cancelled = true; };
   }, [id, user]);
 
+  // ── 완독 축하 confetti ────────────────────────────────────
+  const fireCompletionConfetti = () => {
+    const colors = ["#ff6b9d", "#c084fc", "#60a5fa", "#34d399", "#fbbf24", "#f97316"];
+    const burst = (origin, angle) =>
+      confetti({ particleCount: 60, angle, spread: 70, origin, colors, scalar: 1.1 });
+
+    burst({ x: 0.5, y: 0.6 }, 90);
+    setTimeout(() => { burst({ x: 0.2, y: 0.7 }, 60); burst({ x: 0.8, y: 0.7 }, 120); }, 250);
+    setTimeout(() => { burst({ x: 0.35, y: 0.55 }, 75); burst({ x: 0.65, y: 0.55 }, 105); }, 550);
+    setTimeout(() => { burst({ x: 0.5, y: 0.5 }, 90); }, 850);
+  };
+
   // ── 기록 저장 ─────────────────────────────────────────────
   const handleSave = async () => {
     if (!user) { toast.error("로그인이 필요합니다."); return; }
     if (!status) { toast.error("상태를 먼저 선택해주세요."); return; }
 
     setSaving(true);
+    const isFirstCompletion = status === "done" && savedStatus !== "done";
     try {
       const info = book.volumeInfo || {};
       await setDoc(doc(db, "users", user.uid, "shelf", id), {
@@ -281,7 +297,13 @@ export default function BookDetail() {
         rating,
         lastReadDate: new Date().toISOString().slice(0, 10),
       }, { merge: true });
-      toast.success("독서 기록이 저장되었습니다!");
+      setSavedStatus(status);
+      if (isFirstCompletion) {
+        fireCompletionConfetti();
+        toast.success("🎉 완독을 축하드려요!");
+      } else {
+        toast.success("독서 기록이 저장되었습니다!");
+      }
     } catch (err) {
       console.error(err);
       toast.error("저장에 실패했어요. 다시 시도해주세요.");

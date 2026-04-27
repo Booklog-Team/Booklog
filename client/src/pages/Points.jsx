@@ -1,6 +1,6 @@
 // Booklog Points — 「따뜻한 라이브러리」
 // PRD.md §9 포인트 & 기부 시스템 — 모든 데이터 Firestore 연동
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Gift, BookOpen, PenLine, Users, MessageSquare,
@@ -9,6 +9,28 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePoint, POINT_VALUES } from '@/contexts/PointContext';
+import { MOCK_POINT_HISTORY } from '@/lib/mockData';
+
+const POINT_CAT_STYLE = {
+  '출석 체크':        { color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
+  '연속 독서 보너스': { color: 'text-orange-500',  bg: 'bg-orange-500/10'  },
+  '감상 글 작성':     { color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+  '완독 보상':        { color: 'text-amber-500',   bg: 'bg-amber-500/10'   },
+  '독서 모임 참여':   { color: 'text-violet-600',  bg: 'bg-violet-500/10'  },
+  '댓글 작성':        { color: 'text-teal-500',    bg: 'bg-teal-500/10'    },
+  '책 등록':          { color: 'text-primary',     bg: 'bg-primary/10'     },
+};
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+}
+
+function fmtMonth(yyyyMM) {
+  const [y, m] = yyyyMM.split('-');
+  return `${y}년 ${Number(m)}월`;
+}
 
 // ─── 독서 레벨 시스템 ──────────────────────────────────────
 const LEVELS = [
@@ -87,6 +109,25 @@ export default function Points() {
 
   const [donating, setDonating] = useState(null);
 
+  // mock 포인트 합계 — Firebase 포인트가 0일 때 표시용
+  const mockPointTotal = useMemo(
+    () => MOCK_POINT_HISTORY.reduce((s, p) => s + p.points, 0),
+    []
+  );
+  const displayPoints = myPoints > 0 ? myPoints : mockPointTotal;
+  const levelInfo     = getLevelInfo(displayPoints);
+
+  // 포인트 내역 월별 그룹 (mock 데이터)
+  const pointsByMonth = useMemo(() => {
+    const map = {};
+    MOCK_POINT_HISTORY.forEach(p => {
+      const month = p.date.slice(0, 7);
+      if (!map[month]) map[month] = [];
+      map[month].push(p);
+    });
+    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
+  }, []);
+
   // 파생 값
   const totalDonated     = globalData?.totalDonated     ?? 0;
   const goalAmount       = globalData?.goalAmount       ?? 100_000;
@@ -94,8 +135,6 @@ export default function Points() {
   const donations        = globalData?.donations        ?? {};
   const progressPct      = Math.min(100, Math.round((totalDonated / goalAmount) * 100));
   const booksEquiv       = Math.floor(totalDonated / POINTS_PER_BOOK);
-
-  const levelInfo = getLevelInfo(myPoints);
 
   const selectedCharity = CHARITIES.find(c => c.id === preferredCharity);
 
@@ -144,7 +183,7 @@ export default function Points() {
 
           <p className="text-sm text-white/80 mb-1">나의 포인트</p>
           <div className="flex items-baseline gap-1 mb-2">
-            <span className="text-5xl font-bold">{myPoints.toLocaleString()}</span>
+            <span className="text-5xl font-bold">{displayPoints.toLocaleString()}</span>
             <span className="text-2xl font-semibold">P</span>
           </div>
 
@@ -359,12 +398,36 @@ export default function Points() {
         {/* ── 포인트 내역 ──────────────────────────────── */}
         <div className="mb-6">
           <h2 className="text-sm font-semibold mb-3">포인트 내역</h2>
-          <div className="book-card p-8 flex flex-col items-center justify-center text-center">
-            <p className="text-4xl mb-3">📋</p>
-            <p className="text-sm font-semibold mb-1">아직 포인트 내역이 없어요</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              독서 체크, 메모, 게시글 작성으로<br />첫 포인트를 적립해보세요
-            </p>
+          <div className="space-y-5">
+            {pointsByMonth.map(([month, entries]) => (
+              <div key={month}>
+                <p className="text-xs font-semibold text-muted-foreground mb-2 px-1">
+                  {fmtMonth(month)}
+                </p>
+                <div className="book-card overflow-hidden">
+                  {entries.map((entry, idx) => {
+                    const catStyle = POINT_CAT_STYLE[entry.category] ?? { color: 'text-primary', bg: 'bg-primary/10' };
+                    return (
+                      <div
+                        key={entry.id}
+                        className={`px-4 py-2.5 space-y-1 ${idx < entries.length - 1 ? 'border-b border-border/30' : ''}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap ${catStyle.bg} ${catStyle.color}`}>
+                            {entry.category}
+                          </span>
+                          <span className="text-sm font-bold text-amber-500">+{entry.points}P</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 pl-2.5">
+                          <p className="text-xs text-foreground/75 line-clamp-1 flex-1">{entry.detail}</p>
+                          <p className="text-[11px] text-muted-foreground flex-shrink-0">{fmtDate(entry.date)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

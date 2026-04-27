@@ -24,7 +24,7 @@ const HERO_IMAGES = [
   //사진 링크 추가
 ];
 
-const KEYWORDS = ["소설", "자기계발", "한국문학", "SF", "철학", "에세이"];
+const KEYWORDS = ["소설", "자기계발", "인문학", "역사", "과학", "에세이"];
 
 // Profile.jsx와 동일한 연속 독서일 계산
 function calculateStreak(shelf) {
@@ -157,7 +157,7 @@ export default function Home() {
           {KEYWORDS.map((kw) => (
             <button
               key={kw}
-              onClick={() => navigate(`/search?q=${kw}`)}
+              onClick={() => navigate(`/search?genre=${encodeURIComponent(kw)}&source=homeTag`)}
               className="flex-shrink-0 px-3 py-1.5 bg-secondary rounded-full text-xs font-medium hover:bg-primary/10 hover:text-primary transition-colors"
             >
               {kw}
