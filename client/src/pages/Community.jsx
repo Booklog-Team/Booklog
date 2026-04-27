@@ -1,9 +1,7 @@
 // Booklog Community — 탭 기반 커뮤니티 허브
-import { useState } from "react";
-// ── TODO: 실제 데이터 전환 시 아래 주석 해제하고 mock 데이터 라인 제거 ──
-// import { useState, useEffect } from "react";
-// import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-// import { db } from "@/firebase/config";
+import { useState, useEffect } from "react";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { db } from "@/firebase/config";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -14,8 +12,8 @@ import {
   BookOpen,
   Heart,
   MessageSquare,
+  Loader2,
 } from "lucide-react";
-import { MOCK_COMMUNITY_MEETINGS, MOCK_COMMUNITY_POSTS } from "@/lib/mockData";
 
 const BOOK_COVERS = [
   "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=400&h=180&fit=crop",
@@ -58,41 +56,31 @@ export default function Community() {
 
   const [filterCat, setFilterCat] = useState("전체");
   const [imgErrors, setImgErrors] = useState({});
+  const [meetings, setMeetings] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [loadingMeetings, setLoadingMeetings] = useState(true);
+  const [loadingPosts, setLoadingPosts] = useState(true);
 
-  // ── UI 확인용: 항상 mock 데이터 사용 ──────────────────────────────────────
-  // TODO: 실제 데이터 전환 시 아래 mock 라인을 제거하고 Firebase 구독으로 교체
-  //
-  // const [meetings, setMeetings] = useState([]);
-  // const [posts, setPosts] = useState([]);
-  // const [loadingMeetings, setLoadingMeetings] = useState(true);
-  // const [loadingPosts, setLoadingPosts] = useState(true);
-  //
-  // useEffect(() => {
-  //   const q = query(collection(db, "meetings"), orderBy("createdAt", "desc"));
-  //   return onSnapshot(q,
-  //     snap => { setMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingMeetings(false); },
-  //     () => setLoadingMeetings(false)
-  //   );
-  // }, []);
-  //
-  // useEffect(() => {
-  //   const q = query(collection(db, "board"), orderBy("createdAt", "desc"));
-  //   return onSnapshot(q,
-  //     snap => { setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
-  //     () => setLoadingPosts(false)
-  //   );
-  // }, []);
-  //
-  // const effectiveMeetings = meetings;
-  // const effectivePosts = posts;
-  // ─────────────────────────────────────────────────────────────────────────
-  const effectiveMeetings = MOCK_COMMUNITY_MEETINGS;
-  const effectivePosts = MOCK_COMMUNITY_POSTS;
+  useEffect(() => {
+    const q = query(collection(db, "meetings"), orderBy("createdAt", "desc"));
+    return onSnapshot(q,
+      snap => { setMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingMeetings(false); },
+      () => setLoadingMeetings(false)
+    );
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, "board"), orderBy("createdAt", "desc"));
+    return onSnapshot(q,
+      snap => { setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadingPosts(false); },
+      () => setLoadingPosts(false)
+    );
+  }, []);
 
   const filteredPosts =
     filterCat === "전체"
-      ? effectivePosts
-      : effectivePosts.filter(p => p.category === filterCat);
+      ? posts
+      : posts.filter(p => p.category === filterCat);
 
   return (
     <>
@@ -126,7 +114,7 @@ export default function Community() {
           <TabsContent value="meeting" className="mt-0">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-muted-foreground">
-                {`${effectiveMeetings.length}개 모임 운영 중`}
+                {loadingMeetings ? "불러오는 중..." : `${meetings.length}개 모임 운영 중`}
               </p>
               <button
                 onClick={() =>
@@ -140,7 +128,11 @@ export default function Community() {
               </button>
             </div>
 
-            {effectiveMeetings.length === 0 ? (
+            {loadingMeetings ? (
+              <div className="flex justify-center pt-16">
+                <Loader2 size={28} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : meetings.length === 0 ? (
               <div className="flex flex-col items-center pt-20 text-center">
                 <p className="text-5xl mb-4">📚</p>
                 <p className="text-base font-semibold mb-1">
@@ -152,7 +144,7 @@ export default function Community() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 stagger-children">
-                {effectiveMeetings.map((meeting, idx) => {
+                {meetings.map((meeting, idx) => {
                   const memberCount = meeting.members?.length ?? 0;
                   const isJoined = meeting.members?.includes(user?.uid);
                   const isFull = memberCount >= (meeting.maxMembers || 10);
@@ -265,7 +257,7 @@ export default function Community() {
             {/* 상단 헤더 */}
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-muted-foreground">
-                {`${filteredPosts.length}개 게시글`}
+                {loadingPosts ? "불러오는 중..." : `${filteredPosts.length}개 게시글`}
               </p>
               <button
                 onClick={() =>
@@ -294,7 +286,11 @@ export default function Community() {
               ))}
             </div>
 
-            {filteredPosts.length === 0 ? (
+            {loadingPosts ? (
+              <div className="flex justify-center pt-16">
+                <Loader2 size={28} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredPosts.length === 0 ? (
               <div className="flex flex-col items-center pt-20 text-center">
                 <p className="text-5xl mb-4">📋</p>
                 <p className="text-base font-semibold mb-1">

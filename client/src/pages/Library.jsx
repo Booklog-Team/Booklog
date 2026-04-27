@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { MOCK_BOOKS, READING_CALENDAR } from "@/lib/mockData";
 import {
   Plus,
   Flame,

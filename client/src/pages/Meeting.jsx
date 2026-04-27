@@ -17,11 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { usePoint } from '@/contexts/PointContext';
-import {
-  MOCK_COMMUNITY_MEETINGS,
-  MOCK_MEETING_POSTS,
-  MOCK_MEETING_POST_COMMENTS,
-} from '@/lib/mockData';
 
 // ─── 상수
 const BOOK_COVERS = [
@@ -85,11 +80,6 @@ export default function Meeting() {
   const [fromCommunity, setFromCommunity]       = useState(false);
   const [editingAnn, setEditingAnn]             = useState(false);
   const [annText, setAnnText]                   = useState('');
-  const [mockMemberMap, setMockMemberMap]       = useState(() => {
-    const map = {};
-    MOCK_COMMUNITY_MEETINGS.forEach(m => { map[m.id] = [...(m.members || [])]; });
-    return map;
-  });
   const [showPrevAnns, setShowPrevAnns]         = useState(false);
 
   // Community.jsx에서 navigation state로 넘어온 경우 처리
@@ -134,11 +124,9 @@ export default function Meeting() {
     }
   }, [meetings, pendingMeetingId]);
 
-  const isMockMeeting = selectedMeeting?.id?.startsWith('mock-');
-
-  // 선택된 모임의 게시글 실시간 구독 (Firebase 모임만)
+  // 선택된 모임의 게시글 실시간 구독
   useEffect(() => {
-    if (!selectedMeeting?.id || isMockMeeting) return;
+    if (!selectedMeeting?.id) return;
     setLoadingPosts(true);
     const q = query(
       collection(db, 'meetings', selectedMeeting.id, 'posts'),
@@ -149,11 +137,11 @@ export default function Meeting() {
       setLoadingPosts(false);
     });
     return unsub;
-  }, [selectedMeeting?.id, isMockMeeting]);
+  }, [selectedMeeting?.id]);
 
-  // 선택된 게시글의 댓글 실시간 구독 (Firebase 모임만)
+  // 선택된 게시글의 댓글 실시간 구독
   useEffect(() => {
-    if (!selectedMeeting?.id || !selectedPost?.id || isMockMeeting) return;
+    if (!selectedMeeting?.id || !selectedPost?.id) return;
     const q = query(
       collection(db, 'meetings', selectedMeeting.id, 'posts', selectedPost.id, 'comments'),
       orderBy('createdAt', 'asc')
@@ -162,29 +150,12 @@ export default function Meeting() {
       setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return unsub;
-  }, [selectedMeeting?.id, selectedPost?.id, isMockMeeting]);
-
-  // mock 모임: MOCK_MEETING_POSTS / MOCK_MEETING_POST_COMMENTS 사용
-  const effectivePosts    = isMockMeeting
-    ? (MOCK_MEETING_POSTS[selectedMeeting?.id] ?? [])
-    : posts;
-  const effectiveComments = isMockMeeting
-    ? (MOCK_MEETING_POST_COMMENTS[selectedPost?.id] ?? [])
-    : comments;
+  }, [selectedMeeting?.id, selectedPost?.id]);
 
   // 모임 참여 / 나가기
   async function handleJoinToggle() {
     if (!selectedMeeting) return;
     const uid = user?.uid || 'preview-user';
-
-    if (isMockMeeting) {
-      const current = mockMemberMap[selectedMeeting.id] ?? selectedMeeting.members ?? [];
-      const wasJoined = current.includes(uid);
-      const next = wasJoined ? current.filter(id => id !== uid) : [...current, uid];
-      setMockMemberMap(prev => ({ ...prev, [selectedMeeting.id]: next }));
-      toast.success(wasJoined ? '모임에서 나왔습니다.' : '모임에 참여했습니다! 🎉');
-      return;
-    }
 
     if (!user) return;
     const isJoined = selectedMeeting.members?.includes(user.uid);
@@ -276,19 +247,6 @@ export default function Meeting() {
     setSubmitting(true);
     const today = new Date().toISOString().slice(0, 10);
     const newEntry = { text: annText.trim(), createdAt: today };
-
-    if (isMockMeeting) {
-      const existing = selectedMeeting.announcements
-        ?? (selectedMeeting.announcement
-          ? [{ text: selectedMeeting.announcement, createdAt: selectedMeeting.createdAt || today }]
-          : []);
-      setSelectedMeeting(prev => ({ ...prev, announcements: [newEntry, ...existing] }));
-      setEditingAnn(false);
-      setAnnText('');
-      toast.success('공지가 저장됐어요.');
-      setSubmitting(false);
-      return;
-    }
 
     try {
       const existing = selectedMeeting.announcements ?? [];
@@ -552,14 +510,14 @@ export default function Meeting() {
           </div>
 
           <div className="mb-4">
-            <h3 className="text-sm font-semibold mb-3">댓글 {effectiveComments.length}개</h3>
-            {effectiveComments.length === 0 ? (
+            <h3 className="text-sm font-semibold mb-3">댓글 {comments.length}개</h3>
+            {comments.length === 0 ? (
               <div className="text-center py-6 text-xs text-muted-foreground">
                 첫 댓글을 남겨보세요 💬
               </div>
             ) : (
               <div className="space-y-3">
-                {effectiveComments.map(c => (
+                {comments.map(c => (
                   <div key={c.id} className="flex gap-2.5">
                     <Avatar name={c.authorName} size={8} />
                     <div className="flex-1 bg-secondary/60 rounded-xl px-3 py-2.5">
@@ -609,9 +567,7 @@ export default function Meeting() {
   // 모임 상세
   if (view === 'detail' && selectedMeeting) {
     const uid = user?.uid || 'preview-user';
-    const effectiveMembers = isMockMeeting
-      ? (mockMemberMap[selectedMeeting.id] ?? selectedMeeting.members ?? [])
-      : (selectedMeeting.members ?? []);
+    const effectiveMembers = selectedMeeting.members ?? [];
     const isJoined    = effectiveMembers.includes(uid);
     const isHost      = selectedMeeting.hostUid === user?.uid;
     const memberCount = effectiveMembers.length;
@@ -817,11 +773,11 @@ export default function Meeting() {
               )}
             </div>
 
-            {loadingPosts && !isMockMeeting ? (
+            {loadingPosts ? (
               <div className="flex justify-center py-8">
                 <Loader2 size={22} className="animate-spin text-muted-foreground" />
               </div>
-            ) : effectivePosts.length === 0 ? (
+            ) : posts.length === 0 ? (
               <div className="book-card p-8 flex flex-col items-center text-center">
                 <p className="text-3xl mb-2">📝</p>
                 <p className="text-sm font-semibold mb-1">아직 감상 글이 없어요</p>
@@ -831,7 +787,7 @@ export default function Meeting() {
               </div>
             ) : (
               <div className="space-y-3">
-                {effectivePosts.map(post => (
+                {posts.map(post => (
                   <button
                     key={post.id}
                     onClick={() => { setSelectedPost(post); setView('post-detail'); }}
