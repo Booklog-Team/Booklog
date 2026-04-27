@@ -15,30 +15,47 @@ import { auth, db } from '@/firebase/config';
 import { logout } from '@/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { MOCK_BOOKS, MOCK_POINT_HISTORY } from '@/lib/mockData';
+import { MOCK_BOOKS } from '@/lib/mockData';
 
-const PROFILE_BG =
-  'https://d2xsxph8kpxj0f.cloudfront.net/310519663584969128/K9LDMhfUcVKdtMjF2S9GdE/booklog-profile-bg-Sfmo955ETw2dHjqsmMB9Wh.webp';
+function getHeatLevel(count) {
+  if (!count) return 0;
+  if (count === 1) return 2;
+  if (count === 2) return 3;
+  return 4;
+}
 
-const CHART_COLORS = [
-  'var(--color-primary)',
-  'oklch(0.72 0.1 80)',
-  'var(--color-accent-foreground)',
+const GENRE_COLORS = [
+  'var(--chart-genre-1)',
+  'var(--chart-genre-2)',
+  'var(--chart-genre-3)',
+  'var(--chart-genre-4)',
+  'var(--chart-genre-5)',
 ];
 
 const MONTH_BAR_COLORS = {
-  current: 'var(--color-primary)',
-  previous: 'oklch(0.74 0.08 72)',
-  empty: 'var(--color-secondary)',
+  current:  'var(--color-primary)',
+  previous: 'var(--chart-bar-prev)',
+  empty:    'var(--chart-bar-empty)',
 };
 
-const GENRE_COLORS = [
-  'oklch(0.68 0.12 38)',
-  'oklch(0.72 0.09 145)',
-  'oklch(0.82 0.11 82)',
-  'oklch(0.78 0.10 55)',
-  'oklch(0.76 0.08 190)',
-];
+const CHART_TOOLTIP_STYLE = {
+  background: 'var(--popover)',
+  color: 'var(--popover-foreground)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  boxShadow: '0 14px 36px color-mix(in oklch, var(--foreground) 18%, transparent)',
+  fontSize: 12,
+};
+
+const CHART_TOOLTIP_LABEL_STYLE = {
+  color: 'var(--popover-foreground)',
+  fontWeight: 700,
+};
+
+const CHART_TOOLTIP_ITEM_STYLE = {
+  color: 'var(--popover-foreground)',
+  fontWeight: 600,
+};
 
 const GENRE_LIST = [
   { id: '소설',    emoji: '📖', label: '소설'    },
@@ -50,16 +67,6 @@ const GENRE_LIST = [
   { id: '역사',    emoji: '🏺', label: '역사'    },
   { id: '아동',    emoji: '🎠', label: '아동'    },
 ];
-
-const POINT_CAT_STYLE = {
-  '출석 체크':        { color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
-  '연속 독서 보너스': { color: 'text-orange-500',  bg: 'bg-orange-500/10'  },
-  '감상 글 작성':     { color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  '완독 보상':        { color: 'text-amber-500',   bg: 'bg-amber-500/10'   },
-  '독서 모임 참여':   { color: 'text-violet-600',  bg: 'bg-violet-500/10'  },
-  '댓글 작성':        { color: 'text-teal-500',    bg: 'bg-teal-500/10'    },
-  '책 등록':          { color: 'text-primary',     bg: 'bg-primary/10'     },
-};
 
 const monthKeyFromDate = (date) => {
   const year = date.getFullYear();
@@ -115,11 +122,6 @@ function fmtDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-}
-
-function fmtMonth(yyyyMM) {
-  const [y, m] = yyyyMM.split('-');
-  return `${y}년 ${Number(m)}월`;
 }
 
 // ─── 서브 컴포넌트 ─────────────────────────────────────────────────────────
@@ -225,7 +227,6 @@ export default function Profile() {
   const [editNickname, setEditNickname] = useState('');
   const [saving, setSaving]             = useState(false);
   const [loggingOut, setLoggingOut]     = useState(false);
-  const [bgErr, setBgErr]               = useState(false);
   const [activeModal, setActiveModal]   = useState(null); // null | 'books' | 'done' | 'streak' | 'pages' | 'points'
   const [activeBar, setActiveBar]       = useState(null); // null | '완독' | '읽는 중' | '읽고 싶음'
   const [genreEditOpen, setGenreEditOpen] = useState(false);
@@ -268,12 +269,20 @@ export default function Profile() {
   const streak        = calculateStreak(streakShelf);
   const longestStreak = calculateLongestStreak(streakShelf);
 
-  // 독서 날짜 집합 (미래 날짜 제외, streakShelf 기준)
-  const allReadDates = useMemo(() => {
+  // 날짜 집합 + 날짜별 체크 수 — 단일 패스
+  const { allReadDates, readCountByDate } = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
-    const s = new Set();
-    streakShelf.forEach(b => (b.checkedDates || []).forEach(d => { if (d <= todayStr) s.add(d); }));
-    return s;
+    const dates = new Set();
+    const counts = {};
+    streakShelf.forEach(b => {
+      (b.checkedDates || []).forEach(d => {
+        if (d <= todayStr) {
+          dates.add(d);
+          counts[d] = (counts[d] || 0) + 1;
+        }
+      });
+    });
+    return { allReadDates: dates, readCountByDate: counts };
   }, [streakShelf]);
 
   // 이번 달 독서한 날
@@ -369,25 +378,12 @@ export default function Profile() {
       })
     : '';
 
-  // 포인트 (실제 데이터 없으면 mock 합계)
-  const mockPointTotal = MOCK_POINT_HISTORY.reduce((s, p) => s + p.points, 0);
-  const displayPoints  = (profile?.totalPoints ?? 0) > 0 ? profile.totalPoints : mockPointTotal;
+  const displayPoints = profile?.totalPoints ?? 0;
 
   // 바 차트 클릭 — 선택된 카테고리 책 목록
   const activeMonthData = activeBar ? monthlyReadingData.find(month => month.key === activeBar) : null;
   const activeBarBooks  = activeMonthData?.books || [];
   const activeGenreBooks = activeGenre ? genreShelf.filter(b => (b.genre || []).includes(activeGenre)) : [];
-
-  // 포인트 내역 월별 그룹
-  const pointsByMonth = useMemo(() => {
-    const map = {};
-    MOCK_POINT_HISTORY.forEach(p => {
-      const month = p.date.slice(0, 7);
-      if (!map[month]) map[month] = [];
-      map[month].push(p);
-    });
-    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-  }, []);
 
   // ── 프로필 저장 ────────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -475,7 +471,7 @@ export default function Profile() {
     {
       key: 'pages', label: '기록 페이지',
       value: shelfLoading ? '…' : (totalPages > 999 ? `${(totalPages / 1000).toFixed(1)}k` : `${totalPages}p`),
-      icon: TrendingUp, color: 'text-accent-foreground',
+      icon: TrendingUp, color: '[color:var(--stat-color-2)]',
     },
   ];
 
@@ -717,20 +713,29 @@ export default function Profile() {
               <div className="grid grid-cols-7 gap-1">
                 {cells.map((date, i) => {
                   if (!date) return <div key={`pad-${i}`} />;
-                  const read    = allReadDates.has(date);
+                  const count   = readCountByDate[date] || 0;
+                  const level   = getHeatLevel(count);
                   const isToday = date === today;
                   const day     = new Date(date).getDate();
+                  const isHigh  = level >= 3;
                   return (
                     <div
                       key={date}
-                      title={date}
+                      title={`${date}${count ? ` — ${count}권 체크` : ''}`}
                       className={[
-                        'aspect-square rounded-full flex items-center justify-center text-[10px] font-medium transition-colors',
-                        read && isToday  ? 'bg-primary/75 text-primary-foreground font-bold border border-primary/45 shadow-sm ring-2 ring-primary/45 ring-offset-1'
-                        : read           ? 'bg-primary/18 text-primary font-semibold border border-primary/25 shadow-[0_1px_4px_rgba(184,92,56,0.18)]'
-                        : isToday        ? 'bg-primary/15 text-primary font-bold ring-2 ring-primary/40 ring-offset-1'
-                        :                  'bg-secondary/50 text-muted-foreground/50',
+                        'aspect-square rounded-full flex items-center justify-center text-[10px] font-medium transition-all duration-200',
+                        isToday ? 'ring-2 ring-primary/50 ring-offset-1 shadow-sm' : '',
+                        isHigh  ? 'font-semibold' : '',
                       ].join(' ')}
+                      style={{
+                        backgroundColor: `var(--heatmap-${level})`,
+                        color: isHigh
+                          ? 'var(--heatmap-text)'
+                          : level >= 1
+                            ? 'var(--foreground)'
+                            : undefined,
+                        border: `1px solid color-mix(in oklch, var(--heatmap-${level}) 60%, var(--foreground) 12%)`,
+                      }}
                     >
                       {day}
                     </div>
@@ -739,9 +744,24 @@ export default function Profile() {
               </div>
             );
           })()}
-          <p className="text-[10px] text-muted-foreground mt-3 text-center">
-            채워진 날은 독서 기록이 있는 날이에요
-          </p>
+          {/* 히트맵 범례 */}
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-[10px] text-muted-foreground">채워진 날은 독서 기록이 있는 날이에요</p>
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-muted-foreground/70">적음</span>
+              {[0, 1, 2, 3, 4].map(lv => (
+                <span
+                  key={lv}
+                  className="w-2.5 h-2.5 rounded-sm transition-colors duration-200"
+                  style={{
+                    backgroundColor: `var(--heatmap-${lv})`,
+                    border: '1px solid rgba(0,0,0,0.10)',
+                  }}
+                />
+              ))}
+              <span className="text-[9px] text-muted-foreground/70">많음</span>
+            </div>
+          </div>
         </div>
       ),
     },
@@ -791,49 +811,32 @@ export default function Profile() {
       ),
     },
 
-    // ── 포인트 내역 ───────────────────────────────────────────────────────
+    // ── 포인트 ───────────────────────────────────────────────────────────
     points: {
-      title: '포인트 내역',
+      title: '포인트',
       content: (
         <div>
-          {/* 합계 */}
           <div className="flex items-baseline gap-1.5 mb-6">
             <p className="text-3xl font-bold text-amber-500">{displayPoints.toLocaleString()}</p>
             <span className="text-base font-semibold text-amber-600">P</span>
             <span className="text-xs text-muted-foreground ml-1">누적 포인트</span>
           </div>
-
-          {/* 월별 내역 */}
-          <div className="space-y-6">
-            {pointsByMonth.map(([month, entries]) => (
-              <div key={month}>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">{fmtMonth(month)}</p>
-                <div>
-                  {entries.map(entry => {
-                    const catStyle = POINT_CAT_STYLE[entry.category] ?? { color: 'text-primary', bg: 'bg-primary/10' };
-                    return (
-                      <div key={entry.id} className="py-2.5 border-b border-border/30 last:border-0 space-y-1">
-                        {/* 1행: 카테고리 태그 + 포인트 */}
-                        <div className="flex items-center justify-between">
-                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap ${catStyle.bg} ${catStyle.color}`}>
-                            {entry.category}
-                          </span>
-                          <span className="text-sm font-bold text-amber-500">+{entry.points}P</span>
-                        </div>
-                        {/* 2행: 상세 내역 + 날짜 — 태그 좌측 패딩만큼 들여쓰기 */}
-                        <div className="flex items-center justify-between gap-3 pl-2.5">
-                          <p className="text-xs text-foreground/75 line-clamp-1 flex-1">{entry.detail}</p>
-                          <p className="text-[11px] text-muted-foreground flex-shrink-0">{fmtDate(entry.date)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+          <p className="text-xs font-semibold text-muted-foreground mb-3">적립 방법</p>
+          <div>
+            {[
+              { label: '오늘 독서 체크', pts: 10 },
+              { label: '독서 메모 저장', pts: 5 },
+              { label: '독서 모임 감상 작성', pts: 5 },
+              { label: '자유 게시판 글 작성', pts: 3 },
+            ].map(({ label, pts }) => (
+              <div key={label} className="flex items-center justify-between py-2.5 border-b border-border/30 last:border-0">
+                <p className="text-sm text-foreground/80">{label}</p>
+                <span className="text-sm font-bold text-amber-500">+{pts}P</span>
               </div>
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground text-center mt-5">
-            포인트는 독서 활동을 통해 적립돼요
+            각 활동당 하루 1회 적립돼요
           </p>
         </div>
       ),
@@ -843,32 +846,20 @@ export default function Profile() {
   // ── 메인 화면 ──────────────────────────────────────────────────────────
   return (
     <>
-      {/* 프로필 배경 헤더 */}
+      {/* 프로필 배경 헤더 (z-0) */}
       <div
-        className="relative mt-6 mx-4 rounded-2xl overflow-hidden"
-        style={{
-          background: bgErr
-            ? 'linear-gradient(135deg, #5c3a25 0%, #3d2b1f 100%)'
-            : undefined,
-        }}
+        className="relative z-0 mt-6 mx-4 rounded-2xl overflow-hidden pointer-events-none"
+        style={{ background: 'var(--profile-banner-gradient)' }}
       >
-        {bgErr ? (
-          <div className="w-full h-44" />
-        ) : (
-          <img
-            src={PROFILE_BG} alt="프로필 배경"
-            className="w-full h-44 object-cover"
-            onError={() => setBgErr(true)}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/90" />
+        <div className="w-full h-36" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/10 to-background" />
       </div>
 
-      {/* 아바타 + 이름 + 장르 */}
-      <div className="px-4 -mt-10 mb-5 animate-fade-in-up">
+      {/* 아바타 + 이름 + 장르 (z-10: 배너 위) */}
+      <div className="relative z-10 px-4 -mt-16 mb-5 animate-fade-in-up">
         {/* 아바타 · 이름 · 수정 버튼 행 */}
         <div className="flex items-end gap-3 mb-3">
-          <AvatarImg src={user?.photoURL} name={displayName} size={76} />
+          <AvatarImg src={user?.photoURL} name={displayName} size={76} className="bg-background" />
           <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1
@@ -884,7 +875,7 @@ export default function Profile() {
             </div>
             <button
               onClick={() => setView('edit')}
-              className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary border border-border/70 rounded-full px-2.5 py-1 transition-colors mt-0.5"
+              className="flex-shrink-0 flex items-center gap-1 text-xs bg-muted text-muted-foreground hover:text-primary border border-border rounded-full px-2.5 py-1 transition-colors mt-0.5"
               aria-label="개인정보 수정"
             >
               <Edit3 size={11} />
@@ -894,7 +885,7 @@ export default function Profile() {
         </div>
 
         {/* 선호 장르 박스 */}
-        <div className="bg-secondary/50 rounded-xl px-3 py-2.5">
+        <div className="bg-secondary/60 backdrop-blur-sm rounded-xl px-3 py-2.5">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-semibold text-muted-foreground">선호 장르</p>
             <button
@@ -975,17 +966,14 @@ export default function Profile() {
                   >
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 11, fill: 'oklch(0.55 0.025 60)' }}
+                      tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
                       axisLine={false} tickLine={false}
                     />
                     <YAxis hide />
                     <Tooltip
-                      contentStyle={{
-                        background: 'var(--card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        fontSize: 12,
-                      }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                      itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                       formatter={v => [`${v}권`, '독서량']}
                     />
                     <Bar dataKey="count" radius={[6, 6, 0, 0]} cursor="pointer" minPointSize={6}>
@@ -1087,12 +1075,9 @@ export default function Profile() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{
-                          background: 'var(--card)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
+                        contentStyle={CHART_TOOLTIP_STYLE}
+                        labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                        itemStyle={CHART_TOOLTIP_ITEM_STYLE}
                         formatter={(v, name) => [`${v}권`, name]}
                       />
                     </PieChart>

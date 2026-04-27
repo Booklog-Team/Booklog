@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BookOpen, Home, Search, User, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { MOCK_POINT_HISTORY } from '@/lib/mockData';
+import ThemeSelector from './ThemeSelector';
 
 const NAV_ITEMS = [
   { path: '/', label: '홈', icon: Home },
@@ -39,8 +39,7 @@ export default function SideNav() {
   const location = useLocation();
   const { user, profile } = useAuth();
   const displayName = profile?.nickname || user?.displayName || user?.email?.split('@')[0] || '독서인';
-  const mockPointTotal = MOCK_POINT_HISTORY.reduce((sum, item) => sum + item.points, 0);
-  const points = (profile?.totalPoints ?? 0) > 0 ? profile.totalPoints : mockPointTotal;
+  const points = profile?.totalPoints ?? 0;
 
   return (
     <aside
@@ -85,7 +84,8 @@ export default function SideNav() {
         })}
       </nav>
 
-      <div className="px-3 pt-5 border-t border-border/60 mt-5">
+      <div className="px-3 border-t border-border/60 pt-3 mt-3 flex flex-col gap-0.5">
+        <ThemeSelector />
         <Link
           to="/profile"
           className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg hover:bg-secondary transition-colors"

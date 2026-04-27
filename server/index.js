@@ -76,6 +76,26 @@ async function startServer() {
     }
   });
 
+  // ── Groq AI 프록시 ───────────────────────────────────────────
+  app.post("/api/groq/chat/completions", async (req, res) => {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(req.body),
+      });
+      const data = await response.json();
+      res.status(response.status).json(data);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── 정적 파일 서빙 ─────────────────────────────────────────────
   const staticPath =
     process.env.NODE_ENV === "production"
