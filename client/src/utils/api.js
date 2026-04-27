@@ -54,6 +54,7 @@ export function normalizeBook(item) {
     _price: item.priceSales || 0,
     _rating: item.customerReviewRank || 0,
     _previewImages: item.subInfo?.previewImgList?.map((p) => p.url || p).filter(Boolean) || [],
+    _isbn13: item.isbn13 || null,
     volumeInfo: {
       title: item.title || "제목 없음",
       authors: parseAuthors(item.author),
