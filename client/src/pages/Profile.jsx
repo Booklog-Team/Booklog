@@ -1,5 +1,5 @@
 // Booklog Profile — 「따뜻한 라이브러리」
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LogOut, Edit3, BookOpen, Flame, TrendingUp, Award,
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/firebase/config';
 import { logout } from '@/firebase/auth';
@@ -227,6 +227,8 @@ export default function Profile() {
   const [editNickname, setEditNickname] = useState('');
   const [saving, setSaving]             = useState(false);
   const [loggingOut, setLoggingOut]     = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef(null);
   const [activeModal, setActiveModal]   = useState(null); // null | 'books' | 'done' | 'streak' | 'pages' | 'points'
   const [activeBar, setActiveBar]       = useState(null); // null | '완독' | '읽는 중' | '읽고 싶음'
   const [genreEditOpen, setGenreEditOpen] = useState(false);
@@ -385,6 +387,55 @@ export default function Profile() {
   const activeBarBooks  = activeMonthData?.books || [];
   const activeGenreBooks = activeGenre ? genreShelf.filter(b => (b.genre || []).includes(activeGenre)) : [];
 
+  // ── 이미지 압축 (Canvas → base64 JPEG) ────────────────────────────────
+  const compressImage = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const MAX = 320;
+          let { width, height } = img;
+          if (width > height) {
+            if (width > MAX) { height = Math.round((height * MAX) / width); width = MAX; }
+          } else {
+            if (height > MAX) { width = Math.round((width * MAX) / height); height = MAX; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  // ── 프로필 사진 변경 (Firestore에 base64 저장) ─────────────────────────
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('이미지 파일만 업로드할 수 있어요.'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error('파일 크기는 10MB 이하여야 해요.'); return; }
+
+    setPhotoUploading(true);
+    try {
+      const dataUrl = await compressImage(file);
+      await setDoc(doc(db, 'users', user.uid), { photoURL: dataUrl }, { merge: true });
+      await refreshProfile();
+      toast.success('프로필 사진이 변경되었습니다!');
+    } catch (err) {
+      console.error('[Profile] 사진 변경 실패:', err);
+      toast.error('사진 변경에 실패했어요. 다시 시도해주세요.');
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = '';
+    }
+  };
+
   // ── 프로필 저장 ────────────────────────────────────────────────────────
   const handleSave = async () => {
     const trimmed = editNickname.trim();
@@ -394,7 +445,7 @@ export default function Profile() {
     setSaving(true);
     try {
       await updateProfile(auth.currentUser, { displayName: trimmed });
-      await updateDoc(doc(db, 'users', user.uid), { nickname: trimmed });
+      await setDoc(doc(db, 'users', user.uid), { nickname: trimmed }, { merge: true });
       await refreshProfile();
       toast.success('프로필이 수정되었습니다!');
       setView('main');
@@ -411,7 +462,7 @@ export default function Profile() {
     if (tempGenres.length === 0) { toast.error('최소 1개 이상의 장르를 선택해주세요.'); return; }
     setSavingGenres(true);
     try {
-      await updateDoc(doc(db, 'users', user.uid), { genres: tempGenres });
+      await setDoc(doc(db, 'users', user.uid), { genres: tempGenres }, { merge: true });
       await refreshProfile();
       toast.success('선호 장르가 수정되었습니다!');
       setGenreEditOpen(false);
@@ -495,16 +546,25 @@ export default function Profile() {
           {/* ── 프로필 사진 ─────────────────────────────────── */}
           <div className="flex flex-col items-center py-2">
             <div className="relative">
-              <AvatarImg src={user?.photoURL} name={displayName} size={88} />
+              <AvatarImg src={profile?.photoURL || user?.photoURL} name={displayName} size={88} />
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
               <button
-                disabled
-                title="사진 변경 기능은 준비 중입니다"
-                className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-md opacity-50 cursor-not-allowed"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoUploading}
+                className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-md hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Camera size={14} />
+                {photoUploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-2">프로필 사진 변경은 준비 중이에요</p>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              {photoUploading ? '업로드 중...' : '카메라 아이콘을 눌러 사진을 변경해요 (최대 5MB)'}
+            </p>
           </div>
 
           {/* ── 기본 정보 ───────────────────────────────────── */}
@@ -859,7 +919,7 @@ export default function Profile() {
       <div className="relative z-10 px-4 -mt-16 mb-5 animate-fade-in-up">
         {/* 아바타 · 이름 · 수정 버튼 행 */}
         <div className="flex items-end gap-3 mb-3">
-          <AvatarImg src={user?.photoURL} name={displayName} size={76} className="bg-background" />
+          <AvatarImg src={profile?.photoURL || user?.photoURL} name={displayName} size={76} className="bg-background" />
           <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h1

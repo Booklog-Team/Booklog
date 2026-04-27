@@ -39,6 +39,37 @@ export const THEMES = [
     swatches: ["#0E1426", "#6185EC", "#3ABDE8"],
     dark: true,
   },
+  {
+    id: "mono",
+    label: "모노크롬",
+    desc: "깔끔한 흑백",
+    swatches: ["#F9F9F9", "#1A1A1A", "#888888"],
+  },
+  {
+    id: "spring",
+    label: "봄의 왈츠 🌸",
+    desc: "벚꽃 흩날리는 오후",
+    swatches: ["#FFF5F5", "#FF6B6B", "#82CD47"],
+  },
+  {
+    id: "summer",
+    label: "여름의 조각 🌊",
+    desc: "청량한 파도와 비눗방울",
+    swatches: ["#E0F2FE", "#0284C7", "#10B981"],
+  },
+  {
+    id: "autumn",
+    label: "가을의 전설 🍂",
+    desc: "단풍 물든 노을빛 산책",
+    swatches: ["#FEF3C7", "#991B1B", "#78350F"],
+  },
+  {
+    id: "winter",
+    label: "크리스마스 🎄",
+    desc: "설레는 선물과 반짝이는 밤",
+    swatches: ["#0F172A", "#E11D48", "#10B981"],
+    dark: true,
+  },
 ];
 
 const DARK_THEMES = new Set(THEMES.filter(t => t.dark).map(t => t.id));

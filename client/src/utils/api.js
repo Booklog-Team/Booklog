@@ -23,6 +23,7 @@ export const GENRE_MAP = {
   "예술 / 대중문화":    { id: 517,  label: "예술/대중문화",         queryType: "Bestseller" },
   만화:    { id: 2551,  label: "만화",         queryType: "Bestseller" },
   신간:      { id: null,  label: "전체 신간",      queryType: "ItemNewAll"  },
+  베스트셀러: { id: null,  label: "전체 베스트셀러", queryType: "Bestseller"  },
 };
 
 // ── 알라딘 데이터 → 내부 포맷 정규화 ──────────────────────────────────────

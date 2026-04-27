@@ -11,17 +11,17 @@ const RECOMMENDATION_MAP = {
     Clear: { emoji: "☀️", label: "맑음", genres: ["자기계발", "경제 / 경영", "여행"], vibes: "상쾌하고 활기찬" },
     Clouds: { emoji: "☁️", label: "흐림", genres: ["인문학", "역사", "에세이"], vibes: "차분하고 깊이 있는" },
     Rain: { emoji: "🌧️", label: "비", genres: ["소설", "에세이", "인문학"], vibes: "감성적이고 몽환적인" },
-    Snow: { emoji: "❄️", label: "눈", genres: ["소설", "어린이", "예술 / 대중문화"], vibes: "포근하고 따뜻한" },
-    Drizzle: { emoji: "🌦️", label: "이슬비", genres: ["에세이", "소설"], vibes: "잔잔한" },
-    Thunderstorm: { emoji: "⛈️", label: "천둥번개", genres: ["소설", "인문학"], vibes: "긴장감 넘치는" },
+    Snow: { emoji: "❄️", label: "눈", genres: ["소설", "에세이", "역사"], vibes: "포근하고 따뜻한" },
+    Drizzle: { emoji: "🌦️", label: "이슬비", genres: ["에세이", "소설", "인문학"], vibes: "잔잔한" },
+    Thunderstorm: { emoji: "⛈️", label: "천둥번개", genres: ["소설", "인문학", "역사"], vibes: "긴장감 넘치는" },
   },
   // 시간대: [새벽, 아침, 오후, 저녁, 밤]
   time: {
     dawn: { label: "새벽", genres: ["에세이", "인문학", "소설"], vibes: "고요한" },
     morning: { label: "아침", genres: ["경제 / 경영", "자기계발", "과학"], vibes: "희망찬" },
-    afternoon: { label: "오후", genres: ["소설", "여행", "만화"], vibes: "여유로운" },
+    afternoon: { label: "오후", genres: ["소설", "여행", "에세이"], vibes: "여유로운" },
     evening: { label: "저녁", genres: ["인문학", "역사", "에세이"], vibes: "사색적인" },
-    night: { label: "밤", genres: ["소설", "인문학", "예술 / 대중문화"], vibes: "신비로운" },
+    night: { label: "밤", genres: ["소설", "인문학", "에세이"], vibes: "신비로운" },
   }
 };
 

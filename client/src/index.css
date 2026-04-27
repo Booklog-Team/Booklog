@@ -471,6 +471,140 @@
     linear-gradient(160deg, oklch(0.08 0.022 252) 0%, oklch(0.18 0.030 255) 45%, oklch(0.38 0.18 248) 100%);
 }
 
+/* ─── Theme: 모노크롬 (Monochrome) ───────────────────────────── */
+[data-theme="mono"] {
+  --background: oklch(0.978 0 0);
+  --foreground: oklch(0.10 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.10 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.10 0 0);
+  --primary: oklch(0.18 0 0);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.92 0 0);
+  --secondary-foreground: oklch(0.22 0 0);
+  --muted: oklch(0.94 0 0);
+  --muted-foreground: oklch(0.50 0 0);
+  --accent: oklch(0.86 0 0);
+  --accent-foreground: oklch(0.18 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.86 0 0);
+  --input: oklch(0.86 0 0);
+  --ring: oklch(0.18 0 0);
+  --chart-1: oklch(0.18 0 0);
+  --chart-2: oklch(0.38 0 0);
+  --chart-3: oklch(0.55 0 0);
+  --chart-4: oklch(0.70 0 0);
+  --chart-5: oklch(0.84 0 0);
+  --sidebar: oklch(0.965 0 0);
+  --sidebar-foreground: oklch(0.10 0 0);
+  --sidebar-primary: oklch(0.18 0 0);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.92 0 0);
+  --sidebar-accent-foreground: oklch(0.22 0 0);
+  --sidebar-border: oklch(0.86 0 0);
+  --sidebar-ring: oklch(0.18 0 0);
+  --heatmap-0: oklch(0.92 0 0);
+  --heatmap-1: oklch(0.74 0 0);
+  --heatmap-2: oklch(0.56 0 0);
+  --heatmap-3: oklch(0.38 0 0);
+  --heatmap-4: oklch(0.20 0 0);
+  --heatmap-text: oklch(0.98 0 0);
+  --chart-genre-1: oklch(0.18 0 0);
+  --chart-genre-2: oklch(0.35 0 0);
+  --chart-genre-3: oklch(0.52 0 0);
+  --chart-genre-4: oklch(0.68 0 0);
+  --chart-genre-5: oklch(0.82 0 0);
+  --chart-bar-prev: oklch(0.62 0 0);
+  --chart-bar-empty: oklch(0.88 0 0);
+  --stat-color-1: oklch(0.18 0 0);
+  --stat-color-2: oklch(0.48 0 0);
+  --profile-banner-gradient:
+    linear-gradient(160deg, oklch(0.08 0 0) 0%, oklch(0.22 0 0) 45%, oklch(0.45 0 0) 100%);
+}
+
+/* ─── Theme: 봄 (Spring Waltz) 🌸 ──────────────────────────── */
+[data-theme="spring"] {
+  --background: oklch(0.985 0.02 0);
+  --foreground: oklch(0.20 0.08 10);
+  --primary: oklch(0.75 0.16 15);      /* More Vivid Cherry Blossom */
+  --primary-foreground: oklch(1 0.01 10);
+  --secondary: oklch(0.96 0.04 20);
+  --accent: oklch(0.85 0.15 145);     /* Fresh Lime Sprout */
+  --accent-foreground: oklch(0.30 0.12 140);
+  --border: oklch(0.94 0.03 15);
+  --sidebar: oklch(0.98 0.02 10);
+  --sidebar-primary: oklch(0.75 0.16 15);
+  --heatmap-4: oklch(0.65 0.20 15);
+  --profile-banner-gradient: linear-gradient(160deg, oklch(0.85 0.15 15), oklch(0.70 0.18 12));
+}
+
+/* ─── Theme: 여름 (Summer Splash) 🌊 ───────────────────────── */
+[data-theme="summer"] {
+  --background: oklch(0.96 0.04 220);
+  --foreground: oklch(0.12 0.08 230);
+  --primary: oklch(0.55 0.22 235);     /* Vivid Ultramarine */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.88 0.06 210);
+  --accent: oklch(0.75 0.18 185);     /* Electric Mint */
+  --accent-foreground: oklch(0.20 0.12 180);
+  --border: oklch(0.85 0.05 220);
+  --sidebar: oklch(0.94 0.05 220);
+  --sidebar-primary: oklch(0.55 0.22 235);
+  --heatmap-4: oklch(0.40 0.25 240);
+  --profile-banner-gradient: linear-gradient(160deg, oklch(0.50 0.22 235), oklch(0.30 0.25 245));
+}
+
+/* ─── Theme: 가을 (Autumn Sunset) 🍁 ───────────────────────── */
+[data-theme="autumn"] {
+  --background: oklch(0.95 0.03 80);
+  --foreground: oklch(0.18 0.08 40);
+  --primary: oklch(0.50 0.20 35);      /* Vivid Maple Red */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.85 0.10 75);    /* Intense Sunset Gold */
+  --accent: oklch(0.35 0.10 30);       /* Deep Earth Brown */
+  --accent-foreground: oklch(0.95 0.05 75);
+  --border: oklch(0.82 0.06 65);
+  --sidebar: oklch(0.92 0.05 80);
+  --sidebar-primary: oklch(0.50 0.20 35);
+  --heatmap-4: oklch(0.35 0.22 30);
+  --profile-banner-gradient: linear-gradient(160deg, oklch(0.45 0.22 35), oklch(0.25 0.15 25));
+}
+
+/* ─── Theme: 겨울 (Christmas Eve) 🎄 ───────────────────────── */
+[data-theme="winter"] {
+  --background: oklch(0.18 0.04 145);  /* Cozy Dark Night */
+  --foreground: oklch(0.98 0.01 145);
+  --card: oklch(0.22 0.04 145);
+  --card-foreground: oklch(0.98 0.01 145);
+  --popover: oklch(0.22 0.04 145);
+  --popover-foreground: oklch(0.98 0.01 145);
+  --primary: oklch(0.52 0.22 25);      /* Vivid Holiday Red */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.28 0.06 145);   /* Dark Forest Green */
+  --secondary-foreground: oklch(0.95 0.08 85); /* Candle Gold */
+  --muted: oklch(0.25 0.04 145);
+  --muted-foreground: oklch(0.70 0.02 145);
+  --accent: oklch(0.40 0.15 145);     /* Festive Green */
+  --accent-foreground: oklch(0.98 0.10 85); /* Bright Gold */
+  --border: oklch(0.32 0.05 145);
+  --input: oklch(0.32 0.05 145);
+  --ring: oklch(0.52 0.22 25);
+  --sidebar: oklch(0.14 0.04 145);
+  --sidebar-foreground: oklch(0.92 0.01 145);
+  --sidebar-primary: oklch(0.52 0.22 25);
+  --sidebar-accent: oklch(0.25 0.06 145);
+  --sidebar-border: oklch(0.22 0.05 145);
+  --heatmap-0: oklch(0.26 0.04 145);
+  --heatmap-1: oklch(0.45 0.12 145);
+  --heatmap-2: oklch(0.52 0.18 25);
+  --heatmap-3: oklch(0.60 0.22 25);
+  --heatmap-4: oklch(0.75 0.20 85);    /* Golden Highlight */
+  --heatmap-text: oklch(0.18 0.04 145);
+  --profile-banner-gradient: linear-gradient(160deg, oklch(0.35 0.18 25), oklch(0.20 0.12 145));
+}
+
 @layer components {
   .container {
     width: 100%;

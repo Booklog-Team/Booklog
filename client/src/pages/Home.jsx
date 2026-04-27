@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, BookOpen, ChevronRight, Moon, Sunrise, Coffee, MapPin, Thermometer } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BookCard from "@/components/BookCard";
-import { getBooksByGenre } from "@/utils/api";
+import { getBooksByGenre, searchBooks } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWeather } from "@/contexts/WeatherContext";
 import { collection, getDocs } from "firebase/firestore";
@@ -23,6 +23,116 @@ const ONBOARDING_TO_GENRE = {
 
 const KEYWORDS = ["소설", "자기계발", "인문학", "역사", "과학", "에세이"];
 
+// 데모 슬라이드 애니메이션 데이터 — Math.random 대신 인덱스 기반으로 고정해 리렌더 시 튀지 않음
+const RAIN_DROPS = Array.from({ length: 44 }, (_, i) => ({
+  id: i,
+  left: (i * 2.29) % 100,
+  height: 12 + (i * 9) % 24,
+  duration: 0.45 + (i * 0.025) % 0.45,
+  delay: (i * 0.22) % 1.9,
+}));
+const STARS = Array.from({ length: 22 }, (_, i) => ({
+  id: i,
+  top: 5 + (i * 13) % 65,
+  left: 3 + (i * 19) % 90,
+  size: 0.9 + (i % 4) * 0.8,
+  duration: 1.4 + (i * 0.38) % 2.8,
+  delay: (i * 0.55) % 3.5,
+}));
+const SHOOTING_STARS = Array.from({ length: 5 }, (_, i) => ({
+  id: i,
+  top: 10 + (i * 15) % 50,
+  width: 70 + (i * 30) % 120,
+  duration: 0.8 + (i * 0.2) % 1.2,
+  delay: i * 2, 
+  repeatDelay: 3 + (i * 1.5) % 5, 
+}));
+const SNOW_FLAKES = Array.from({ length: 28 }, (_, i) => ({
+  id: i,
+  left: (i * 3.58) % 100,
+  size: 4 + (i % 5) * 2.2,
+  duration: 5 + (i % 6) * 1.8,
+  delay: (i * 0.65) % 5.5,
+  drift: ((i % 7) - 3) * 15,
+  opacity: 0.5 + (i % 4) * 0.12,
+}));
+
+// 날씨·시간 무드별 알라딘 검색 키워드 — 장르 ID 대신 실제 감성 키워드로 검색
+const MOOD_KEYWORDS = {
+  // 날씨별
+  Rain:         ["비 오는 날 소설", "감성 소설", "빗소리 에세이"],
+  Drizzle:      ["서정 에세이", "잔잔한 소설", "감성 소설"],
+  Thunderstorm: ["스릴러 소설", "긴장감 심리", "서스펜스 소설"],
+  Snow:         ["겨울 소설", "따뜻한 이야기", "포근한 에세이"],
+  Clear:        ["여행 에세이", "긍정 에너지 자기계발", "활기찬 소설"],
+  Clouds:       ["사색 에세이", "철학 인문", "깊이 있는 소설"],
+  // 시간대별
+  dawn:         ["새벽 감성 소설", "고독 에세이", "불면 소설"],
+  morning:      ["아침 동기부여", "성공 습관 자기계발", "하루 루틴"],
+  afternoon:    ["여유로운 소설", "힐링 에세이", "여행기"],
+  evening:      ["저녁 인문 에세이", "사색 소설", "역사 이야기"],
+  night:        ["밤 소설", "미스터리 소설", "철학적 에세이"],
+};
+
+// 날씨+시간 조합에서 검색 키워드 픽 (weather 우선, 시간 보조)
+function pickMoodKeyword(weatherMain, timeState) {
+  const wList = MOOD_KEYWORDS[weatherMain] || [];
+  const tList = MOOD_KEYWORDS[timeState]   || [];
+  const merged = [...wList, ...tList];
+  if (!merged.length) return "감성 소설";
+  return merged[Math.floor(Math.random() * merged.length)];
+}
+
+// 데모 슬라이드 고정 무드 키워드
+const DEMO_MOOD = {
+  rain:    ["비 오는 날 소설", "감성 소설", "빗소리 에세이"],
+  dawn:    ["새벽 감성 소설", "고독 에세이", "깊은 밤 소설"],
+  morning: ["아침 동기부여", "성공 습관 자기계발", "하루 루틴"],
+  snow:    ["겨울 소설", "따뜻한 이야기", "포근한 에세이"],
+};
+
+const QUOTES = [
+  {
+    lines: ["책은 한 권의 도끼여야 한다.", "우리 안의 얼어붙은 바다를", "깨트리는 도끼여야 한다."],
+    author: "프란츠 카프카",
+    bg: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1200&q=80",
+    imgFilter: "brightness(0.42) saturate(0.65)",
+    tint: "bg-[#060614]/55",
+    blob: "from-indigo-500/25 via-purple-500/20 to-pink-500/15",
+    accent: "text-purple-400/60",
+    particles: "stars",
+  },
+  {
+    lines: ["독서는 완성된 사람을 만들고,", "대화는 재치 있는 사람을 만들며,", "글쓰기는 정확한 사람을 만든다."],
+    author: "프랜시스 베이컨",
+    bg: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=1200&q=80",
+    imgFilter: "brightness(0.35) saturate(0.6)",
+    tint: "bg-amber-950/45",
+    blob: "from-amber-500/25 via-orange-500/20 to-yellow-400/15",
+    accent: "text-amber-300/70",
+    particles: "rays",
+  },
+  {
+    lines: ["책을 읽는다는 것은", "자신의 삶을 사는 것 외에", "또 다른 삶을 사는 것이다."],
+    author: "오스카 와일드",
+    bg: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=1200&q=80",
+    imgFilter: "brightness(0.3) saturate(0.45) hue-rotate(200deg)",
+    tint: "bg-slate-950/50",
+    blob: "from-cyan-500/15 via-blue-500/20 to-teal-400/10",
+    accent: "text-cyan-300/65",
+    particles: "rain",
+  },
+  {
+    lines: ["어떤 책은 맛보고,", "어떤 책은 삼켜야 하고,", "소수만이 씹어서 소화해야 한다."],
+    author: "프랜시스 베이컨",
+    bg: "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1200&q=80",
+    imgFilter: "brightness(0.38) saturate(0.5)",
+    tint: "bg-violet-950/52",
+    blob: "from-violet-500/25 via-fuchsia-500/20 to-purple-400/15",
+    accent: "text-violet-300/65",
+    particles: "stars",
+  },
+];
 
 export default function Home() {
   const navigate = useNavigate();
@@ -37,9 +147,24 @@ export default function Home() {
   const [weatherRecBooks, setWeatherRecBooks] = useState([]);
   const [weatherRecLoading, setWeatherRecLoading] = useState(true);
   const [recommendGenre, setRecommendGenre] = useState("소설");
+  const [bestBooks, setBestBooks] = useState([]);
+  const [bestLoading, setBestLoading] = useState(true);
+  // 데모 슬라이드별 독립 도서 (무드에 맞는 장르 고정)
+  const [demoSlideBooks, setDemoSlideBooks] = useState({ rain: [], dawn: [], morning: [], snow: [] });
   // 캐러셀 상태
   const [activeSlide, setActiveSlide] = useState(0);
   const totalSlides = 7;
+  // 글귀 슬라이드 순환
+  const [quoteIndex, setQuoteIndex] = useState(0);
+  const quoteVisitRef = useRef(0);
+
+  // 슬라이드 6이 보일 때마다 다른 글귀로 순환
+  useEffect(() => {
+    if (activeSlide === 6) {
+      setQuoteIndex(quoteVisitRef.current);
+      quoteVisitRef.current = (quoteVisitRef.current + 1) % QUOTES.length;
+    }
+  }, [activeSlide]);
 
   // 캐러셀 자동 전환
   useEffect(() => {
@@ -73,31 +198,38 @@ export default function Home() {
     setRecLoading(true);
     setRecError(false);
 
-    getBooksByGenre(genre, 6)
-      .then(({ items }) => { if (!cancelled) setRecBooks(items); })
+    const recPage = Math.floor(Math.random() * 8) + 1;
+    getBooksByGenre(genre, 6, recPage)
+      .then(({ items }) => {
+        if (!cancelled) {
+          if (!items || items.length === 0) {
+            return getBooksByGenre(genre, 6, 1).then(({ items: fb }) => {
+              if (!cancelled) setRecBooks(fb);
+            });
+          }
+          setRecBooks(items);
+        }
+      })
       .catch(() => { if (!cancelled) setRecError(true); })
       .finally(() => { if (!cancelled) setRecLoading(false); });
 
     return () => { cancelled = true; };
   }, [profile]);
 
-  // ── 날씨/시간 기반 추천 도서 로드 ───────────────────────────
+  // ── 날씨/시간 기반 추천 도서 로드 (무드 키워드 검색) ──────────
   useEffect(() => {
-    if (!recommendation?.genres?.length) return;
+    if (!weather && !timeState) return;
 
     let cancelled = false;
-    // 날씨+시간 추천 장르 중 랜덤 선택, 랜덤 페이지로 매번 다른 책
-    const genres = recommendation.genres;
-    const genre = genres[Math.floor(Math.random() * genres.length)];
-    const randomPage = Math.floor(Math.random() * 6) + 1;
     setWeatherRecLoading(true);
 
-    getBooksByGenre(genre, 8, randomPage)
+    const keyword = pickMoodKeyword(weather?.main, timeState);
+    searchBooks(keyword, { start: 1, maxResults: 8 })
       .then(({ items }) => {
         if (!cancelled) {
           if (!items || items.length === 0) {
-            // 해당 페이지 결과 없으면 1페이지로 재시도
-            return getBooksByGenre(genre, 6, 1).then(({ items: fb }) => {
+            // 키워드 결과 없으면 "감성 소설" 폴백
+            return searchBooks("감성 소설", { start: 1, maxResults: 6 }).then(({ items: fb }) => {
               if (!cancelled) setWeatherRecBooks([...fb].sort(() => Math.random() - 0.5));
             });
           }
@@ -108,7 +240,40 @@ export default function Home() {
       .finally(() => { if (!cancelled) setWeatherRecLoading(false); });
 
     return () => { cancelled = true; };
-  }, [recommendation]);
+  }, [weather?.main, timeState]);
+
+  // ── 베스트셀러 도서 로드 ────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    getBooksByGenre("베스트셀러", 10, 1)
+      .then(({ items }) => { if (!cancelled) setBestBooks(items); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setBestLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── 데모 슬라이드별 무드 맞춤 도서 로드 ──────────────────────
+  // 각 슬라이드 분위기에 맞는 장르를 고정 — 만화/어린이 등 부적합 장르 배제
+  useEffect(() => {
+    let cancelled = false;
+    const rp = () => Math.floor(Math.random() * 6) + 1;
+    Promise.all([
+      getBooksByGenre("소설",      3, rp()),  // 비 오는 저녁 — 감성 소설
+      getBooksByGenre("에세이",    3, rp()),  // 고요한 새벽 — 사색 에세이
+      getBooksByGenre("자기계발",  3, rp()),  // 맑은 아침 — 자기계발
+      getBooksByGenre("인문학",    3, rp()),  // 눈 오는 날 — 따뜻한 인문
+    ]).then(([rain, dawn, morning, snow]) => {
+      if (!cancelled) {
+        setDemoSlideBooks({
+          rain:    rain.items.slice(0, 2),
+          dawn:    dawn.items.slice(0, 2),
+          morning: morning.items.slice(0, 2),
+          snow:    snow.items.slice(0, 2),
+        });
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const readingBooks  = shelf.filter((b) => b.status === "reading");
   const displayName  = profile?.nickname || user?.displayName || user?.email?.split("@")[0] || "독자";
@@ -136,8 +301,9 @@ export default function Home() {
   };
 
   const getBackgroundImg = () => {
+    if (weather?.main === 'Snow') return '/assets/weather/snowy_window.png';
     if (timeState === 'night' || timeState === 'evening') return '/assets/weather/night.png';
-    if (weather?.main === 'Rain') return '/assets/weather/rainy.png';
+    if (weather?.main === 'Rain' || weather?.main === 'Drizzle' || weather?.main === 'Thunderstorm') return '/assets/weather/rainy.png';
     return '/assets/weather/sunny.png';
   };
 
@@ -188,19 +354,96 @@ export default function Home() {
               animate={{ opacity: 1, filter: "blur(0px)" }}
               exit={{ opacity: 0, filter: "blur(4px)" }}
               transition={{ duration: 0.5 }}
-              className="absolute inset-0"
+              className="absolute inset-0 overflow-hidden"
             >
-              <img 
-                src={getBackgroundImg()} 
+              <img
+                src={getBackgroundImg()}
                 className="w-full h-full object-cover scale-110"
                 alt="날씨 배경"
               />
               <div className={`absolute inset-0 transition-all duration-1000 ${
-                timeState === 'night' || timeState === 'evening' 
-                  ? 'bg-indigo-950/50' 
+                timeState === 'night' || timeState === 'evening'
+                  ? 'bg-indigo-950/50'
                   : 'bg-black/30'
               }`} />
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+              {/* 비/이슬비/천둥 → 빗방울 */}
+              {(weather?.main === 'Rain' || weather?.main === 'Drizzle' || weather?.main === 'Thunderstorm') && RAIN_DROPS.map((drop) => (
+                <motion.div
+                  key={drop.id}
+                  className="absolute rounded-full pointer-events-none"
+                  style={{
+                    width: "1.5px", height: `${drop.height}px`, left: `${drop.left}%`, top: "-4%",
+                    background: "linear-gradient(to bottom, transparent, rgba(147,197,253,0.8), transparent)",
+                    transform: "rotate(14deg)",
+                  }}
+                  animate={{ y: ["0vh", "115vh"] }}
+                  transition={{ duration: drop.duration, repeat: Infinity, delay: drop.delay, ease: "linear" }}
+                />
+              ))}
+              {/* 천둥 → 번개 플래시 */}
+              {weather?.main === 'Thunderstorm' && (
+                <motion.div
+                  className="absolute inset-0 bg-white/5 pointer-events-none"
+                  animate={{ opacity: [0, 0, 0, 0.3, 0, 0.15, 0, 0] }}
+                  transition={{ duration: 9, repeat: Infinity, delay: 3, ease: "easeOut" }}
+                />
+              )}
+              {/* 눈 → 눈송이 */}
+              {weather?.main === 'Snow' && SNOW_FLAKES.map((flake) => (
+                <motion.div
+                  key={flake.id}
+                  className="absolute rounded-full bg-white pointer-events-none"
+                  style={{ width: `${flake.size}px`, height: `${flake.size}px`, left: `${flake.left}%`, top: "-5%", opacity: 0.75 }}
+                  animate={{ y: ["0vh", "110vh"], x: [0, flake.drift, 0], opacity: [0, 0.85, 0.7, 0] }}
+                  transition={{ duration: flake.duration, repeat: Infinity, delay: flake.delay, ease: "linear" }}
+                />
+              ))}
+              {/* 밤/새벽 → 별 + 별똥별 */}
+              {(timeState === 'night' || timeState === 'dawn') && STARS.map((star) => (
+                <motion.div
+                  key={star.id}
+                  className="absolute bg-white rounded-full pointer-events-none"
+                  style={{ top: `${star.top}%`, left: `${star.left}%`, width: `${star.size}px`, height: `${star.size}px` }}
+                  animate={{ opacity: [0.12, 1, 0.12], scale: [0.8, 1.3, 0.8] }}
+                  transition={{ duration: star.duration, repeat: Infinity, delay: star.delay, ease: "easeInOut" }}
+                />
+              ))}
+              {(timeState === 'night' || timeState === 'dawn') && SHOOTING_STARS.map((star) => (
+                <motion.div
+                  key={star.id}
+                  className="absolute pointer-events-none"
+                  style={{ top: `${star.top}%`, left: "0%", height: "1.5px", width: `${star.width}px` }}
+                  animate={{ x: ["-8vw", "115vw"], opacity: [0, 1, 0.9, 0] }}
+                  transition={{ duration: star.duration, repeat: Infinity, delay: star.delay, repeatDelay: star.repeatDelay, ease: "easeOut" }}
+                >
+                  <div className="w-full h-full" style={{ background: "linear-gradient(to right, transparent, white 35%, rgba(196,181,253,0.9), transparent)" }} />
+                </motion.div>
+              ))}
+              {/* 아침 → 햇살 */}
+              {timeState === 'morning' && (
+                <>
+                  <motion.div
+                    className="absolute -top-24 -right-24 rounded-full pointer-events-none"
+                    style={{ width: "320px", height: "320px", background: "radial-gradient(circle, rgba(253,224,71,0.45) 0%, rgba(251,146,60,0.2) 45%, transparent 70%)" }}
+                    animate={{ scale: [1, 1.12, 1], opacity: [0.55, 0.85, 0.55] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  />
+                  {Array.from({ length: 8 }, (_, i) => (
+                    <motion.div
+                      key={i}
+                      className="absolute pointer-events-none"
+                      style={{
+                        top: "0%", right: "0%", width: "2px", height: "200%",
+                        background: "linear-gradient(to bottom, rgba(253,224,71,0.4), transparent 55%)",
+                        transform: `rotate(${-55 + i * 22}deg)`, transformOrigin: "top right",
+                      }}
+                      animate={{ opacity: [0.12, 0.45, 0.12], scaleX: [1, 2, 1] }}
+                      transition={{ duration: 2.5 + i * 0.3, repeat: Infinity, delay: i * 0.25, ease: "easeInOut" }}
+                    />
+                  ))}
+                </>
+              )}
               
               <div className="absolute inset-0 flex flex-col justify-end p-10">
                 <div className="flex flex-wrap items-center gap-2 mb-6">
@@ -270,26 +513,71 @@ export default function Home() {
               transition={{ duration: 0.5 }}
               className="absolute inset-0 overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-950" />
+              <img src="/assets/weather/rainy.png" className="w-full h-full object-cover scale-110" alt="rainy" />
+              <div className="absolute inset-0 bg-slate-950/35" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+              {RAIN_DROPS.map((drop) => (
+                <motion.div
+                  key={drop.id}
+                  className="absolute rounded-full"
+                  style={{
+                    width: "1.5px",
+                    height: `${drop.height}px`,
+                    left: `${drop.left}%`,
+                    top: "-4%",
+                    background: "linear-gradient(to bottom, transparent, rgba(147,197,253,0.8), transparent)",
+                    transform: "rotate(14deg)",
+                  }}
+                  animate={{ y: ["0vh", "115vh"] }}
+                  transition={{ duration: drop.duration, repeat: Infinity, delay: drop.delay, ease: "linear" }}
+                />
+              ))}
               <motion.div
-                animate={{ opacity: [0.4, 0.7, 0.4], scale: [1, 1.15, 1] }}
-                transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-gradient-to-tl from-blue-600/20 via-transparent to-indigo-500/10 blur-2xl"
+                className="absolute inset-0 bg-white/5"
+                animate={{ opacity: [0, 0, 0, 0.2, 0, 0.1, 0, 0] }}
+                transition={{ duration: 9, repeat: Infinity, delay: 4, ease: "easeOut" }}
               />
-              <div className="absolute top-8 right-8 text-[6rem] leading-none opacity-15 select-none">🌧️</div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
               <div className="absolute inset-0 flex flex-col justify-end p-10">
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex items-center gap-2 mb-5">
-                  <span className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20">🌧️ 비</span>
-                  <span className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20">🌙 저녁</span>
-                  <span className="px-3 py-1.5 bg-blue-400/20 backdrop-blur-xl rounded-full text-[10px] font-bold text-blue-200 border border-blue-400/30">소설 · 에세이</span>
-                </motion.div>
-                <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="text-2xl md:text-3xl font-black text-white leading-tight tracking-tighter mb-2">
-                  감성적이고 몽환적인,<br />빗소리와 함께하는 독서
-                </motion.h2>
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-[12px] text-white/60 font-medium">
-                  비 오는 날엔 소설 한 편이 딱이에요.
-                </motion.p>
+                <div className="flex flex-wrap items-center gap-2 mb-6">
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <MapPin size={12} /> 서울
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <Thermometer size={12} className="text-blue-300" /> 12°C
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    🌧️ 저녁
+                  </div>
+                </div>
+                <div className="flex flex-col md:flex-row md:items-end gap-6">
+                  {demoSlideBooks.rain.length > 0 && (
+                    <div className="flex gap-3 items-center flex-shrink-0">
+                      {demoSlideBooks.rain.map((book, idx) => (
+                        <motion.div
+                          key={book.id}
+                          initial={{ opacity: 0, y: 30, rotate: -5 }}
+                          animate={{ opacity: 1, y: 0, rotate: 0 }}
+                          transition={{ delay: 0.2 + idx * 0.1, type: "spring", damping: 12 }}
+                          onClick={() => navigate(`/book/${book.id}`)}
+                          className="w-24 md:w-28 aspect-[2/3] relative cursor-pointer group/item"
+                        >
+                          <div className="absolute inset-0 bg-white/20 rounded-xl blur-lg group-hover/item:bg-primary/30 transition-all" />
+                          <img src={book._cover || book.volumeInfo?.imageLinks?.thumbnail} className="w-full h-full object-cover rounded-xl border border-white/40 shadow-2xl relative z-10 transition-all duration-500 group-hover/item:-translate-y-4 group-hover/item:scale-105" alt={book.volumeInfo?.title} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 mb-2">
+                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+                      <h2 className="text-2xl md:text-3xl font-black text-white leading-tight mb-2 tracking-tighter drop-shadow-2xl">
+                        감성적이고 몽환적인,<br />{displayName}님께 드리는 추천
+                      </h2>
+                      <p className="text-[12px] text-white/70 font-medium tracking-tight bg-white/5 inline-block px-2 py-1 rounded-md backdrop-blur-sm">
+                        비 오는 저녁엔 소설 한 편이 딱이에요.
+                      </p>
+                    </motion.div>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -304,34 +592,70 @@ export default function Home() {
               transition={{ duration: 0.5 }}
               className="absolute inset-0 overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-[#0d0d2b] via-indigo-950 to-[#080820]" />
-              <motion.div
-                animate={{ opacity: [0.3, 0.6, 0.3], x: [0, 20, 0], y: [0, -10, 0] }}
-                transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-gradient-to-br from-violet-800/20 via-purple-900/15 to-transparent blur-3xl"
-              />
-              {[...Array(12)].map((_, i) => (
+              <img src="/assets/weather/night.png" className="w-full h-full object-cover scale-110" alt="dawn" />
+              <div className="absolute inset-0 bg-indigo-950/45" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-transparent" />
+              {STARS.map((star) => (
                 <motion.div
-                  key={i}
-                  className="absolute w-px h-px bg-white rounded-full"
-                  style={{ top: `${10 + Math.random() * 70}%`, left: `${5 + Math.random() * 90}%`, width: `${1 + Math.random() * 2}px`, height: `${1 + Math.random() * 2}px` }}
-                  animate={{ opacity: [0.2, 1, 0.2] }}
-                  transition={{ duration: 2 + Math.random() * 3, repeat: Infinity, delay: Math.random() * 2 }}
+                  key={star.id}
+                  className="absolute bg-white rounded-full"
+                  style={{ top: `${star.top}%`, left: `${star.left}%`, width: `${star.size}px`, height: `${star.size}px` }}
+                  animate={{ opacity: [0.12, 1, 0.12], scale: [0.8, 1.3, 0.8] }}
+                  transition={{ duration: star.duration, repeat: Infinity, delay: star.delay, ease: "easeInOut" }}
                 />
               ))}
-              <div className="absolute top-6 right-8 text-[5rem] leading-none opacity-20 select-none">🌙</div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-              <div className="absolute inset-0 flex flex-col justify-end p-10">
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex items-center gap-2 mb-5">
-                  <span className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20">🌙 새벽</span>
-                  <span className="px-3 py-1.5 bg-violet-400/20 backdrop-blur-xl rounded-full text-[10px] font-bold text-violet-200 border border-violet-400/30">인문학 · 에세이</span>
+              {SHOOTING_STARS.map((star) => (
+                <motion.div
+                  key={star.id}
+                  className="absolute"
+                  style={{ top: `${star.top}%`, left: "0%", height: "1.5px", width: `${star.width}px` }}
+                  animate={{ x: ["-8vw", "115vw"], opacity: [0, 1, 0.9, 0] }}
+                  transition={{ duration: star.duration, repeat: Infinity, delay: star.delay, repeatDelay: star.repeatDelay, ease: "easeOut" }}
+                >
+                  <div className="w-full h-full" style={{ background: "linear-gradient(to right, transparent, white 35%, rgba(196,181,253,0.9), transparent)" }} />
                 </motion.div>
-                <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="text-2xl md:text-3xl font-black text-white leading-tight tracking-tighter mb-2">
-                  고요하고 사색적인,<br />새벽 2시의 독서
-                </motion.h2>
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-[12px] text-white/60 font-medium">
-                  세상이 잠든 새벽, 나만의 깊은 생각 속으로.
-                </motion.p>
+              ))}
+              <div className="absolute inset-0 flex flex-col justify-end p-10">
+                <div className="flex flex-wrap items-center gap-2 mb-6">
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <MapPin size={12} /> 서울
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <Thermometer size={12} className="text-blue-300" /> 5°C
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    🌙 새벽
+                  </div>
+                </div>
+                <div className="flex flex-col md:flex-row md:items-end gap-6">
+                  {demoSlideBooks.dawn.length > 0 && (
+                    <div className="flex gap-3 items-center flex-shrink-0">
+                      {demoSlideBooks.dawn.map((book, idx) => (
+                        <motion.div
+                          key={book.id}
+                          initial={{ opacity: 0, y: 30, rotate: -5 }}
+                          animate={{ opacity: 1, y: 0, rotate: 0 }}
+                          transition={{ delay: 0.2 + idx * 0.1, type: "spring", damping: 12 }}
+                          onClick={() => navigate(`/book/${book.id}`)}
+                          className="w-24 md:w-28 aspect-[2/3] relative cursor-pointer group/item"
+                        >
+                          <div className="absolute inset-0 bg-white/20 rounded-xl blur-lg group-hover/item:bg-primary/30 transition-all" />
+                          <img src={book._cover || book.volumeInfo?.imageLinks?.thumbnail} className="w-full h-full object-cover rounded-xl border border-white/40 shadow-2xl relative z-10 transition-all duration-500 group-hover/item:-translate-y-4 group-hover/item:scale-105" alt={book.volumeInfo?.title} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 mb-2">
+                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+                      <h2 className="text-2xl md:text-3xl font-black text-white leading-tight mb-2 tracking-tighter drop-shadow-2xl">
+                        고요하고 사색적인,<br />{displayName}님께 드리는 추천
+                      </h2>
+                      <p className="text-[12px] text-white/70 font-medium tracking-tight bg-white/5 inline-block px-2 py-1 rounded-md backdrop-blur-sm">
+                        새벽 같은 맑음에는 인문학이 어울려요.
+                      </p>
+                    </motion.div>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -346,26 +670,71 @@ export default function Home() {
               transition={{ duration: 0.5 }}
               className="absolute inset-0 overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600" />
+              <img src="https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1200&q=80" className="w-full h-full object-cover scale-105" alt="morning" />
+              <div className="absolute inset-0 bg-amber-900/25" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
               <motion.div
-                animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.2, 1] }}
-                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -top-20 -right-20 w-80 h-80 bg-yellow-300/30 rounded-full blur-3xl"
+                className="absolute -top-24 -right-24 rounded-full pointer-events-none"
+                style={{ width: "340px", height: "340px", background: "radial-gradient(circle, rgba(253,224,71,0.5) 0%, rgba(251,146,60,0.25) 45%, transparent 70%)" }}
+                animate={{ scale: [1, 1.12, 1], opacity: [0.6, 0.9, 0.6] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
               />
-              <div className="absolute top-4 right-6 text-[7rem] leading-none opacity-20 select-none">☀️</div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+              {Array.from({ length: 10 }, (_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute pointer-events-none"
+                  style={{
+                    top: "0%", right: "0%",
+                    width: "2px", height: "200%",
+                    background: "linear-gradient(to bottom, rgba(253,224,71,0.45), transparent 55%)",
+                    transform: `rotate(${-55 + i * 19}deg)`,
+                    transformOrigin: "top right",
+                  }}
+                  animate={{ opacity: [0.15, 0.5, 0.15], scaleX: [1, 2, 1] }}
+                  transition={{ duration: 2.5 + i * 0.28, repeat: Infinity, delay: i * 0.22, ease: "easeInOut" }}
+                />
+              ))}
               <div className="absolute inset-0 flex flex-col justify-end p-10">
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex items-center gap-2 mb-5">
-                  <span className="px-3 py-1.5 bg-white/20 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/30">☀️ 맑음</span>
-                  <span className="px-3 py-1.5 bg-white/20 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/30">🌅 아침</span>
-                  <span className="px-3 py-1.5 bg-amber-200/30 backdrop-blur-xl rounded-full text-[10px] font-bold text-amber-100 border border-amber-300/30">자기계발 · 경제</span>
-                </motion.div>
-                <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="text-2xl md:text-3xl font-black text-white leading-tight tracking-tighter mb-2">
-                  상쾌하고 활기찬,<br />오늘을 시작하는 아침 독서
-                </motion.h2>
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-[12px] text-white/70 font-medium">
-                  맑은 아침엔 성장을 위한 한 페이지로 시작해보세요.
-                </motion.p>
+                <div className="flex flex-wrap items-center gap-2 mb-6">
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <MapPin size={12} /> 서울
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <Thermometer size={12} className="text-orange-300" /> 18°C
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    🌅 아침
+                  </div>
+                </div>
+                <div className="flex flex-col md:flex-row md:items-end gap-6">
+                  {demoSlideBooks.morning.length > 0 && (
+                    <div className="flex gap-3 items-center flex-shrink-0">
+                      {demoSlideBooks.morning.map((book, idx) => (
+                        <motion.div
+                          key={book.id}
+                          initial={{ opacity: 0, y: 30, rotate: -5 }}
+                          animate={{ opacity: 1, y: 0, rotate: 0 }}
+                          transition={{ delay: 0.2 + idx * 0.1, type: "spring", damping: 12 }}
+                          onClick={() => navigate(`/book/${book.id}`)}
+                          className="w-24 md:w-28 aspect-[2/3] relative cursor-pointer group/item"
+                        >
+                          <div className="absolute inset-0 bg-white/20 rounded-xl blur-lg group-hover/item:bg-primary/30 transition-all" />
+                          <img src={book._cover || book.volumeInfo?.imageLinks?.thumbnail} className="w-full h-full object-cover rounded-xl border border-white/40 shadow-2xl relative z-10 transition-all duration-500 group-hover/item:-translate-y-4 group-hover/item:scale-105" alt={book.volumeInfo?.title} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 mb-2">
+                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+                      <h2 className="text-2xl md:text-3xl font-black text-white leading-tight mb-2 tracking-tighter drop-shadow-2xl">
+                        상쾌하고 활기찬,<br />{displayName}님께 드리는 추천
+                      </h2>
+                      <p className="text-[12px] text-white/70 font-medium tracking-tight bg-white/5 inline-block px-2 py-1 rounded-md backdrop-blur-sm">
+                        맑은 아침엔 자기계발 한 페이지로 시작해보세요.
+                      </p>
+                    </motion.div>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -380,40 +749,67 @@ export default function Home() {
               transition={{ duration: 0.5 }}
               className="absolute inset-0 overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-sky-100 to-blue-200" />
-              <motion.div
-                animate={{ opacity: [0.4, 0.8, 0.4] }}
-                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-gradient-to-t from-blue-300/30 via-transparent to-sky-100/50 blur-xl"
-              />
-              {[...Array(16)].map((_, i) => (
+              <img src="/assets/weather/snowy_window.png" className="w-full h-full object-cover scale-105" alt="snowy window" />
+              <div className="absolute inset-0 bg-black/20" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+              {SNOW_FLAKES.map((flake) => (
                 <motion.div
-                  key={i}
-                  className="absolute text-white/60 text-xs select-none"
-                  style={{ top: `-5%`, left: `${Math.random() * 100}%` }}
-                  animate={{ y: ["0%", "110%"], opacity: [0, 1, 0] }}
-                  transition={{ duration: 4 + Math.random() * 4, repeat: Infinity, delay: Math.random() * 4, ease: "linear" }}
-                >
-                  ❄
-                </motion.div>
+                  key={flake.id}
+                  className="absolute rounded-full bg-white shadow-sm"
+                  style={{ width: `${flake.size}px`, height: `${flake.size}px`, left: `${flake.left}%`, top: "-4%", opacity: flake.opacity }}
+                  animate={{ y: ["0vh", "118vh"], x: [0, flake.drift, 0, -flake.drift, 0] }}
+                  transition={{
+                    y: { duration: flake.duration, repeat: Infinity, delay: flake.delay, ease: "linear" },
+                    x: { duration: flake.duration * 0.75, repeat: Infinity, delay: flake.delay, ease: "easeInOut" },
+                  }}
+                />
               ))}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/5 to-transparent" />
               <div className="absolute inset-0 flex flex-col justify-end p-10">
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex items-center gap-2 mb-5">
-                  <span className="px-3 py-1.5 bg-white/30 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/40">❄️ 눈</span>
-                  <span className="px-3 py-1.5 bg-sky-200/30 backdrop-blur-xl rounded-full text-[10px] font-bold text-sky-100 border border-sky-300/30">소설 · 어린이</span>
-                </motion.div>
-                <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="text-2xl md:text-3xl font-black text-white leading-tight tracking-tighter mb-2">
-                  포근하고 따뜻한,<br />눈 쌓인 창가의 독서
-                </motion.h2>
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-[12px] text-white/70 font-medium">
-                  눈이 내리는 날엔 따뜻한 이야기가 어울려요.
-                </motion.p>
+                <div className="flex flex-wrap items-center gap-2 mb-6">
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <MapPin size={12} /> 서울
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    <Thermometer size={12} className="text-sky-300" /> -2°C
+                  </div>
+                  <div className="px-3 py-1.5 bg-white/10 backdrop-blur-xl rounded-full text-[10px] font-bold text-white border border-white/20 flex items-center gap-2 shadow-2xl">
+                    ❄️ 오후
+                  </div>
+                </div>
+                <div className="flex flex-col md:flex-row md:items-end gap-6">
+                  {demoSlideBooks.snow.length > 0 && (
+                    <div className="flex gap-3 items-center flex-shrink-0">
+                      {demoSlideBooks.snow.map((book, idx) => (
+                        <motion.div
+                          key={book.id}
+                          initial={{ opacity: 0, y: 30, rotate: -5 }}
+                          animate={{ opacity: 1, y: 0, rotate: 0 }}
+                          transition={{ delay: 0.2 + idx * 0.1, type: "spring", damping: 12 }}
+                          onClick={() => navigate(`/book/${book.id}`)}
+                          className="w-24 md:w-28 aspect-[2/3] relative cursor-pointer group/item"
+                        >
+                          <div className="absolute inset-0 bg-white/20 rounded-xl blur-lg group-hover/item:bg-primary/30 transition-all" />
+                          <img src={book._cover || book.volumeInfo?.imageLinks?.thumbnail} className="w-full h-full object-cover rounded-xl border border-white/40 shadow-2xl relative z-10 transition-all duration-500 group-hover/item:-translate-y-4 group-hover/item:scale-105" alt={book.volumeInfo?.title} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 mb-2">
+                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+                      <h2 className="text-2xl md:text-3xl font-black text-white leading-tight mb-2 tracking-tighter drop-shadow-2xl">
+                        포근하고 따뜻한,<br />{displayName}님께 드리는 추천
+                      </h2>
+                      <p className="text-[12px] text-white/70 font-medium tracking-tight bg-white/5 inline-block px-2 py-1 rounded-md backdrop-blur-sm">
+                        눈 오는 날엔 따뜻한 이야기가 어울려요.
+                      </p>
+                    </motion.div>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
 
-          {/* ── 슬라이드 6: 명언 ── */}
+          {/* ── 슬라이드 6: 명언 (순환) ── */}
           {activeSlide === 6 && (
             <motion.div
               key="quote-slide"
@@ -423,27 +819,101 @@ export default function Home() {
               transition={{ duration: 0.5 }}
               className="absolute inset-0 flex items-center justify-center overflow-hidden"
             >
-              <div className="absolute inset-0 bg-[#1a1a1a]" />
-              <motion.div
-                animate={{ opacity: [0.3, 0.5, 0.3], scale: [1, 1.1, 1] }}
-                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute inset-0 bg-gradient-to-tr from-indigo-500/20 via-purple-500/20 to-pink-500/20 blur-3xl"
+              {/* 배경 사진 */}
+              <img
+                src={QUOTES[quoteIndex].bg}
+                className="absolute inset-0 w-full h-full object-cover"
+                style={QUOTES[quoteIndex].imgFilter ? { filter: QUOTES[quoteIndex].imgFilter } : {}}
+                alt="quote bg"
               />
+              <div className={`absolute inset-0 ${QUOTES[quoteIndex].tint}`} />
+              {/* 분위기 블롭 */}
+              <motion.div
+                key={quoteIndex}
+                animate={{ opacity: [0.3, 0.55, 0.3], scale: [1, 1.12, 1] }}
+                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+                className={`absolute inset-0 bg-gradient-to-tr ${QUOTES[quoteIndex].blob} blur-3xl`}
+              />
+              {/* 별 파티클 — night 테마 */}
+              {QUOTES[quoteIndex].particles === "stars" && STARS.slice(0, 12).map((star) => (
+                <motion.div
+                  key={star.id}
+                  className="absolute bg-white rounded-full"
+                  style={{ top: `${star.top}%`, left: `${star.left}%`, width: `${star.size}px`, height: `${star.size}px` }}
+                  animate={{ opacity: [0.1, 0.85, 0.1] }}
+                  transition={{ duration: star.duration, repeat: Infinity, delay: star.delay }}
+                />
+              ))}
+              {/* 빗줄기 파티클 — rainy 테마 */}
+              {QUOTES[quoteIndex].particles === "rain" && RAIN_DROPS.slice(0, 22).map((drop) => (
+                <motion.div
+                  key={drop.id}
+                  className="absolute rounded-full"
+                  style={{
+                    width: "1px", height: `${drop.height * 0.55}px`,
+                    left: `${drop.left}%`, top: "-4%",
+                    background: "linear-gradient(to bottom, transparent, rgba(147,197,253,0.45), transparent)",
+                    transform: "rotate(14deg)", opacity: 0.5,
+                  }}
+                  animate={{ y: ["0vh", "115vh"] }}
+                  transition={{ duration: drop.duration * 1.3, repeat: Infinity, delay: drop.delay, ease: "linear" }}
+                />
+              ))}
+              {/* 광선 파티클 — sunny/amber 테마 */}
+              {QUOTES[quoteIndex].particles === "rays" && Array.from({ length: 7 }, (_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute"
+                  style={{
+                    top: "0%", right: "0%", width: "2px", height: "180%",
+                    background: "linear-gradient(to bottom, rgba(253,200,71,0.35), transparent 55%)",
+                    transform: `rotate(${-40 + i * 20}deg)`,
+                    transformOrigin: "top right",
+                  }}
+                  animate={{ opacity: [0.1, 0.45, 0.1], scaleX: [1, 1.8, 1] }}
+                  transition={{ duration: 3 + i * 0.5, repeat: Infinity, delay: i * 0.4, ease: "easeInOut" }}
+                />
+              ))}
+              {/* 글귀 콘텐츠 — quoteIndex 변경 시 fade-in */}
               <div className="relative z-10 text-center px-10 max-w-lg">
-                <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} className="text-primary/40 text-6xl font-serif mb-4 h-8 select-none">"</motion.div>
-                <motion.h3
-                  initial={{ opacity: 0, y: 15 }}
+                <motion.div
+                  key={quoteIndex}
+                  initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="text-xl md:text-2xl font-medium text-white/90 leading-[1.8] tracking-tight"
-                  style={{ fontFamily: 'Georgia, "Nanum Myeongjo", serif' }}
+                  transition={{ duration: 0.65 }}
                 >
-                  책은 한 권의 도끼여야 한다. <br />
-                  우리 안의 얼어붙은 바다를 <br className="md:hidden" />
-                  깨트리는 도끼여야 한다.
-                </motion.h3>
-                <motion.div initial={{ width: 0 }} animate={{ width: 40 }} transition={{ delay: 0.7, duration: 0.8 }} className="h-px bg-primary/30 mx-auto my-6" />
-                <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }} className="text-white/40 text-[10px] font-bold tracking-[0.4em] uppercase">Franz Kafka</motion.p>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.15 }}
+                    className={`${QUOTES[quoteIndex].accent} text-6xl font-serif mb-4 h-8 select-none`}
+                  >"</motion.div>
+                  <motion.h3
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-xl md:text-2xl font-medium text-white/90 leading-[1.8] tracking-tight"
+                    style={{ fontFamily: 'Georgia, "Nanum Myeongjo", serif' }}
+                  >
+                    {QUOTES[quoteIndex].lines.map((line, i) => (
+                      <span key={i}>{line}{i < QUOTES[quoteIndex].lines.length - 1 && <br />}</span>
+                    ))}
+                  </motion.h3>
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: 40 }}
+                    transition={{ delay: 0.65, duration: 0.8 }}
+                    className="h-px bg-white/25 mx-auto my-6"
+                  />
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.85 }}
+                    className="text-white/75 text-sm font-bold tracking-[0.3em] uppercase"
+                  >
+                    {QUOTES[quoteIndex].author}
+                  </motion.p>
+                </motion.div>
               </div>
             </motion.div>
           )}
@@ -613,6 +1083,42 @@ export default function Home() {
                   viewport={{ once: true }}
                   transition={{ delay: idx * 0.1, type: "spring", damping: 15 }}
                 >
+                  <BookCard book={book} />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 베스트 도서 */}
+        <section>
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-black tracking-tighter">베스트 도서</h2>
+              <p className="text-xs text-muted-foreground font-medium mt-1">지금 가장 많이 읽히는 책들</p>
+            </div>
+            <button onClick={() => navigate("/search?genre=베스트셀러")} className="p-2 bg-secondary/50 rounded-full hover:bg-secondary transition-colors">
+              <ChevronRight size={20} />
+            </button>
+          </div>
+          {bestLoading ? (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+              {[...Array(5)].map((_, i) => <div key={i} className="flex-shrink-0 w-24 aspect-[2/3] bg-muted animate-pulse rounded-2xl" />)}
+            </div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+              {bestBooks.slice(0, 10).map((book, idx) => (
+                <motion.div
+                  key={book.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.04, type: "spring", damping: 15 }}
+                  className="flex-shrink-0 w-24 relative pt-3 pl-1"
+                >
+                  <span className="absolute top-0 left-0 w-5 h-5 bg-primary text-primary-foreground rounded-full text-[9px] font-black flex items-center justify-center z-10 shadow-md">
+                    {idx + 1}
+                  </span>
                   <BookCard book={book} />
                 </motion.div>
               ))}
