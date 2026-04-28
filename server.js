@@ -4,6 +4,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 import path from "path";
 import { fileURLToPath } from "url";
 
+const axios = require("axios");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
@@ -18,16 +19,23 @@ app.use(
 );
 
 // 2. 알라딘 API 프록시 수정
-app.use(
-  "/api/aladin",
-  createProxyMiddleware({
-    target: "http://www.aladin.co.kr",
-    changeOrigin: true,
-    pathRewrite: {
-      "^/api/aladin": "", // '/api/aladin/ItemList.aspx' -> '/ItemList.aspx'로 변경됨
-    },
-  })
-);
+app.get("/api/aladin", async (req, res) => {
+  try {
+    // 1. 클라이언트가 보낸 쿼리 파라미터를 그대로 복사
+    const params = req.query;
+
+    // 2. 서버에서 직접 알라딘에 요청 (브라우저가 아님!)
+    const response = await axios.get("https://www.aladin.co.kr/ItemList.aspx", {
+      params: params,
+    });
+
+    // 3. 받은 데이터를 클라이언트에게 그대로 전달
+    res.json(response.data);
+  } catch (error) {
+    console.error("Aladin API 호출 중 오류:", error.message);
+    res.status(500).json({ error: "데이터를 가져오는데 실패했습니다." });
+  }
+});
 
 // 3. Groq API 프록시 (환경변수 적용)
 app.use(
