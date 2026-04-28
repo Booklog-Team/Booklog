@@ -19,7 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { usePoint } from '@/contexts/PointContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { motion } from 'framer-motion';
-import { MOCK_BOOKS } from '@/lib/mockData';
+
 
 
 function getHeatLevel(count) {
