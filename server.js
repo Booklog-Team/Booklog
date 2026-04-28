@@ -17,13 +17,15 @@ app.use(
   })
 );
 
-// 2. 알라딘 API 프록시
+// 2. 알라딘 API 프록시 수정
 app.use(
   "/api/aladin",
   createProxyMiddleware({
     target: "http://www.aladin.co.kr",
     changeOrigin: true,
-    pathRewrite: { "^/api/aladin": "/ttb/api" },
+    pathRewrite: {
+      "^/api/aladin": "", // '/api/aladin/ItemList.aspx' -> '/ItemList.aspx'로 변경됨
+    },
   })
 );
 
