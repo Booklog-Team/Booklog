@@ -104,7 +104,7 @@ export default function ShelfCard({
     const displayPage = book.status === "done" ? book.totalPage : book.currentPage || 0;
     return (
       <div
-        className="flex flex-col p-3 rounded-xl bg-card border border-border/50 hover:border-border transition-colors cursor-pointer"
+        className="book-card flex flex-col p-3 cursor-pointer"
         onClick={onClick}
       >
         <div className="flex gap-2.5 items-start">
@@ -151,8 +151,8 @@ export default function ShelfCard({
   // Grid variant (cover only with hover overlay)
   if (variant === "grid") {
     return (
-      <div className="relative group cursor-pointer" onClick={onClick}>
-        <div className="relative overflow-hidden rounded-lg shadow-sm hover:shadow-md transition-shadow bg-secondary/30">
+      <div className="relative group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:drop-shadow-md" onClick={onClick}>
+        <div className="relative overflow-hidden rounded-lg shadow-sm bg-secondary/30">
           <img
             src={book.thumbnail || "/placeholder.png"}
             alt={book.title}

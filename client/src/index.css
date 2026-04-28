@@ -131,6 +131,10 @@
 
   --profile-banner-gradient:
     linear-gradient(160deg, oklch(0.35 0.12 38) 0%, oklch(0.52 0.13 42) 45%, oklch(0.70 0.09 60) 100%);
+
+  /* 캘린더 선택 날짜 — 히트맵(orange)과 대비: sky blue */
+  --cal-select-bg: oklch(0.52 0.17 215);
+  --cal-select-ring: oklch(0.68 0.15 215);
 }
 
 @layer base {
@@ -225,6 +229,10 @@
   --stat-color-2: oklch(0.50 0.10 165);
   --profile-banner-gradient:
     linear-gradient(160deg, oklch(0.25 0.12 150) 0%, oklch(0.38 0.14 148) 45%, oklch(0.55 0.11 142) 100%);
+
+  /* 캘린더 선택 날짜 — 히트맵(green)과 대비: rose red */
+  --cal-select-bg: oklch(0.55 0.21 15);
+  --cal-select-ring: oklch(0.70 0.19 15);
 }
 
 /* ─── Theme: 모닝 카페 (Morning Cafe) ────────────────────────── */
@@ -286,6 +294,10 @@
   --stat-color-2: oklch(0.52 0.09 148);
   --profile-banner-gradient:
     linear-gradient(160deg, oklch(0.22 0.08 45) 0%, oklch(0.38 0.10 50) 40%, oklch(0.58 0.09 65) 100%);
+
+  /* 캘린더 선택 날짜 — 히트맵(coffee brown)과 대비: sky blue */
+  --cal-select-bg: oklch(0.52 0.17 215);
+  --cal-select-ring: oklch(0.68 0.15 215);
 }
 
 /* ─── Theme: 고요한 밤 (Quiet Night) ─────────────────────────── */
@@ -347,6 +359,10 @@
   --stat-color-2: oklch(0.72 0.10 165);
   --profile-banner-gradient:
     linear-gradient(160deg, oklch(0.10 0.014 52) 0%, oklch(0.20 0.020 50) 50%, oklch(0.38 0.10 45) 100%);
+
+  /* 캘린더 선택 날짜 — 히트맵(amber, dark bg)과 대비: teal (어두운 배경에서 밝게) */
+  --cal-select-bg: oklch(0.60 0.18 193);
+  --cal-select-ring: oklch(0.76 0.16 193);
 }
 
 /* ─── Theme: 오션 뷰 (Ocean View) ────────────────────────────── */
@@ -408,6 +424,10 @@
   --stat-color-2: oklch(0.52 0.12 190);
   --profile-banner-gradient:
     linear-gradient(160deg, oklch(0.22 0.16 224) 0%, oklch(0.38 0.18 222) 45%, oklch(0.55 0.14 218) 100%);
+
+  /* 캘린더 선택 날짜 — 히트맵(ocean blue)과 대비: orange */
+  --cal-select-bg: oklch(0.60 0.19 42);
+  --cal-select-ring: oklch(0.74 0.17 42);
 }
 
 /* ─── Theme: 미드나잇 (Midnight) ─────────────────────────────── */
@@ -469,6 +489,10 @@
   --stat-color-2: oklch(0.78 0.16 198);
   --profile-banner-gradient:
     linear-gradient(160deg, oklch(0.08 0.022 252) 0%, oklch(0.18 0.030 255) 45%, oklch(0.38 0.18 248) 100%);
+
+  /* 캘린더 선택 날짜 — 히트맵(indigo, dark bg)과 대비: gold amber (어두운 배경에서 밝게) */
+  --cal-select-bg: oklch(0.70 0.17 78);
+  --cal-select-ring: oklch(0.83 0.15 78);
 }
 
 /* ─── Theme: 모노크롬 (Monochrome) ───────────────────────────── */
@@ -522,6 +546,10 @@
   --stat-color-2: oklch(0.48 0 0);
   --profile-banner-gradient:
     linear-gradient(160deg, oklch(0.08 0 0) 0%, oklch(0.22 0 0) 45%, oklch(0.45 0 0) 100%);
+
+  /* 캘린더 선택 날짜 — 히트맵(grayscale)과 대비: vivid blue */
+  --cal-select-bg: oklch(0.50 0.20 255);
+  --cal-select-ring: oklch(0.68 0.18 255);
 }
 
 /* ─── Theme: 봄 (Spring Waltz) 🌸 ──────────────────────────── */
@@ -538,6 +566,10 @@
   --sidebar-primary: oklch(0.75 0.16 15);
   --heatmap-4: oklch(0.65 0.20 15);
   --profile-banner-gradient: linear-gradient(160deg, oklch(0.85 0.15 15), oklch(0.70 0.18 12));
+
+  /* 캘린더 선택 날짜 — 히트맵(cherry pink)과 대비: sky blue */
+  --cal-select-bg: oklch(0.50 0.18 215);
+  --cal-select-ring: oklch(0.66 0.16 215);
 }
 
 /* ─── Theme: 여름 (Summer Splash) 🌊 ───────────────────────── */
@@ -554,6 +586,10 @@
   --sidebar-primary: oklch(0.55 0.22 235);
   --heatmap-4: oklch(0.40 0.25 240);
   --profile-banner-gradient: linear-gradient(160deg, oklch(0.50 0.22 235), oklch(0.30 0.25 245));
+
+  /* 캘린더 선택 날짜 — 히트맵(ultramarine blue)과 대비: vivid orange */
+  --cal-select-bg: oklch(0.62 0.21 42);
+  --cal-select-ring: oklch(0.75 0.19 42);
 }
 
 /* ─── Theme: 가을 (Autumn Sunset) 🍁 ───────────────────────── */
@@ -570,6 +606,10 @@
   --sidebar-primary: oklch(0.50 0.20 35);
   --heatmap-4: oklch(0.35 0.22 30);
   --profile-banner-gradient: linear-gradient(160deg, oklch(0.45 0.22 35), oklch(0.25 0.15 25));
+
+  /* 캘린더 선택 날짜 — 히트맵(maple red/orange)과 대비: teal */
+  --cal-select-bg: oklch(0.52 0.18 210);
+  --cal-select-ring: oklch(0.68 0.16 210);
 }
 
 /* ─── Theme: 겨울 (Christmas Eve) 🎄 ───────────────────────── */
@@ -603,6 +643,10 @@
   --heatmap-4: oklch(0.75 0.20 85);    /* Golden Highlight */
   --heatmap-text: oklch(0.18 0.04 145);
   --profile-banner-gradient: linear-gradient(160deg, oklch(0.35 0.18 25), oklch(0.20 0.12 145));
+
+  /* 캘린더 선택 날짜 — 히트맵(red+green+gold, dark bg)과 대비: sky-teal */
+  --cal-select-bg: oklch(0.62 0.18 210);
+  --cal-select-ring: oklch(0.76 0.16 210);
 }
 
 @layer components {
