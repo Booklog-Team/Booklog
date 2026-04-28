@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { getReadingStatusStyle } from "@/utils/readingStatus";
 
 function formatDateShort(dateStr) {
   if (!dateStr) return null;
@@ -61,13 +62,7 @@ export default function ShelfCard({
         ? Math.round((book.currentPage / book.totalPage) * 100)
         : 0;
 
-  const statusColors = {
-    reading: { bg: "bg-blue-50", text: "text-blue-700", label: "읽는 중" },
-    want: { bg: "bg-amber-50", text: "text-amber-700", label: "읽고 싶음" },
-    done: { bg: "bg-green-50", text: "text-green-700", label: "완독" },
-  };
-
-  const statusStyle = statusColors[book.status] || statusColors.want;
+  const statusStyle = getReadingStatusStyle(book.status);
 
   const handleDelete = async () => {
     try {
