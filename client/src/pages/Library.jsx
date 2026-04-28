@@ -45,6 +45,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useShelf } from "@/contexts/ShelfContext";
 import { usePoint } from "@/contexts/PointContext";
 import ShelfCard from "@/components/ShelfCard";
+import { getReadingStatusStyle } from "@/utils/readingStatus";
 
 const READING_STATUS_OPTS = [
   {
@@ -82,34 +83,13 @@ const STATUS_TABS = [
   { value: "done", label: "완독" },
 ];
 
-const STATUS_STYLE = {
-  reading: {
-    label: "읽는 중",
-    badge: "bg-blue-50 text-blue-700",
-    text: "text-blue-700",
-    dot: "bg-blue-400",
-  },
-  want: {
-    label: "읽고 싶음",
-    badge: "bg-amber-50 text-amber-700",
-    text: "text-amber-700",
-    dot: "bg-amber-400",
-  },
-  done: {
-    label: "완독",
-    badge: "bg-green-50 text-green-700",
-    text: "text-green-700",
-    dot: "bg-green-400",
-  },
-};
-
 const LOG_SORT_OPTIONS = [
   { value: "latest", label: "최신순" },
   { value: "oldest", label: "등록순" },
 ];
 
 function getStatusStyle(status) {
-  return STATUS_STYLE[status] || STATUS_STYLE.want;
+  return getReadingStatusStyle(status);
 }
 
 function StatusBadge({ status, className = "" }) {
@@ -304,6 +284,11 @@ function getLatestLogId(logs) {
   const realLogs = logs.filter(log => !log.isSnapshot);
   const candidates = realLogs.length > 0 ? realLogs : logs;
   return sortLogs(candidates, "latest")[0]?.id || null;
+}
+
+function shouldShowStatusBadge(logs, index) {
+  if (index <= 0) return true;
+  return logs[index - 1]?.status !== logs[index]?.status;
 }
 
 function getLatestBookActivityMs(book, latestLogMsByBook) {
@@ -1023,6 +1008,10 @@ export default function Library() {
                             const pagesRead = Number(log.pagesRead || 0);
                             const statusStyle = getStatusStyle(log.status);
                             const isLatestLog = log.id === focusedLatestLogId;
+                            const showStatusBadge = shouldShowStatusBadge(
+                              sortedFocusedBookLogs,
+                              idx
+                            );
                             const eventText = getStatusEventText(log);
                             return (
                               <div
@@ -1047,7 +1036,9 @@ export default function Library() {
                                       <span className="text-xs font-bold text-foreground">
                                         {formatDateKo(log.date)}
                                       </span>
-                                      <StatusBadge status={log.status} />
+                                      {showStatusBadge && (
+                                        <StatusBadge status={log.status} />
+                                      )}
                                       {isLatestLog && (
                                         <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 text-[9px] font-semibold text-foreground/70">
                                           최신
@@ -1164,8 +1155,10 @@ export default function Library() {
                           const isExpanded =
                             expandedDateBookIds.has(dateGroupKey);
                           const log = primaryLog;
-                          const dateLogs =
-                            realLogs.length > 0 ? realLogs : [log];
+                          const dateLogs = sortLogs(
+                            realLogs.length > 0 ? realLogs : [log],
+                            dateDetailSort
+                          );
                           const latestDateLogId = getLatestLogId(dateLogs);
                           const eventText = getStatusEventText(
                             log,
@@ -1263,6 +1256,10 @@ export default function Library() {
                                     const rlStatusStyle = getStatusStyle(rl.status);
                                     const isLatestDateLog =
                                       rl.id === latestDateLogId;
+                                    const showStatusBadge = shouldShowStatusBadge(
+                                      dateLogs,
+                                      i
+                                    );
                                     const rlEventText = getStatusEventText(
                                       rl,
                                       selectedDate
@@ -1289,10 +1286,12 @@ export default function Library() {
                                             <span className="text-[10px] font-semibold text-muted-foreground">
                                               기록 {i + 1}
                                             </span>
-                                            <StatusBadge
-                                              status={rl.status}
-                                              className="text-[9px]"
-                                            />
+                                            {showStatusBadge && (
+                                              <StatusBadge
+                                                status={rl.status}
+                                                className="text-[9px]"
+                                              />
+                                            )}
                                             {isLatestDateLog && (
                                               <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 text-[9px] font-semibold text-foreground/70">
                                                 최신
@@ -2026,6 +2025,10 @@ export default function Library() {
                         const pagesRead = Number(log.pagesRead || 0);
                         const statusStyle = getStatusStyle(log.status);
                         const isLatestLog = log.id === logModalLatestLogId;
+                        const showStatusBadge = shouldShowStatusBadge(
+                          sortedLogModalLogs,
+                          idx
+                        );
                         const eventText = getStatusEventText(log);
                         return (
                           <div
@@ -2050,7 +2053,9 @@ export default function Library() {
                                   <span className="text-xs font-bold text-foreground">
                                     {formatDateKo(log.date)}
                                   </span>
-                                  <StatusBadge status={log.status} />
+                                  {showStatusBadge && (
+                                    <StatusBadge status={log.status} />
+                                  )}
                                   {isLatestLog && (
                                     <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 text-[9px] font-semibold text-foreground/70">
                                       최신

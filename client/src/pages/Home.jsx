@@ -10,6 +10,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useWeather } from "@/contexts/WeatherContext";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebase/config";
+import { getReadingStatusStyle } from "@/utils/readingStatus";
 
 // 온보딩 장르 ID → GENRE_MAP 키 매핑
 const ONBOARDING_TO_GENRE = {
@@ -24,6 +25,17 @@ const ONBOARDING_TO_GENRE = {
 };
 
 const KEYWORDS = ["소설", "자기계발", "인문학", "역사", "과학", "에세이"];
+
+function StatusBadge({ status, className = "" }) {
+  const style = getReadingStatusStyle(status);
+  return (
+    <span
+      className={`inline-flex w-fit items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${style.badge} ${className}`}
+    >
+      {style.label}
+    </span>
+  );
+}
 
 // 데모 슬라이드 애니메이션 데이터 — Math.random 대신 인덱스 기반으로 고정해 리렌더 시 튀지 않음
 const RAIN_DROPS = Array.from({ length: 44 }, (_, i) => ({
@@ -1282,7 +1294,7 @@ export default function Home() {
                         className="w-11 h-[4.2rem] object-cover rounded-lg shadow-sm flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-bold text-primary mb-0.5">읽는 중</p>
+                        <StatusBadge status={book.status} className="mb-0.5" />
                         <p className="text-xs font-semibold line-clamp-2 leading-snug">{book.title}</p>
                         <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{book.author}</p>
                         {pct !== null && (
