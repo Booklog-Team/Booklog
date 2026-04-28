@@ -8,7 +8,6 @@ import { useShelf } from "@/contexts/ShelfContext";
 import { usePoint } from "@/contexts/PointContext";
 import { getDocs, collection, query, orderBy, limit } from "firebase/firestore";
 import { db } from "@/firebase/config";
-import { MOCK_COMMUNITY_POSTS } from "@/lib/mockData";
 
 const WEATHER_KEY = import.meta.env.VITE_WEATHER_API_KEY;
 
@@ -111,17 +110,21 @@ const ChatBot = () => {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef(null);
   const [meetings, setMeetings] = useState([]);
+  const [posts, setPosts] = useState([]);
   const meetingsLoadedRef = useRef(false);
   const requestTimestampsRef = useRef([]);
   const [rateLimitUntil, setRateLimitUntil] = useState(null);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
 
-  // 채팅 열릴 때 모임 데이터 로드 (1회)
+  // 채팅 열릴 때 모임 + 게시판 데이터 로드 (1회)
   useEffect(() => {
     if (!isOpen || meetingsLoadedRef.current) return;
     meetingsLoadedRef.current = true;
     getDocs(query(collection(db, "meetings"), orderBy("createdAt", "desc"), limit(10)))
       .then(snap => setMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(() => {});
+    getDocs(query(collection(db, "board"), orderBy("createdAt", "desc"), limit(5)))
+      .then(snap => setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
       .catch(() => {});
   }, [isOpen]);
 
@@ -148,8 +151,9 @@ const ChatBot = () => {
     const meetingsSummary = meetings.length === 0
       ? "현재 모임 없음"
       : meetings.slice(0, 5).map(m => `"${m.title || "제목없음"}"(${m.currentMembers ?? m.members?.length ?? 0}명)`).join(", ");
-    const boardSummary = MOCK_COMMUNITY_POSTS.slice(0, 5)
-      .map(p => `"${p.title}"(${p.category}, 좋아요 ${p.likes?.length ?? 0})`).join(", ");
+    const boardSummary = posts.length === 0
+      ? "게시글 없음"
+      : posts.slice(0, 5).map(p => `"${p.title}"(${p.category}, 좋아요 ${p.likes?.length ?? 0})`).join(", ");
 
     return `
 [사용자 개인 데이터 — user_data 질문에 이 정보를 바탕으로 답변]

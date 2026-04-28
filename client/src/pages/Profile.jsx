@@ -21,6 +21,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { motion } from 'framer-motion';
 import { MOCK_BOOKS } from '@/lib/mockData';
 
+
 function getHeatLevel(count) {
   if (!count) return 0;
   if (count === 1) return 2;
@@ -315,8 +316,7 @@ export default function Profile() {
     setEditMotto(profile?.motto || '');
   }, [profile, user]);
 
-  // 서재 데이터 — 실제 데이터 없으면 mock 폴백
-  const effectiveShelf = shelfLoading ? [] : (shelf.length > 0 ? shelf : MOCK_BOOKS);
+  const effectiveShelf = shelfLoading ? [] : shelf;
 
   // 파생 통계
   const doneCount     = effectiveShelf.filter(b => b.status === 'done').length;
@@ -325,11 +325,8 @@ export default function Profile() {
   const totalBooks    = effectiveShelf.length;
   const totalPages    = effectiveShelf.reduce((s, b) => s + (b.currentPage || 0), 0);
 
-  // 실제 서재에 checkedDates / genre 가 없으면 MOCK_BOOKS 로 대체
-  const hasCheckedDates = !shelfLoading && shelf.some(b => b.checkedDates?.length > 0);
-  const hasGenreData    = !shelfLoading && shelf.some(b => b.genre?.length > 0);
-  const streakShelf     = hasCheckedDates ? effectiveShelf : MOCK_BOOKS;
-  const genreShelf      = hasGenreData    ? effectiveShelf : MOCK_BOOKS;
+  const streakShelf = effectiveShelf;
+  const genreShelf  = effectiveShelf;
 
   const streak        = calculateStreak(streakShelf);
   const longestStreak = calculateLongestStreak(streakShelf);
@@ -354,38 +351,15 @@ export default function Profile() {
   const thisMonth     = new Date().toISOString().slice(0, 7);
   const thisMonthDays = [...allReadDates].filter(d => d.startsWith(thisMonth)).length;
 
-  const recentMonthKeys = useMemo(() => {
-    const today = new Date();
-    return Array.from({ length: 6 }, (_, i) => {
-      const date = new Date(today.getFullYear(), today.getMonth() - (5 - i), 1);
-      return monthKeyFromDate(date);
-    });
-  }, []);
-
   const monthlyShelf = useMemo(() => {
     if (shelfLoading) return [];
-    if (shelf.length === 0) return MOCK_BOOKS;
+    return shelf;
+  }, [shelf, shelfLoading]);
 
-    const realMonthKeys = new Set();
-    shelf.forEach(book => {
-      getBookMonthKeys(book).forEach(key => realMonthKeys.add(key));
-    });
-
-    const supplementMonthKeys = new Set(
-      recentMonthKeys.filter(key => !realMonthKeys.has(key))
-    );
-    const supplementBooks = MOCK_BOOKS.filter(book =>
-      [...getBookMonthKeys(book)].some(key => supplementMonthKeys.has(key))
-    );
-
-    return [...shelf, ...supplementBooks];
-  }, [recentMonthKeys, shelf, shelfLoading]);
-
-  // 장르 분포 (genreShelf 기준 — 실제 데이터 없으면 MOCK_BOOKS)
   const genreData = useMemo(() => {
     const counts = {};
     genreShelf.forEach(b => {
-      (b.genre || []).forEach(g => { counts[g] = (counts[g] || 0) + 1; });
+      (Array.isArray(b.genre) ? b.genre : [b.genre]).filter(Boolean).forEach(g => { counts[g] = (counts[g] || 0) + 1; });
     });
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
@@ -448,7 +422,7 @@ export default function Profile() {
   // 바 차트 클릭 — 선택된 카테고리 책 목록
   const activeMonthData = activeBar ? monthlyReadingData.find(month => month.key === activeBar) : null;
   const activeBarBooks  = activeMonthData?.books || [];
-  const activeGenreBooks = activeGenre ? genreShelf.filter(b => (b.genre || []).includes(activeGenre)) : [];
+  const activeGenreBooks = activeGenre ? genreShelf.filter(b => (Array.isArray(b.genre) ? b.genre : [b.genre]).filter(Boolean).includes(activeGenre)) : [];
 
   // ── 이미지 압축 (Canvas → base64 JPEG) ────────────────────────────────
   const compressImage = (file) =>
@@ -743,7 +717,12 @@ export default function Profile() {
     // ── 총 도서 ──────────────────────────────────────────────────────────
     books: {
       title: `내 서재 전체 (${totalBooks}권)`,
-      content: (
+      content: totalBooks === 0 ? (
+        <div className="flex flex-col items-center py-14 gap-3 text-center">
+          <BookOpen size={36} className="text-muted-foreground/30" />
+          <p className="text-sm text-muted-foreground">아직 서재에 책이 없어요</p>
+        </div>
+      ) : (
         <div className="space-y-6">
           {[
             { status: 'reading', label: '읽는 중',   color: 'text-primary'          },
