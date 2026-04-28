@@ -18,7 +18,7 @@ const RECOMMENDATION_MAP = {
   // 시간대: [새벽, 아침, 오후, 저녁, 밤]
   time: {
     dawn: { label: "새벽", genres: ["에세이", "인문학", "소설"], vibes: "고요한" },
-    morning: { label: "아침", genres: ["경제 / 경영", "자기계발", "과학"], vibes: "희망찬" },
+    morning: { label: "오전", genres: ["경제 / 경영", "자기계발", "과학"], vibes: "희망찬" },
     afternoon: { label: "오후", genres: ["소설", "여행", "에세이"], vibes: "여유로운" },
     evening: { label: "저녁", genres: ["인문학", "역사", "에세이"], vibes: "사색적인" },
     night: { label: "밤", genres: ["소설", "인문학", "에세이"], vibes: "신비로운" },

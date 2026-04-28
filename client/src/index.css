@@ -605,6 +605,63 @@
   --profile-banner-gradient: linear-gradient(160deg, oklch(0.35 0.18 25), oklch(0.20 0.12 145));
 }
 
+/* ─── Theme: 유리 (Glass) 💎 ────────────────────────────────── */
+[data-theme="glass"] {
+  --background: #CACACA;                 /* Apple Light Gray Base */
+  --foreground: #1D1D1F;
+  --card: rgba(255, 255, 255, 0.45);     /* Frosted Glass */
+  --card-foreground: #1D1D1F;
+  --popover: rgba(255, 255, 255, 0.85);
+  --popover-foreground: #1D1D1F;
+  --primary: #007AFF;                    /* Apple Blue */
+  --primary-foreground: #FFFFFF;
+  --secondary: rgba(255, 255, 255, 0.3);
+  --secondary-foreground: #1D1D1F;
+  --muted: rgba(0, 0, 0, 0.05);
+  --muted-foreground: #86868B;
+  --accent: rgba(255, 255, 255, 0.2);
+  --accent-foreground: #007AFF;
+  --border: rgba(255, 255, 255, 0.5);    /* Glass edge */
+  --input: rgba(255, 255, 255, 0.2);
+  --ring: #007AFF;
+  --sidebar: rgba(255, 255, 255, 0.3);
+  --sidebar-foreground: #1D1D1F;
+  --sidebar-primary: #007AFF;
+  --sidebar-accent: rgba(255, 255, 255, 0.4);
+  --sidebar-border: rgba(255, 255, 255, 0.4);
+  
+  /* Heatmap — Glass: Gray Scale */
+  --heatmap-0: rgba(255, 255, 255, 0.2);
+  --heatmap-1: rgba(0, 122, 255, 0.2);
+  --heatmap-2: rgba(0, 122, 255, 0.4);
+  --heatmap-3: rgba(0, 122, 255, 0.7);
+  --heatmap-4: rgba(0, 122, 255, 1);
+  --heatmap-text: #FFFFFF;
+
+  --profile-banner-gradient: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%);
+}
+
+/* Glass Specific Global Overrides */
+[data-theme="glass"] .book-card {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="glass"] .book-card:hover {
+  background: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.7);
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="glass"] .page-layout-bg {
+  background-color: #CACACA;
+  background-image: none; /* Handled by SeasonEffects blobs */
+}
+
 @layer components {
   .container {
     width: 100%;
