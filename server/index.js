@@ -10,66 +10,23 @@ const __dirname = path.dirname(__filename);
 const ALADIN_API_KEY = process.env.ALADIN_API_KEY;
 const ALADIN_BASE = "http://www.aladin.co.kr/ttb/api";
 
-async function aladinFetch(endpoint, params) {
-  const url = new URL(`${ALADIN_BASE}/${endpoint}`);
-  url.searchParams.set("ttbkey", ALADIN_API_KEY);
-  url.searchParams.set("output", "js");
-  url.searchParams.set("Version", "20131101");
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`Aladin API error: ${res.status}`);
-  return res.json();
-}
-
 async function startServer() {
   const app = express();
   app.use(cors());
   app.use(express.json());
 
-  // ── 알라딘 API 프록시 ─────────────────────────────────────────
-  // 도서 검색
-  app.get("/api/aladin/search", async (req, res) => {
+  // ── 알라딘 API 프록시 (catch-all) ─────────────────────────────────────────
+  app.get("/api/aladin/:endpoint", async (req, res) => {
     try {
-      const { query, start = 1, maxResults = 20 } = req.query;
-      if (!query) return res.status(400).json({ error: "query required" });
-      const data = await aladinFetch("ItemSearch.aspx", {
-        Query: query,
-        QueryType: "Keyword",
-        MaxResults: maxResults,
-        start,
-        SearchTarget: "Book",
-      });
-      res.json(data);
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // 카테고리/베스트셀러 목록
-  app.get("/api/aladin/list", async (req, res) => {
-    try {
-      const { categoryId, queryType = "Bestseller", maxResults = 10 } = req.query;
-      const params = { QueryType: queryType, MaxResults: maxResults, SearchTarget: "Book" };
-      if (categoryId) params.CategoryId = categoryId;
-      const data = await aladinFetch("ItemList.aspx", params);
-      res.json(data);
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // 도서 상세
-  app.get("/api/aladin/detail", async (req, res) => {
-    try {
-      const { itemId } = req.query;
-      if (!itemId) return res.status(400).json({ error: "itemId required" });
-      const data = await aladinFetch("ItemLookUp.aspx", {
-        itemIdType: "ItemId",
-        ItemId: itemId,
-        OptResult: "subInfo,previewImgList",
-      });
+      const { endpoint } = req.params;
+      const url = new URL(`${ALADIN_BASE}/${endpoint}`);
+      url.searchParams.set("ttbkey", ALADIN_API_KEY);
+      for (const [k, v] of Object.entries(req.query)) {
+        url.searchParams.set(k, v);
+      }
+      const upstream = await fetch(url.toString());
+      if (!upstream.ok) throw new Error(`Aladin upstream error: ${upstream.status}`);
+      const data = await upstream.json();
       res.json(data);
     } catch (e) {
       res.status(500).json({ error: e.message });
