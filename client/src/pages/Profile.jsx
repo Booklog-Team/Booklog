@@ -294,7 +294,7 @@ export default function Profile() {
   const genreData = useMemo(() => {
     const counts = {};
     genreShelf.forEach(b => {
-      (b.genre || []).forEach(g => { counts[g] = (counts[g] || 0) + 1; });
+      (Array.isArray(b.genre) ? b.genre : [b.genre]).filter(Boolean).forEach(g => { counts[g] = (counts[g] || 0) + 1; });
     });
     return Object.entries(counts)
       .map(([name, value]) => ({ name, value }))
@@ -357,7 +357,7 @@ export default function Profile() {
   // 바 차트 클릭 — 선택된 카테고리 책 목록
   const activeMonthData = activeBar ? monthlyReadingData.find(month => month.key === activeBar) : null;
   const activeBarBooks  = activeMonthData?.books || [];
-  const activeGenreBooks = activeGenre ? genreShelf.filter(b => (b.genre || []).includes(activeGenre)) : [];
+  const activeGenreBooks = activeGenre ? genreShelf.filter(b => (Array.isArray(b.genre) ? b.genre : [b.genre]).filter(Boolean).includes(activeGenre)) : [];
 
   // ── 이미지 압축 (Canvas → base64 JPEG) ────────────────────────────────
   const compressImage = (file) =>
