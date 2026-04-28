@@ -123,7 +123,7 @@ export default function Points() {
   return (
     <>
       {/* 헤더 */}
-      <div className="flex items-center justify-between px-4 pt-8 pb-4 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between px-4 pt-8 pb-4">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -135,14 +135,14 @@ export default function Points() {
         </div>
       </div>
 
-      <div className="px-4 pb-10 stagger-children max-w-2xl mx-auto">
+      <div className="px-4 pb-10 stagger-children">
         <div className="grid grid-cols-2 gap-3.5 mb-6">
           {/* ── 내 포인트 카드 ───────────────────────────── */}
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-white shadow-xl shadow-amber-500/10 flex flex-col justify-between min-h-[160px]">
             <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10 pointer-events-none" />
             
             <div>
-              <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-2">My Points</p>
+              <p className="text-[11px] font-black text-white/70 uppercase tracking-widest mb-2">My Points</p>
               <div className="flex items-baseline gap-1">
                 <span className="text-3xl font-black tracking-tighter">{displayPoints.toLocaleString()}</span>
                 <span className="text-sm font-bold opacity-80">P</span>
@@ -150,7 +150,7 @@ export default function Points() {
             </div>
 
             <div className="mt-4 pt-3 border-t border-white/10">
-              <p className="text-[10px] text-white/80 leading-tight line-clamp-2">
+              <p className="text-[11px] text-white/80 leading-tight line-clamp-2">
                 {selectedCharity
                   ? <><span className="font-bold text-white">{selectedCharity.name}</span> 응원 중 ❤️</>
                   : '기부처를 선택해주세요'}
@@ -166,7 +166,7 @@ export default function Points() {
             </div>
 
             <div>
-              <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-2">Reading Level</p>
+              <p className="text-[11px] font-black text-white/50 uppercase tracking-widest mb-2">Reading Level</p>
               <div className="flex items-center gap-2">
                 <span className="text-2xl leading-none">{levelInfo.current.emoji}</span>
                 <p className="text-base font-bold leading-tight">{levelInfo.current.label}</p>
@@ -176,9 +176,12 @@ export default function Points() {
             <div className="mt-4">
               {levelInfo.next ? (
                 <div className="space-y-2">
-                  <div className="flex justify-between text-[9px] text-white/50 font-bold uppercase tracking-tighter">
-                    <span>Lv.{levelInfo.current.level}</span>
-                    <span>{levelInfo.ptsToNext}P to Lv.{levelInfo.next.level}</span>
+                  <div className="flex justify-between text-[10px] text-white/60 font-bold tracking-tight">
+                    <span>Lv.{levelInfo.current.level} {levelInfo.current.label}</span>
+                    <span>{levelInfo.ptsToNext}P 남음</span>
+                  </div>
+                  <div className="text-[10px] text-white/40 mb-1">
+                    다음 목표: {levelInfo.next.emoji} {levelInfo.next.label}
                   </div>
                   <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div
@@ -221,10 +224,10 @@ export default function Points() {
                       <Icon size={16} className={earned ? fg : 'text-muted-foreground'} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate">{label}</p>
+                      <p className="text-sm font-bold truncate">{label}</p>
                     </div>
                     <div className="text-right flex items-center gap-1.5">
-                      <p className={`text-xs font-black ${earned ? 'text-amber-600' : 'text-muted-foreground'}`}>+{pts}P</p>
+                      <p className={`text-sm font-black ${earned ? 'text-amber-600' : 'text-muted-foreground'}`}>+{pts}P</p>
                       {earned && <CheckCircle2 size={12} className="text-green-500" />}
                     </div>
                   </div>
@@ -237,7 +240,7 @@ export default function Points() {
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
               <h2 className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Select Charity</h2>
-              <Heart size={12} className="text-primary" />
+              
             </div>
             <div className="space-y-2">
               {CHARITIES.map(({ id, name, desc, icon, bg, fg }) => {
@@ -256,8 +259,8 @@ export default function Points() {
                       {isLoading ? <Loader2 size={14} className="animate-spin" /> : icon}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate">{name}</p>
-                      <p className="text-[10px] text-muted-foreground line-clamp-1">{desc}</p>
+                      <p className="text-sm font-bold truncate">{name}</p>
+                      <p className="text-[11px] text-muted-foreground line-clamp-1">{desc}</p>
                     </div>
                     {selected && <CheckCircle2 size={12} className="text-primary flex-shrink-0" />}
                   </button>
@@ -286,7 +289,7 @@ export default function Points() {
                     <p className="text-2xl font-black text-primary">
                       {totalDonated.toLocaleString()}<span className="text-sm ml-0.5 font-bold">P</span>
                     </p>
-                    <div className="flex items-center gap-1 text-amber-600 font-bold text-xs">
+                    <div className="flex items-center gap-1 text-amber-600 font-bold text-sm">
                       <Trophy size={12} /> {booksEquiv}권
                     </div>
                   </div>
@@ -306,16 +309,16 @@ export default function Points() {
           </div>
 
           {/* 기부 안내 */}
-          <div className="book-card p-5 bg-primary/5 border-primary/10">
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">🎁</span>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-tight mb-2">Notice</h3>
-                <p className="text-[10px] text-muted-foreground leading-relaxed mb-3">
-                  전체 독서인이 모은 포인트는 합산되어 소외 지역 어린이들에게 책으로 선물됩니다.
+          <div className="book-card p-6 bg-primary/5 border-primary/20 shadow-sm">
+            <div className="flex items-start gap-4">
+              <span className="text-4xl">🎁</span>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-2 text-primary">Notice</h3>
+                <p className="text-[13px] font-medium text-muted-foreground leading-relaxed mb-4">
+                  전체 독서인이 모은 포인트는 합산되어<br />소외 지역 어린이들에게 책으로 선물됩니다.
                 </p>
-                <div className="inline-flex items-center gap-2 py-1.5 px-3 bg-background rounded-lg border border-border/40">
-                  <span className="text-[10px] font-black text-primary uppercase">1,000P = 📚 1 Book</span>
+                <div className="inline-flex items-center gap-2 py-2 px-4 bg-background rounded-xl border border-border/40 shadow-sm">
+                  <span className="text-xs font-black text-primary uppercase">1,000P = 📚 1 Book</span>
                 </div>
               </div>
             </div>
