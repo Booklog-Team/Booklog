@@ -1,6 +1,7 @@
 import "dotenv/config"; // 이 한 줄이면 끝입니다!
 import express from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
+import axios from "axios";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -18,20 +19,25 @@ app.use(
 );
 
 // 2. 알라딘 API 프록시
-app.use(
-  "/api/aladin",
-  createProxyMiddleware({
-    target: "http://www.aladin.co.kr",
-    changeOrigin: true,
-    followRedirects: true,
-    pathRewrite: { "^/api/aladin": "/ttb/api" },
-    on: {
-      proxyRes: (proxyRes) => {
-        proxyRes.headers["access-control-allow-origin"] = "*";
-      },
-    },
-  })
-);
+app.use("/api/aladin", async (req, res) => {
+  try {
+    const targetPath = req.path;
+    const queryString = new URLSearchParams(req.query).toString();
+    const url = `https://www.aladin.co.kr/ttb/api${targetPath}?${queryString}`;
+
+    const response = await axios.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      responseType: "text",
+    });
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Content-Type", "application/json");
+    res.send(response.data);
+  } catch (error) {
+    console.error("Aladin proxy error:", error.message);
+    res.status(500).json({ error: "알라딘 API 오류" });
+  }
+});
 
 // 3. Groq API 프록시 (환경변수 적용)
 app.use(
