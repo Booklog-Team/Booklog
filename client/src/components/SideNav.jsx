@@ -47,13 +47,18 @@ export default function SideNav() {
       style={{ paddingTop: '28px', paddingBottom: '28px' }}
     >
       <div className="px-6 pb-7 border-b border-border/60 mb-5">
-        <Link to="/" className="block">
-          <span className="block font-bold text-lg text-primary leading-tight" style={{ fontFamily: "'DM Mono', monospace" }}>
-            Booklog
-          </span>
-          <span className="text-[11px] text-muted-foreground tracking-wide mt-0.5 block">
-            나만의 따뜻한 서재
-          </span>
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 transition-transform group-hover:scale-110">
+            <BookOpen size={18} strokeWidth={2.5} />
+          </div>
+          <div>
+            <span className="block font-black text-lg tracking-tighter uppercase leading-none">
+              Booklog
+            </span>
+            <span className="text-[10px] text-muted-foreground font-bold tracking-tight mt-1 block">
+              나만의 따뜻한 서재
+            </span>
+          </div>
         </Link>
       </div>
 

@@ -213,7 +213,6 @@ export default function ShelfCard({
             </p>
             <h3
               className="font-bold text-base leading-snug mb-0.5 line-clamp-2"
-              style={{ fontFamily: "'Noto Serif KR', serif" }}
             >
               {book.title}
             </h3>

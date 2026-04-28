@@ -260,6 +260,22 @@ function getSliderThumbAlignedStyle(value, max) {
   return { left: `calc(${percent}% + ${thumbOffset}px)` };
 }
 
+function getStatusEventText(log, dateOverride) {
+  const dateLabel = formatDateShort(dateOverride || log?.date);
+  if (!dateLabel || !log?.eventType) return null;
+
+  if (log.eventType === "want_added") return `${dateLabel}에 읽고싶음에 등록`;
+  if (log.eventType === "reading_started") return `${dateLabel}에 읽기 시작`;
+  if (log.eventType === "completed") return `${dateLabel}에 완독`;
+  return null;
+}
+
+function getStatusEventClassName(log) {
+  if (log?.status === "done") return "text-emerald-600";
+  if (log?.status === "reading") return "text-primary";
+  return "text-muted-foreground";
+}
+
 function timestampMs(value) {
   if (!value) return 0;
   if (typeof value.toMillis === "function") return value.toMillis();
@@ -1007,6 +1023,7 @@ export default function Library() {
                             const pagesRead = Number(log.pagesRead || 0);
                             const statusStyle = getStatusStyle(log.status);
                             const isLatestLog = log.id === focusedLatestLogId;
+                            const eventText = getStatusEventText(log);
                             return (
                               <div
                                 key={log.id}
@@ -1076,6 +1093,13 @@ export default function Library() {
                                       </button>
                                     </div>
                                   )}
+                                  {eventText && (
+                                    <p
+                                      className={`mb-1.5 text-[11px] font-semibold ${getStatusEventClassName(log)}`}
+                                    >
+                                      {eventText}
+                                    </p>
+                                  )}
                                   {(log.fromPage > 0 || log.toPage > 0) && (
                                     <div className="mb-1.5 flex items-baseline gap-1.5">
                                       <span className="text-sm font-bold text-foreground">
@@ -1143,6 +1167,10 @@ export default function Library() {
                           const dateLogs =
                             realLogs.length > 0 ? realLogs : [log];
                           const latestDateLogId = getLatestLogId(dateLogs);
+                          const eventText = getStatusEventText(
+                            log,
+                            selectedDate
+                          );
                           return (
                             <div
                               key={bookId}
@@ -1179,7 +1207,13 @@ export default function Library() {
                                     <p className="line-clamp-1 text-[11px] text-muted-foreground">
                                       {log.author}
                                     </p>
-                                    {log.status === "done" ? (
+                                    {eventText ? (
+                                      <p
+                                        className={`mt-1 text-[11px] font-semibold ${getStatusEventClassName(log)}`}
+                                      >
+                                        {eventText}
+                                      </p>
+                                    ) : log.status === "done" ? (
                                       <p className="mt-1 text-[11px] font-semibold text-emerald-600">
                                         완독했어요! 🎉
                                       </p>
@@ -1229,6 +1263,10 @@ export default function Library() {
                                     const rlStatusStyle = getStatusStyle(rl.status);
                                     const isLatestDateLog =
                                       rl.id === latestDateLogId;
+                                    const rlEventText = getStatusEventText(
+                                      rl,
+                                      selectedDate
+                                    );
                                     return (
                                       <div
                                         key={rl.id}
@@ -1261,7 +1299,13 @@ export default function Library() {
                                               </span>
                                             )}
                                           </div>
-                                          {rl.status === "done" && (
+                                          {rlEventText ? (
+                                            <p
+                                              className={`text-[11px] font-semibold ${getStatusEventClassName(rl)}`}
+                                            >
+                                              {rlEventText}
+                                            </p>
+                                          ) : rl.status === "done" && (
                                             <p className="text-[11px] font-semibold text-emerald-600">
                                               완독했어요! 🎉
                                             </p>
@@ -1982,6 +2026,7 @@ export default function Library() {
                         const pagesRead = Number(log.pagesRead || 0);
                         const statusStyle = getStatusStyle(log.status);
                         const isLatestLog = log.id === logModalLatestLogId;
+                        const eventText = getStatusEventText(log);
                         return (
                           <div
                             key={log.id}
@@ -2048,6 +2093,13 @@ export default function Library() {
                                     취소
                                   </button>
                                 </div>
+                              )}
+                              {eventText && (
+                                <p
+                                  className={`mb-1.5 text-[11px] font-semibold ${getStatusEventClassName(log)}`}
+                                >
+                                  {eventText}
+                                </p>
                               )}
                               {(log.fromPage > 0 || log.toPage > 0) && (
                                 <div className="mb-1.5 flex items-baseline gap-1.5">

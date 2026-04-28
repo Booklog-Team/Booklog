@@ -129,7 +129,6 @@ export default function Community() {
       <div className="px-4 pt-8 pb-2">
         <h1
           className="text-2xl font-bold"
-          style={{ fontFamily: "'Noto Serif KR', serif" }}
         >
           커뮤니티
         </h1>
@@ -275,7 +274,6 @@ export default function Community() {
                           )}
                           <h3
                             className="font-bold text-xs leading-snug mb-1 line-clamp-1"
-                            style={{ fontFamily: "'Noto Serif KR', serif" }}
                           >
                             {meeting.title}
                           </h3>

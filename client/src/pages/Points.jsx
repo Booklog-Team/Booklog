@@ -95,7 +95,6 @@ export default function Points() {
   const totalDonated     = globalData?.totalDonated     ?? 0;
   const goalAmount       = globalData?.goalAmount       ?? 100_000;
   const participantCount = globalData?.participantCount ?? 0;
-  const donations        = globalData?.donations        ?? {};
   const progressPct      = Math.min(100, Math.round((totalDonated / goalAmount) * 100));
   const booksEquiv       = Math.floor(totalDonated / POINTS_PER_BOOK);
 
@@ -124,7 +123,7 @@ export default function Points() {
   return (
     <>
       {/* 헤더 */}
-      <div className="flex items-center justify-between px-4 pt-8 pb-4">
+      <div className="flex items-center justify-between px-4 pt-8 pb-4 max-w-2xl mx-auto">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -134,256 +133,194 @@ export default function Points() {
           </button>
           <h1 className="text-xl font-bold">포인트 &amp; 기부</h1>
         </div>
-        <Gift size={22} className="text-primary" />
       </div>
 
-      <div className="px-4 pb-10 stagger-children">
-
-        {/* ── 내 포인트 카드 ───────────────────────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 mb-4 text-white shadow-lg">
-          <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute -right-2 bottom-0 w-20 h-20 rounded-full bg-white/5 pointer-events-none" />
-
-          <p className="text-sm text-white/80 mb-1">나의 포인트</p>
-          <div className="flex items-baseline gap-1 mb-2">
-            <span className="text-5xl font-bold">{displayPoints.toLocaleString()}</span>
-            <span className="text-2xl font-semibold">P</span>
-          </div>
-
-          <p className="text-sm text-white/80 mb-3">
-            {selectedCharity
-              ? <><span className="font-bold text-white">{selectedCharity.name}</span>을 응원하고 있어요 ❤️</>
-              : '기부처를 선택해 포인트를 나눠요'}
-          </p>
-
-          <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
-            <Info size={14} className="text-white/70 flex-shrink-0" />
-            <p className="text-xs text-white/80">
-              포인트는 하루 1회, 활동당 1회만 적립됩니다
-            </p>
-          </div>
-        </div>
-
-        {/* ── 독서 레벨 카드 ───────────────────────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-700 to-green-900 p-5 mb-6 text-white shadow-lg">
-          <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
-          <div className="absolute right-4 bottom-3 text-5xl opacity-15 pointer-events-none select-none leading-none">
-            {levelInfo.current.emoji}
-          </div>
-
-          <div className="flex items-start justify-between mb-3">
+      <div className="px-4 pb-10 stagger-children max-w-2xl mx-auto">
+        <div className="grid grid-cols-2 gap-3.5 mb-6">
+          {/* ── 내 포인트 카드 ───────────────────────────── */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-5 text-white shadow-xl shadow-amber-500/10 flex flex-col justify-between min-h-[160px]">
+            <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10 pointer-events-none" />
+            
             <div>
-              <p className="text-[11px] text-white/60 mb-1">현재 독서 레벨</p>
+              <p className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-2">My Points</p>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-black tracking-tighter">{displayPoints.toLocaleString()}</span>
+                <span className="text-sm font-bold opacity-80">P</span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <p className="text-[10px] text-white/80 leading-tight line-clamp-2">
+                {selectedCharity
+                  ? <><span className="font-bold text-white">{selectedCharity.name}</span> 응원 중 ❤️</>
+                  : '기부처를 선택해주세요'}
+              </p>
+            </div>
+          </div>
+
+          {/* ── 독서 레벨 카드 ───────────────────────────── */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800 to-slate-900 p-5 text-white shadow-xl shadow-black/10 flex flex-col justify-between min-h-[160px]">
+            <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white/10 pointer-events-none" />
+            <div className="absolute right-4 bottom-4 text-4xl opacity-10 pointer-events-none select-none">
+              {levelInfo.current.emoji}
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-2">Reading Level</p>
               <div className="flex items-center gap-2">
                 <span className="text-2xl leading-none">{levelInfo.current.emoji}</span>
-                <div>
-                  <p className="text-[10px] text-white/50 leading-none mb-0.5">Lv.{levelInfo.current.level}</p>
-                  <p className="text-lg font-bold leading-tight" style={{ fontFamily: "'Noto Serif KR', serif" }}>
-                    {levelInfo.current.label}
-                  </p>
-                </div>
+                <p className="text-base font-bold leading-tight">{levelInfo.current.label}</p>
               </div>
             </div>
-            {earnedToday.length > 0 && (
-              <div className="text-right">
-                <p className="text-[10px] text-white/60 mb-0.5">오늘 적립</p>
-                <p className="text-xl font-bold">+{totalEarned}<span className="text-sm ml-0.5">P</span></p>
-              </div>
-            )}
-          </div>
 
-          {levelInfo.next ? (
-            <>
-              <div className="flex items-center justify-between text-[11px] text-white/60 mb-1.5">
-                <span>{levelInfo.current.label}</span>
-                <span>
-                  {levelInfo.next.emoji} {levelInfo.next.label}까지
-                  <span className="font-bold text-white ml-1">{levelInfo.ptsToNext}P</span>
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-white/20 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-white transition-all duration-700"
-                  style={{ width: `${levelInfo.progressPct}%` }}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center gap-2 bg-white/20 rounded-xl px-3 py-2">
-              <Trophy size={14} className="text-amber-300 flex-shrink-0" />
-              <p className="text-xs text-white font-semibold">최고 레벨 달성! 대단해요 🎉</p>
+            <div className="mt-4">
+              {levelInfo.next ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-[9px] text-white/50 font-bold uppercase tracking-tighter">
+                    <span>Lv.{levelInfo.current.level}</span>
+                    <span>{levelInfo.ptsToNext}P to Lv.{levelInfo.next.level}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-700"
+                      style={{ width: `${levelInfo.progressPct}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[10px] font-bold text-amber-400">MAX LEVEL 🎉</p>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* ── 오늘의 포인트 활동 ───────────────────────── */}
-        {/* lastPointDates[type] === today → 컬러(활성), 미적립 → 회색(비활성) */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold mb-3">오늘의 포인트 활동</h2>
-          <div className="space-y-2">
-            {EARN_RULES.map(({ type, label, pts, icon: Icon, bg, fg }) => {
-              const earned = lastPointDates[type] === today;
-              return (
-                <div
-                  key={type}
-                  className={`book-card p-3.5 flex items-center gap-3 ${!earned ? 'opacity-50' : ''}`}
-                >
+        {/* 오늘 적립 요약 (있을 경우만) */}
+        {earnedToday.length > 0 && (
+          <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-3 mb-6 flex items-center justify-between animate-fade-in">
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-sm">✨</span>
+              <p className="text-xs font-bold text-amber-700">오늘 이만큼 모았어요!</p>
+            </div>
+            <p className="text-base font-black text-amber-600">+{totalEarned}P</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          {/* 오늘의 활동 */}
+          <div>
+            <h2 className="text-[11px] font-black text-muted-foreground uppercase tracking-widest mb-3 px-1">Today's Activities</h2>
+            <div className="space-y-2">
+              {EARN_RULES.map(({ type, label, pts, icon: Icon, bg, fg }) => {
+                const earned = lastPointDates[type] === today;
+                return (
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      earned ? bg : 'bg-secondary'
+                    key={type}
+                    className={`book-card p-3 flex items-center gap-3 transition-all ${!earned ? 'opacity-40 grayscale' : 'shadow-md border-primary/20'}`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${earned ? bg : 'bg-secondary'}`}>
+                      <Icon size={16} className={earned ? fg : 'text-muted-foreground'} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold truncate">{label}</p>
+                    </div>
+                    <div className="text-right flex items-center gap-1.5">
+                      <p className={`text-xs font-black ${earned ? 'text-amber-600' : 'text-muted-foreground'}`}>+{pts}P</p>
+                      {earned && <CheckCircle2 size={12} className="text-green-500" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 기부처 선택 */}
+          <div>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h2 className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Select Charity</h2>
+              <Heart size={12} className="text-primary" />
+            </div>
+            <div className="space-y-2">
+              {CHARITIES.map(({ id, name, desc, icon, bg, fg }) => {
+                const selected = preferredCharity === id;
+                const isLoading = donating === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleDonate(id)}
+                    disabled={!!donating}
+                    className={`w-full text-left book-card p-3 flex items-center gap-3 transition-all ${
+                      selected ? 'border-primary bg-primary/5 shadow-md' : 'opacity-60 hover:opacity-100'
                     }`}
                   >
-                    <Icon size={18} className={earned ? fg : 'text-muted-foreground'} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold">{label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {earned ? '오늘 완료' : '하루 1회 적립 가능'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${earned ? 'text-amber-600' : 'text-muted-foreground'}`}>
-                      +{pts}P
-                    </p>
-                    {earned && <CheckCircle2 size={14} className="text-green-500 ml-auto mt-0.5" />}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── 기부처 선택 ──────────────────────────────── */}
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-1">
-            <Heart size={16} className="text-primary" />
-            <h2 className="text-sm font-semibold">기부처 선택</h2>
-          </div>
-          <p className="text-xs text-muted-foreground mb-3">
-            내 포인트를 기부할 곳을 선택해요. 언제든 변경할 수 있어요.
-          </p>
-
-          <div className="grid grid-cols-1 gap-3">
-            {CHARITIES.map(({ id, name, desc, icon, bg, fg }) => {
-              const selected   = preferredCharity === id;
-              const isLoading  = donating === id;
-              const charityPts = donations[id] ?? 0;
-
-              return (
-                <button
-                  key={id}
-                  onClick={() => handleDonate(id)}
-                  disabled={!!donating}
-                  className={`relative overflow-hidden w-full text-left book-card p-4 flex items-center gap-4 transition-all duration-200 ${
-                    selected ? 'bg-primary/5' : 'hover:bg-secondary/60 active:bg-secondary'
-                  } ${donating && !isLoading ? 'opacity-60' : ''}`}
-                >
-                  {selected && (
-                    <div className="absolute left-0 inset-y-0 w-1 bg-primary rounded-l-xl" />
-                  )}
-                  <div className={`w-12 h-12 rounded-xl ${bg} ${fg} flex items-center justify-center text-2xl flex-shrink-0`}>
-                    {isLoading ? <Loader2 size={20} className="animate-spin" /> : icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-sm font-semibold truncate">{name}</p>
-                      {selected && (
-                        <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                          <CheckCircle2 size={10} /> 선택됨
-                        </span>
-                      )}
+                    <div className={`w-9 h-9 rounded-xl ${bg} ${fg} flex items-center justify-center text-lg flex-shrink-0`}>
+                      {isLoading ? <Loader2 size={14} className="animate-spin" /> : icon}
                     </div>
-                    <p className="text-xs text-muted-foreground">{desc}</p>
-                    <p className="text-xs font-semibold text-primary mt-1">
-                      {charityPts.toLocaleString()}P 모임
-                    </p>
-                  </div>
-                  {!selected && <ChevronRight size={16} className="text-muted-foreground flex-shrink-0" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── 전체 기부 캠페인 ─────────────────────────── */}
-        <div className="book-card p-5 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={16} className="text-primary" />
-            <h2 className="text-sm font-semibold">전체 기부 캠페인</h2>
-          </div>
-
-          {globalLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 size={24} className="animate-spin text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold truncate">{name}</p>
+                      <p className="text-[10px] text-muted-foreground line-clamp-1">{desc}</p>
+                    </div>
+                    {selected && <CheckCircle2 size={12} className="text-primary flex-shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
-          ) : (
-            <>
-              <div className="flex items-end justify-between mb-4">
-                <div>
-                  <p className="text-3xl font-bold text-primary">
-                    {totalDonated.toLocaleString()}
-                    <span className="text-base ml-1 font-semibold">P</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">전체 독서인이 모은 누적 포인트</p>
-                </div>
-                <div className="text-right space-y-1">
-                  <div className="flex items-center gap-1.5 justify-end">
-                    <Trophy size={14} className="text-amber-500" />
-                    <span className="text-lg font-bold text-amber-600">{booksEquiv}권</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 justify-end">
-                    <Users size={12} className="text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{participantCount.toLocaleString()}명 참여</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
-                  <span>0P</span>
-                  <span className="font-semibold text-primary">{progressPct}% 달성</span>
-                  <span>{goalAmount.toLocaleString()}P</span>
-                </div>
-                <div className="h-3 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                목표 달성 시 소외 지역 어린이에게 책을 선물해요 🎁
-              </p>
-            </>
-          )}
+          </div>
         </div>
 
-        {/* ── 기부 시스템 안내 ─────────────────────────── */}
-        <div className="book-card p-4 bg-primary/5 border-primary/20">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl flex-shrink-0">📖</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+          {/* 전체 기부 캠페인 */}
+          <div className="book-card p-5 flex flex-col justify-between">
             <div>
-              <h3 className="text-sm font-semibold mb-1.5">기부 시스템 안내</h3>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Booklog의 모든 독서인이 활동으로 적립한 포인트는 합산되어
-                  기부 금액으로 환산됩니다.
-                </p>
-                <div className="flex items-center gap-2 py-2 px-3 bg-background rounded-lg">
-                  <span className="text-xs font-semibold text-primary">1,000P</span>
-                  <span className="text-xs text-muted-foreground">=</span>
-                  <span className="text-xs font-semibold text-foreground">📚 책 1권</span>
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp size={14} className="text-primary" />
+                <h2 className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">Global Campaign</h2>
+              </div>
+              
+              {globalLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 size={20} className="animate-spin text-muted-foreground" />
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  소외 지역 어린이, 독서 장학금, 노인 독서 프로그램 등
-                  다양한 곳에 독서의 가치를 전합니다.
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-end justify-between">
+                    <p className="text-2xl font-black text-primary">
+                      {totalDonated.toLocaleString()}<span className="text-sm ml-0.5 font-bold">P</span>
+                    </p>
+                    <div className="flex items-center gap-1 text-amber-600 font-bold text-xs">
+                      <Trophy size={12} /> {booksEquiv}권
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] font-bold text-muted-foreground uppercase">
+                      <span>Progress</span>
+                      <span className="text-primary">{progressPct}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-primary transition-all duration-1000" style={{ width: `${progressPct}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 기부 안내 */}
+          <div className="book-card p-5 bg-primary/5 border-primary/10">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">🎁</span>
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-tight mb-2">Notice</h3>
+                <p className="text-[10px] text-muted-foreground leading-relaxed mb-3">
+                  전체 독서인이 모은 포인트는 합산되어 소외 지역 어린이들에게 책으로 선물됩니다.
                 </p>
+                <div className="inline-flex items-center gap-2 py-1.5 px-3 bg-background rounded-lg border border-border/40">
+                  <span className="text-[10px] font-black text-primary uppercase">1,000P = 📚 1 Book</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-
       </div>
     </>
   );
