@@ -22,6 +22,7 @@ import {
   DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { usePoint } from '@/contexts/PointContext';
+import { sortPosts } from '@/utils/community';
 
 // ─── 헬퍼 ────────────────────────────────────────────────
 function formatTs(ts) {
@@ -48,6 +49,10 @@ function Avatar({ name, size = 8 }) {
 }
 
 const CATEGORIES = ['전체', '자유', '독후감', '질문'];
+const BOARD_SORT_OPTIONS = [
+  { value: 'latest', label: '최신등록순' },
+  { value: 'likes', label: '좋아요순' },
+];
 const CAT_STYLE = {
   '자유':   { bg: 'bg-secondary',    text: 'text-secondary-foreground' },
   '독후감': { bg: 'bg-primary/10',   text: 'text-primary' },
@@ -70,6 +75,7 @@ export default function Board() {
   const [loadingPosts, setLoadingPosts]     = useState(true);
   const [submitting, setSubmitting]         = useState(false);
   const [filterCat, setFilterCat]           = useState('전체');
+  const [boardSort, setBoardSort]           = useState('latest');
   const [commentText, setCommentText]       = useState('');
   const [newPost, setNewPost]               = useState({ title: '', content: '', category: '자유' });
   const [fromCommunity, setFromCommunity]   = useState(false);
@@ -115,9 +121,10 @@ export default function Board() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredPosts = filterCat === '전체'
+  const baseFilteredPosts = filterCat === '전체'
     ? posts
     : posts.filter(p => p.category === filterCat);
+  const filteredPosts = sortPosts(baseFilteredPosts, boardSort);
 
   // 좋아요 토글
   async function handleLike(post, e) {
@@ -151,7 +158,7 @@ export default function Board() {
       toast.success('게시글이 등록됐어요!');
       addPoint('board_post').catch(() => {});
       setNewPost({ title: '', content: '', category: '자유' });
-      setView('list');
+      navigate('/community', { state: { tab: 'board' } });
     } catch {
       toast.error('게시글 작성에 실패했어요.');
     } finally {
@@ -450,6 +457,22 @@ export default function Board() {
               }`}
             >
               {cat}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-1 rounded-xl bg-secondary p-1 mb-5">
+          {BOARD_SORT_OPTIONS.map(option => (
+            <button
+              key={option.value}
+              onClick={() => setBoardSort(option.value)}
+              className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                boardSort === option.value
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {option.label}
             </button>
           ))}
         </div>

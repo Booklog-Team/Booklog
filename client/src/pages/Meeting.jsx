@@ -40,6 +40,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { usePoint } from "@/contexts/PointContext";
 import { searchBooks } from "@/utils/api";
+import { getMeetingStatus, sortMeetings } from "@/utils/community";
 import { Slider } from "@/components/ui/slider";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import {
@@ -76,6 +77,30 @@ const GENRES = [
   "역사",
   "기타",
 ];
+
+const MEETING_SORT_OPTIONS = [
+  { value: "latest", label: "최신개설순" },
+  { value: "deadline", label: "마감임박순" },
+  { value: "popular", label: "참여많은순" },
+];
+
+const MEETING_STATUS_LABEL = {
+  joined: "참가 중",
+  recruiting: "모집중",
+  closed: "마감",
+};
+
+const MEETING_STATUS_BADGE = {
+  joined: "bg-primary text-primary-foreground",
+  recruiting: "bg-accent text-accent-foreground",
+  closed: "bg-destructive text-destructive-foreground",
+};
+
+const MEETING_STATUS_CHIP = {
+  joined: "bg-primary/10 text-primary",
+  recruiting: "bg-accent text-accent-foreground",
+  closed: "bg-destructive/10 text-destructive",
+};
 
 // ─── 헬퍼
 function formatTs(ts) {
@@ -119,6 +144,7 @@ export default function Meeting() {
 
   const [view, setView] = useState("list");
   const [meetings, setMeetings] = useState([]);
+  const [meetingSort, setMeetingSort] = useState("latest");
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
@@ -233,7 +259,14 @@ export default function Meeting() {
 
   async function handleJoinToggle() {
     if (!selectedMeeting || !user) return;
-    const isJoined = selectedMeeting.members?.includes(user.uid);
+    const { isJoined, isRecruiting } = getMeetingStatus(
+      selectedMeeting,
+      user.uid
+    );
+    if (!isJoined && !isRecruiting) {
+      toast.error("모집이 마감된 모임입니다.");
+      return;
+    }
     const ref = doc(db, "meetings", selectedMeeting.id);
     try {
       await updateDoc(ref, {
@@ -552,7 +585,7 @@ export default function Meeting() {
           </div>
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-1.5">
-              현재 읽는 책 *
+              모임에서 읽을 책 *
             </p>
             <div className="relative">
               {bookSuggestionLoading ? (
@@ -1049,10 +1082,11 @@ export default function Meeting() {
   // 모임 상세
   if (view === "detail" && selectedMeeting) {
     const uid = user?.uid || "preview-user";
-    const effectiveMembers = selectedMeeting.members ?? [];
-    const isJoined = effectiveMembers.includes(uid);
+    const { memberCount, maxMembers, isJoined, isRecruiting } =
+      getMeetingStatus(selectedMeeting, uid);
     const isHost = selectedMeeting.hostUid === user?.uid;
-    const memberCount = effectiveMembers.length;
+    const availabilityKey = isRecruiting ? "recruiting" : "closed";
+    const progress = Math.min(100, (memberCount / maxMembers) * 100);
     const rawAnns =
       selectedMeeting.announcements ??
       (selectedMeeting.announcement
@@ -1105,9 +1139,14 @@ export default function Meeting() {
                   <Crown size={10} /> 모임장
                 </span>
               )}
+              <span
+                className={`text-[10px] font-semibold rounded-full px-2 py-0.5 ${MEETING_STATUS_CHIP[availabilityKey]}`}
+              >
+                {MEETING_STATUS_LABEL[availabilityKey]}
+              </span>
               {isJoined && !isHost && (
                 <span className="text-[10px] font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                  참여 중
+                  참가 중
                 </span>
               )}
             </div>
@@ -1142,7 +1181,7 @@ export default function Meeting() {
                 {
                   icon: Users,
                   label: "멤버",
-                  value: `${memberCount}/${selectedMeeting.maxMembers}명`,
+                  value: `${memberCount}/${maxMembers}명`,
                 },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="bg-secondary/60 rounded-xl p-3">
@@ -1158,17 +1197,12 @@ export default function Meeting() {
             <div className="mb-4">
               <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
                 <span>모임 인원</span>
-                <span>
-                  {Math.round((memberCount / selectedMeeting.maxMembers) * 100)}
-                  %
-                </span>
+                <span>{Math.round(progress)}%</span>
               </div>
               <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                 <div
                   className="h-full rounded-full bg-primary transition-all"
-                  style={{
-                    width: `${Math.min(100, (memberCount / selectedMeeting.maxMembers) * 100)}%`,
-                  }}
+                  style={{ width: `${progress}%` }}
                 />
               </div>
             </div>
@@ -1184,9 +1218,14 @@ export default function Meeting() {
               <Button
                 onClick={handleJoinToggle}
                 variant={isJoined ? "outline" : "default"}
+                disabled={!isJoined && !isRecruiting}
                 className="w-full h-11 rounded-xl font-semibold"
               >
-                {isJoined ? "모임 나가기" : "모임 참여하기"}
+                {isJoined
+                  ? "모임 나가기"
+                  : isRecruiting
+                    ? "모임 참여하기"
+                    : "모집 마감"}
               </Button>
             )}
 
@@ -1434,6 +1473,8 @@ export default function Meeting() {
   }
 
   // 모임 목록
+  const sortedMeetings = sortMeetings(meetings, meetingSort);
+
   return (
     <>
       <div className="flex items-center justify-between px-4 pt-8 pb-4">
@@ -1459,6 +1500,23 @@ export default function Meeting() {
       </div>
 
       <div className="px-4 pb-10">
+        {meetings.length > 0 && (
+          <div className="flex gap-1 rounded-xl bg-secondary p-1 mb-5">
+            {MEETING_SORT_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                onClick={() => setMeetingSort(option.value)}
+                className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                  meetingSort === option.value
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
         {loadingMeetings ? (
           <div className="flex justify-center pt-16">
             <Loader2 size={28} className="animate-spin text-muted-foreground" />
@@ -1481,13 +1539,17 @@ export default function Meeting() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 stagger-children">
-            {meetings.map((meeting, idx) => {
-              const memberCount = meeting.members?.length ?? 0;
-              const isJoined = meeting.members?.includes(user?.uid);
-              const isFull = memberCount >= (meeting.maxMembers || 10);
+            {sortedMeetings.map((meeting, idx) => {
+              const {
+                memberCount,
+                maxMembers,
+                statusKey,
+              } = getMeetingStatus(meeting, user?.uid);
+              const statusLabel = MEETING_STATUS_LABEL[statusKey];
+              const statusClass = MEETING_STATUS_BADGE[statusKey];
               const pct = Math.min(
                 100,
-                (memberCount / (meeting.maxMembers || 1)) * 100
+                (memberCount / maxMembers) * 100
               );
 
               return (
@@ -1515,16 +1577,11 @@ export default function Meeting() {
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-                    {isJoined && (
-                      <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-primary text-primary-foreground text-[10px] font-semibold rounded-full">
-                        참여 중
-                      </span>
-                    )}
-                    {isFull && !isJoined && (
-                      <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-semibold rounded-full">
-                        마감
-                      </span>
-                    )}
+                    <span
+                      className={`absolute top-2 right-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ring-1 ring-white/35 ${statusClass}`}
+                    >
+                      {statusLabel}
+                    </span>
                   </div>
 
                   <div className="p-3">
@@ -1545,7 +1602,7 @@ export default function Meeting() {
                     )}
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
                       <span className="flex items-center gap-0.5">
-                        <Users size={10} /> {memberCount}/{meeting.maxMembers}명
+                        <Users size={10} /> {memberCount}/{maxMembers}명
                       </span>
                       {meeting.deadline && (
                         <span className="flex items-center gap-0.5">
