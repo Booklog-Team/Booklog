@@ -49,8 +49,9 @@ app.use(
 app.use(express.static(path.join(__dirname, "dist/public")));
 
 // SPA 라우팅 (모든 요청을 index.html로 보내 React가 처리하게 함)
+// Express 5 버전과 호환되도록 (.*) 형식을 사용합니다.
 app.get("(.*)", (req, res) => {
-  res.sendFile(path.resolve("dist/public/index.html"));
+  res.sendFile(path.join(__dirname, "dist/public/index.html"));
 });
 
 const PORT = 80;
