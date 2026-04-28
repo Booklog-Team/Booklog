@@ -23,7 +23,13 @@ app.use(
   createProxyMiddleware({
     target: "http://www.aladin.co.kr",
     changeOrigin: true,
+    followRedirects: true,
     pathRewrite: { "^/api/aladin": "/ttb/api" },
+    on: {
+      proxyRes: (proxyRes) => {
+        proxyRes.headers["access-control-allow-origin"] = "*";
+      },
+    },
   })
 );
 
