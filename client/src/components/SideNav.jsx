@@ -90,7 +90,7 @@ export default function SideNav() {
           to="/profile"
           className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg hover:bg-secondary transition-colors"
         >
-          <NavAvatar src={user?.photoURL} name={displayName} />
+          <NavAvatar src={profile?.photoURL || user?.photoURL} name={displayName} />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{displayName}</p>
             <p className="text-[10px] text-muted-foreground">{points.toLocaleString()}P</p>

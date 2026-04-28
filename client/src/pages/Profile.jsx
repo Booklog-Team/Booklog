@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   LogOut, Edit3, BookOpen, Flame, TrendingUp, Award,
   ArrowLeft, Camera, Loader2, X, Star, ChevronRight,
+  Info, Trophy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,10 @@ import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/firebase/config';
 import { logout } from '@/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import { usePoint } from '@/contexts/PointContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { motion } from 'framer-motion';
 import { MOCK_BOOKS } from '@/lib/mockData';
 
 function getHeatLevel(count) {
@@ -47,6 +51,33 @@ const CHART_TOOLTIP_STYLE = {
   fontSize: 12,
 };
 
+const THEME_CHART_COLORS = {
+  spring: { 
+    current: '#FF6B6B', previous: '#FFDADA', empty: '#FFF5F5',
+    genres: ['#FF6B6B', '#FF8E8E', '#FFB2B2', '#FFD6D6', '#FFF5F5']
+  },
+  summer: { 
+    current: '#0284C7', previous: '#BAE6FD', empty: '#F0F9FF',
+    genres: ['#0284C7', '#0EA5E9', '#38BDF8', '#7DD3FC', '#BAE6FD']
+  },
+  autumn: { 
+    current: '#D97706', previous: '#FDE68A', empty: '#FEF3C7',
+    genres: ['#D97706', '#F59E0B', '#FBBF24', '#FCD34D', '#FDE68A']
+  },
+  winter: { 
+    current: '#E11D48', previous: '#BBF7D0', empty: '#F1F5F9',
+    genres: ['#E11D48', '#F43F5E', '#FB7185', '#FDA4AF', '#FECDD3']
+  },
+  glass:  { 
+    current: '#111827', previous: '#E5E7EB', empty: '#F9FAFB',
+    genres: ['#111827', '#374151', '#4B5563', '#6B7280', '#9CA3AF']
+  },
+  default: { 
+    current: 'var(--color-primary)', previous: 'var(--chart-bar-prev)', empty: 'var(--chart-bar-empty)',
+    genres: ['var(--chart-genre-1)', 'var(--chart-genre-2)', 'var(--chart-genre-3)', 'var(--chart-genre-4)', 'var(--chart-genre-5)']
+  }
+};
+
 const CHART_TOOLTIP_LABEL_STYLE = {
   color: 'var(--popover-foreground)',
   fontWeight: 700,
@@ -67,6 +98,29 @@ const GENRE_LIST = [
   { id: '역사',    emoji: '🏺', label: '역사'    },
   { id: '아동',    emoji: '🎠', label: '아동'    },
 ];
+
+const LEVELS = [
+  { level: 1, label: '새싹 독자',     emoji: '🌱', minPts: 0   },
+  { level: 2, label: '꾸준한 독자',   emoji: '📚', minPts: 50  },
+  { level: 3, label: '책벌레',        emoji: '🐛', minPts: 150 },
+  { level: 4, label: '독서왕',        emoji: '👑', minPts: 300 },
+  { level: 5, label: '도서관 수호자', emoji: '🏛️', minPts: 500 },
+];
+
+function getLevelInfo(pts) {
+  let current = LEVELS[0];
+  let next    = LEVELS[1];
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (pts >= LEVELS[i].minPts) {
+      current = LEVELS[i];
+      next    = LEVELS[i + 1] ?? null;
+      break;
+    }
+  }
+  const range       = next ? next.minPts - current.minPts : 1;
+  const progressPct = next ? Math.min(100, Math.round(((pts - current.minPts) / range) * 100)) : 100;
+  return { current, next, progressPct, ptsToNext: next ? next.minPts - pts : 0 };
+}
 
 const monthKeyFromDate = (date) => {
   const year = date.getFullYear();
@@ -220,11 +274,19 @@ function CenterModal({ open, onClose, title, children }) {
 export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
+  const { theme } = useTheme();
+  const { myPoints } = usePoint();
+
+  const displayPoints = myPoints ?? (profile?.totalPoints ?? 0);
+  const levelInfo     = getLevelInfo(displayPoints);
+
+  const chartColors = THEME_CHART_COLORS[theme] || THEME_CHART_COLORS.default;
 
   const [view, setView]                 = useState('main');
   const [shelf, setShelf]               = useState([]);
   const [shelfLoading, setShelfLoading] = useState(true);
   const [editNickname, setEditNickname] = useState('');
+  const [editMotto, setEditMotto]       = useState('');
   const [saving, setSaving]             = useState(false);
   const [loggingOut, setLoggingOut]     = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -250,6 +312,7 @@ export default function Profile() {
   // 편집 폼 동기화
   useEffect(() => {
     setEditNickname(profile?.nickname || user?.displayName || '');
+    setEditMotto(profile?.motto || '');
   }, [profile, user]);
 
   // 서재 데이터 — 실제 데이터 없으면 mock 폴백
@@ -380,7 +443,7 @@ export default function Profile() {
       })
     : '';
 
-  const displayPoints = profile?.totalPoints ?? 0;
+  const displayPointsFallback = profile?.totalPoints ?? 0; // Legacy if point context is not ready
 
   // 바 차트 클릭 — 선택된 카테고리 책 목록
   const activeMonthData = activeBar ? monthlyReadingData.find(month => month.key === activeBar) : null;
@@ -445,7 +508,10 @@ export default function Profile() {
     setSaving(true);
     try {
       await updateProfile(auth.currentUser, { displayName: trimmed });
-      await setDoc(doc(db, 'users', user.uid), { nickname: trimmed }, { merge: true });
+      await setDoc(doc(db, 'users', user.uid), { 
+        nickname: trimmed,
+        motto: editMotto.trim()
+      }, { merge: true });
       await refreshProfile();
       toast.success('프로필이 수정되었습니다!');
       setView('main');
@@ -584,6 +650,17 @@ export default function Profile() {
                   className="h-11 bg-secondary border-none rounded-xl"
                 />
                 <p className="text-xs text-muted-foreground text-right">{editNickname.length} / 12</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">독서 좌우명</Label>
+                <Input
+                  value={editMotto}
+                  onChange={e => setEditMotto(e.target.value)}
+                  placeholder="나만의 독서 좌우명을 입력해주세요"
+                  maxLength={40}
+                  className="h-11 bg-secondary border-none rounded-xl"
+                />
+                <p className="text-xs text-muted-foreground text-right">{editMotto.length} / 40</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">이메일</Label>
@@ -855,8 +932,11 @@ export default function Profile() {
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${pct}%` }}
+                          className="h-full rounded-full transition-all"
+                          style={{ 
+                            width: `${pct}%`,
+                            backgroundColor: chartColors.current 
+                          }}
                         />
                       </div>
                       <span className="text-[10px] text-muted-foreground flex-shrink-0 w-16 text-right">
@@ -906,71 +986,136 @@ export default function Profile() {
   // ── 메인 화면 ──────────────────────────────────────────────────────────
   return (
     <>
-      {/* 프로필 배경 헤더 (z-0) */}
-      <div
-        className="relative z-0 mt-6 mx-4 rounded-2xl overflow-hidden pointer-events-none"
-        style={{ background: 'var(--profile-banner-gradient)' }}
-      >
-        <div className="w-full h-36" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/10 to-background" />
-      </div>
-
-      {/* 아바타 + 이름 + 장르 (z-10: 배너 위) */}
-      <div className="relative z-10 px-4 -mt-16 mb-5 animate-fade-in-up">
-        {/* 아바타 · 이름 · 수정 버튼 행 */}
-        <div className="flex items-end gap-3 mb-3">
-          <AvatarImg src={profile?.photoURL || user?.photoURL} name={displayName} size={76} className="bg-background" />
-          <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
-            <div className="min-w-0">
+      {/* 아바타 + 정보 + 장르 행 (50:50 분할 카드 그리드) */}
+      <div className="relative z-10 px-4 mt-8 mb-8 animate-fade-in-up grid grid-cols-2 gap-3.5">
+        
+        {/* 왼쪽: 아바타와 정보 + 선호 장르 카드 */}
+        <div className="bg-card/60 backdrop-blur-md rounded-[1.5rem] p-5 border border-border/50 shadow-sm flex flex-col justify-between h-full min-h-[340px]">
+          <div className="flex items-center gap-5 mb-5">
+            <AvatarImg src={profile?.photoURL || user?.photoURL} name={displayName} size={110} className="bg-background shadow-xl" />
+            <div className="flex-1 min-w-0">
               <h1
-                className="text-xl font-bold leading-tight truncate"
+                className="text-2xl font-bold leading-tight truncate text-foreground/90 mb-1.5"
                 style={{ fontFamily: "'Noto Serif KR', serif" }}
               >
                 {displayName}
               </h1>
-              <p className="text-xs text-muted-foreground truncate mt-0.5">{email}</p>
+              <p className="text-sm text-muted-foreground truncate mb-1">{email}</p>
               {joinDate && (
-                <p className="text-xs text-muted-foreground">{joinDate} 가입</p>
+                <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest truncate">{joinDate} 가입</p>
               )}
             </div>
-            <button
-              onClick={() => setView('edit')}
-              className="flex-shrink-0 flex items-center gap-1 text-xs bg-muted text-muted-foreground hover:text-primary border border-border rounded-full px-2.5 py-1 transition-colors mt-0.5"
-              aria-label="개인정보 수정"
-            >
-              <Edit3 size={11} />
-              수정
-            </button>
           </div>
+
+          {/* 선호 장르 섹션 (Left Column) */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Star size={10} className="text-primary fill-primary" />
+                <p className="text-[9px] font-black text-primary uppercase tracking-widest">나의 선호 장르</p>
+              </div>
+              <button
+                onClick={() => { setTempGenres(genres); setGenreEditOpen(true); }}
+                className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-full bg-secondary/80 hover:bg-secondary"
+              >
+                <Edit3 size={10} />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5 content-start">
+              {genres.length > 0 ? (
+                genres.map(g => {
+                  const genreObj = GENRE_LIST.find(item => item.id === g);
+                  return (
+                    <div key={g} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/5 border border-primary/10 rounded-xl shadow-sm transition-all hover:scale-[1.03]">
+                      <span className="text-sm">{genreObj?.emoji || '📚'}</span>
+                      <span className="text-[11px] font-bold text-foreground/90">{g}</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <button
+                  onClick={() => { setTempGenres([]); setGenreEditOpen(true); }}
+                  className="text-[10px] text-primary/70 hover:text-primary font-bold transition-colors text-left w-full p-2.5 bg-primary/5 rounded-xl border border-primary/20 border-dashed"
+                >
+                  + 선호 장르 추가
+                </button>
+              )}
+            </div>
+          </div>
+
+          <button
+            onClick={() => setView('edit')}
+            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-xl py-2.5 transition-colors shadow-sm"
+            aria-label="개인정보 수정"
+          >
+            <Edit3 size={12} />
+            프로필 편집
+          </button>
         </div>
 
-        {/* 선호 장르 박스 */}
-        <div className="bg-secondary/60 backdrop-blur-sm rounded-xl px-3 py-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[11px] font-semibold text-muted-foreground">선호 장르</p>
-            <button
-              onClick={() => { setTempGenres(genres); setGenreEditOpen(true); }}
-              className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:text-primary/80 font-medium transition-colors"
-            >
-              <Edit3 size={10} />
-              수정
-            </button>
+        {/* 오른쪽: 포인트 및 도서 레벨 카드 (이전 디자인 복구) */}
+        <div className="bg-card/60 backdrop-blur-md rounded-[1.5rem] p-5 border border-border/50 shadow-sm flex flex-col h-full min-h-[340px]">
+          {/* 포인트 섹션 */}
+          <div 
+            className="mb-5 flex-1 cursor-pointer group"
+            onClick={() => navigate('/points')}
+          >
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/30">
+              <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-wider">나의 포인트</p>
+              <ChevronRight size={14} className="text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+            <div className="flex items-baseline gap-1.5 mb-2">
+              <span className="text-4xl font-black text-amber-600 tracking-tighter">
+                {displayPoints.toLocaleString()}
+              </span>
+              <span className="text-lg font-bold text-amber-500">P</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 rounded-xl border border-amber-500/10">
+              <span className="text-lg">🎁</span>
+              <p className="text-[10px] text-amber-700/80 font-medium leading-tight">
+                포인트로 기부에 참여하여<br/>독서의 가치를 나눠보세요
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {genres.length > 0 ? (
-              genres.map(g => (
-                <span key={g} className="tag-pill bg-primary/10 text-primary text-xs border border-primary/20">
-                  {g}
-                </span>
-              ))
-            ) : (
-              <button
-                onClick={() => { setTempGenres([]); setGenreEditOpen(true); }}
-                className="text-xs text-primary/70 hover:text-primary font-medium transition-colors"
-              >
-                + 장르 선택하기
-              </button>
-            )}
+
+          {/* 도서 레벨 섹션 */}
+          <div className="pt-4 border-t border-border/30">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-wider">현재 도서 레벨</p>
+              <div className="px-2 py-0.5 bg-primary/10 rounded-full">
+                <p className="text-[9px] font-bold text-primary">Lv.{levelInfo.current.level}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-2xl shadow-inner">
+                {levelInfo.current.emoji}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-bold text-foreground/90 truncate" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+                  {levelInfo.current.label}
+                </p>
+                {levelInfo.next && (
+                  <p className="text-[10px] text-muted-foreground font-medium truncate">
+                    다음 단계까지 <span className="text-primary font-bold">{levelInfo.ptsToNext}P</span> 남음
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-end text-[9px] font-bold text-muted-foreground px-1">
+                <span>{levelInfo.current.label}</span>
+                {levelInfo.next && <span>{levelInfo.next.label}</span>}
+              </div>
+              <div className="h-2 w-full bg-secondary rounded-full overflow-hidden shadow-inner p-[0.5px]">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${levelInfo.progressPct}%` }}
+                  className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full shadow-sm"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1042,10 +1187,10 @@ export default function Profile() {
                           key={entry.key}
                           fill={
                             entry.count === 0
-                              ? MONTH_BAR_COLORS.empty
+                              ? chartColors.empty
                               : entry.isCurrent
-                                ? MONTH_BAR_COLORS.current
-                                : MONTH_BAR_COLORS.previous
+                                ? chartColors.current
+                                : chartColors.previous
                           }
                           opacity={activeBar && activeBar !== entry.key ? 0.35 : entry.count === 0 ? 0.65 : 1}
                         />
@@ -1129,7 +1274,7 @@ export default function Profile() {
                         {genreData.map((entry, i) => (
                           <Cell
                             key={i}
-                            fill={GENRE_COLORS[i % GENRE_COLORS.length]}
+                            fill={chartColors.genres[i % chartColors.genres.length]}
                             opacity={activeGenre && activeGenre !== entry.name ? 0.35 : 1}
                           />
                         ))}
@@ -1206,6 +1351,7 @@ export default function Profile() {
               </div>
             )}
           </div>
+
         </div>
 
         {/* 포인트 카드 — 카드 클릭 시 /points 이동, 내역 버튼으로 모달 분리 */}

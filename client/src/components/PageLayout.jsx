@@ -11,8 +11,11 @@ export default function PageLayout({ children, showNav = true, className = '' })
     return (
       <div className={`min-h-screen bg-background relative ${className}`}>
         <WeatherEffects />
-        <SeasonEffects />
-        {children ?? <Outlet />}
+        <SeasonEffects layer="background" />
+        <div className="relative z-10">
+          {children ?? <Outlet />}
+        </div>
+        <SeasonEffects layer="foreground" />
         <ChatBot />
       </div>
     );
@@ -21,13 +24,14 @@ export default function PageLayout({ children, showNav = true, className = '' })
   return (
     <div className="flex h-screen overflow-hidden bg-background relative">
       <WeatherEffects />
-      <SeasonEffects />
+      <SeasonEffects layer="background" />
       <SideNav />
-      <main className={`flex-1 min-w-0 overflow-y-auto ${className}`}>
+      <main className={`flex-1 min-w-0 overflow-y-auto ${className} relative z-10`}>
         <div className="max-w-5xl w-full">
           {children ?? <Outlet />}
         </div>
       </main>
+      <SeasonEffects layer="foreground" />
       <ChatBot />
     </div>
   );

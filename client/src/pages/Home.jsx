@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, BookOpen, ChevronRight, Moon, Sunrise, Coffee, MapPin, Thermometer } from "lucide-react";
+import { Search, BookOpen, ChevronRight, ChevronLeft, Moon, Sunrise, Coffee, MapPin, Thermometer } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BookCard from "@/components/BookCard";
+import AppleDashboard from "@/components/AppleDashboard";
 import { getBooksByGenre, searchBooks } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useWeather } from "@/contexts/WeatherContext";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebase/config";
@@ -57,44 +59,170 @@ const SNOW_FLAKES = Array.from({ length: 28 }, (_, i) => ({
   opacity: 0.5 + (i % 4) * 0.12,
 }));
 
-// 날씨·시간 무드별 알라딘 검색 키워드 — 장르 ID 대신 실제 감성 키워드로 검색
-const MOOD_KEYWORDS = {
-  // 날씨별
-  Rain:         ["비 오는 날 소설", "감성 소설", "빗소리 에세이"],
-  Drizzle:      ["서정 에세이", "잔잔한 소설", "감성 소설"],
-  Thunderstorm: ["스릴러 소설", "긴장감 심리", "서스펜스 소설"],
-  Snow:         ["겨울 소설", "따뜻한 이야기", "포근한 에세이"],
-  Clear:        ["여행 에세이", "긍정 에너지 자기계발", "활기찬 소설"],
-  Clouds:       ["사색 에세이", "철학 인문", "깊이 있는 소설"],
-  // 시간대별
-  dawn:         ["새벽 감성 소설", "고독 에세이", "불면 소설"],
-  morning:      ["아침 동기부여", "성공 습관 자기계발", "하루 루틴"],
-  afternoon:    ["여유로운 소설", "힐링 에세이", "여행기"],
-  evening:      ["저녁 인문 에세이", "사색 소설", "역사 이야기"],
-  night:        ["밤 소설", "미스터리 소설", "철학적 에세이"],
-};
-
-// 날씨+시간 조합에서 검색 키워드 픽 (weather 우선, 시간 보조)
-function pickMoodKeyword(weatherMain, timeState) {
-  const wList = MOOD_KEYWORDS[weatherMain] || [];
-  const tList = MOOD_KEYWORDS[timeState]   || [];
-  const merged = [...wList, ...tList];
-  if (!merged.length) return "감성 소설";
-  return merged[Math.floor(Math.random() * merged.length)];
+// 커버 이미지 있는 책만 필터
+function withCovers(items) {
+  return (items || []).filter(b => b._cover || b.volumeInfo?.imageLinks?.thumbnail);
 }
 
-// 데모 슬라이드 고정 무드 키워드
-const DEMO_MOOD = {
-  rain:    ["비 오는 날 소설", "감성 소설", "빗소리 에세이"],
-  dawn:    ["새벽 감성 소설", "고독 에세이", "깊은 밤 소설"],
-  morning: ["아침 동기부여", "성공 습관 자기계발", "하루 루틴"],
-  snow:    ["겨울 소설", "따뜻한 이야기", "포근한 에세이"],
+// 무드별 알라딘 카테고리 — AI 선별을 위한 책 풀 구성
+const MOOD_CATEGORIES = {
+  Rain:         ["소설", "에세이"],
+  Drizzle:      ["소설", "에세이"],
+  Thunderstorm: ["소설", "인문학"],
+  Snow:         ["소설", "에세이"],           // 여행 제외 — 겨울 감성과 무관
+  Clear:        ["에세이", "자기계발", "여행"],
+  Clouds:       ["에세이", "인문학", "소설"],
+  dawn:         ["에세이", "인문학", "소설"],
+  morning:      ["자기계발", "경제 / 경영", "에세이"],
+  afternoon:    ["소설", "에세이"],           // 여행은 Clear(맑음) 전용으로 분리
+  evening:      ["에세이", "인문학", "소설"],
+  night:        ["소설", "인문학", "에세이"],
 };
+
+
+// 무드 상세 선별 기준 — Groq에게 "뭘 고르고 뭘 피해야 하는지" 명확히 전달
+const MOOD_DESC = {
+  Rain:         "비 오는 날 감성. 서정적이고 잔잔한 소설·문학 에세이만. 자기계발·건강·요리·비즈니스 제외.",
+  Drizzle:      "이슬비 내리는 날 감성. 차분하고 섬세한 소설·에세이만. 자기계발·건강 제외.",
+  Thunderstorm: "천둥치는 긴장감. 몰입감 있는 스릴러·심리 소설만. 가볍거나 밝은 책 제외.",
+  Snow:         "눈 오는 날 겨울 감성. 따뜻하고 포근한 한국·외국 소설·에세이만. 여름·봄 소재, 아동·판타지·여행·자기계발·건강·다이어트·만화 절대 제외.",
+  Clear:        "맑고 화창한 날. 밝고 긍정적인 자기계발서·여행 에세이만. 어둡거나 우울한 소재 제외.",
+  Clouds:       "흐린 날 사색. 깊이 있는 인문·철학 에세이만. 밝거나 가벼운 책 제외.",
+  dawn:         "고요한 새벽 사색. 철학적이고 내면적인 에세이·인문서만. 자기계발·다이어트·건강·요리 절대 제외.",
+  morning:      "활기찬 아침. 동기부여·성장·생산성 자기계발서만. 어둡거나 무거운 소재 제외.",
+  afternoon:    "여유로운 오후. 가볍게 읽히는 소설·여행 에세이만.",
+  evening:      "사색적인 저녁. 역사·인문·성찰적 에세이만. 자기계발·다이어트 제외.",
+  night:        "깊어가는 밤. 몰입감 있는 문학 소설·철학 인문서만. 가볍거나 실용적인 책 제외.",
+};
+
+// 전역 Groq 직렬화 큐 — 모든 호출을 순서대로, 700ms 간격 유지해 429 방지
+let _groqQueue = Promise.resolve();
+let _lastGroqCall = 0;
+const GROQ_GAP = 700; // ms
+
+function enqueueGroq(fn) {
+  const job = _groqQueue.then(async () => {
+    const gap = GROQ_GAP - (Date.now() - _lastGroqCall);
+    if (gap > 0) await new Promise(r => setTimeout(r, gap));
+    _lastGroqCall = Date.now();
+    return fn();
+  });
+  _groqQueue = job.then(() => undefined, () => undefined);
+  return job;
+}
+
+// 세션 캐시 — 탭 닫으면 초기화, 5분 TTL로 연속 새로고침 시 Groq 절약
+const SESSION_CACHE_TTL = 5 * 60 * 1000;
+
+function loadSessionCache(moodKey) {
+  try {
+    const raw = sessionStorage.getItem(`brec:${moodKey}`);
+    if (!raw) return null;
+    const { books, ts } = JSON.parse(raw);
+    if (Date.now() - ts > SESSION_CACHE_TTL) { sessionStorage.removeItem(`brec:${moodKey}`); return null; }
+    return books;
+  } catch { return null; }
+}
+
+function saveSessionCache(moodKey, books) {
+  try {
+    sessionStorage.setItem(`brec:${moodKey}`, JSON.stringify({ books, ts: Date.now() }));
+  } catch { }
+}
+
+// 알라딘 카테고리 풀 수집 → Groq 상세 기준 선별 → 세션 캐시
+// 429 발생 시 2초 대기 후 1회 재시도, 이후 랜덤 폴백
+async function fetchAIMoodBooks(weatherMain, timeState, count = 2) {
+  const moodKey = `${weatherMain ?? "any"}:${timeState ?? "any"}`;
+
+  // 1. 세션 캐시 확인 (5분 이내 동일 무드 → 재사용)
+  const cached = loadSessionCache(moodKey);
+  if (cached && cached.length >= count) {
+    console.log(`[Rec] 💾 세션 hit [${moodKey}]`, cached.map(b => b.volumeInfo?.title));
+    return cached;
+  }
+
+  // 2. 무드에 맞는 카테고리에서 병렬로 책 풀 수집 (랜덤 페이지)
+  const wCats = MOOD_CATEGORIES[weatherMain] || [];
+  const tCats = MOOD_CATEGORIES[timeState]   || [];
+  const cats  = [...new Set([...wCats, ...tCats])].slice(0, 3);
+
+  const pool = [];
+  await Promise.all(
+    cats.map(async (cat) => {
+      try {
+        const page = Math.floor(Math.random() * 8) + 1;
+        const { items } = await getBooksByGenre(cat, 15, page);
+        pool.push(...withCovers(items));
+      } catch { /* 카테고리 스킵 */ }
+    })
+  );
+
+  const unique = Array.from(new Map(pool.map(b => [b.id, b])).values())
+    .sort(() => Math.random() - 0.5);
+  console.log(`[Rec] 📚 풀 수집 [${moodKey}] ${unique.length}권 (${cats.join(", ")})`);
+
+  if (unique.length < count) {
+    console.warn(`[Rec] ⚠️ 풀 부족 [${moodKey}]`);
+    saveSessionCache(moodKey, unique);
+    return unique;
+  }
+
+  // 3. Groq 선별 — 429 시 2초 대기 후 1회 재시도
+  const wDesc    = MOOD_DESC[weatherMain] || "";
+  const tDesc    = MOOD_DESC[timeState]   || "";
+  const moodDesc = [wDesc, tDesc].filter(Boolean).join(" / ") || "분위기에 맞는 책";
+  const listText = unique
+    .slice(0, 40)
+    .map((b, i) => `${i + 1}.${b.volumeInfo?.title}-${b.volumeInfo?.authors?.[0] || ""}`)
+    .join(" ");
+
+  try {
+    const res = await enqueueGroq(() => fetch("/api/groq/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        max_tokens: 20,
+        messages: [
+          { role: "system", content: "너는 엄격한 책 큐레이터야. 선별 기준을 반드시 따르고, 기준과 맞지 않는 책은 절대 고르지 마. 번호만 쉼표로 답해." },
+          { role: "user",   content: `선별 기준: ${moodDesc}\n기준에 정확히 맞는 책 ${count}권 번호만 답해.\n${listText}` },
+        ],
+      }),
+    }));
+
+    if (res.ok) {
+      const data = await res.json();
+      const rawText = data.choices?.[0]?.message?.content || "";
+      const indices = [...new Set((rawText.match(/\d+/g) || []).map(Number))]
+        .filter(n => n >= 1 && n <= unique.length);
+      const selected = indices.slice(0, count).map(n => unique[n - 1]).filter(Boolean);
+      if (selected.length >= count) {
+        console.log(`[Rec] ✅ Groq 성공 [${moodKey}] "${rawText}" →`, selected.map(b => b.volumeInfo?.title));
+        saveSessionCache(moodKey, selected);
+        return selected;
+      }
+      console.warn(`[Rec] ⚠️ 파싱 실패 [${moodKey}] "${rawText}"`);
+    } else {
+      console.warn(`[Rec] ❌ Groq ${res.status} [${moodKey}]`);
+    }
+  } catch (e) {
+    console.warn(`[Rec] ❌ Groq 오류 [${moodKey}]`, e?.message);
+  }
+
+  // 4. 폴백: 셔플된 풀에서 선택
+  const fallback = unique.slice(0, count);
+  console.log(`[Rec] 🎲 폴백 [${moodKey}]`, fallback.map(b => b.volumeInfo?.title));
+  saveSessionCache(moodKey, fallback);
+  return fallback;
+}
 
 const QUOTES = [
   {
     lines: ["책은 한 권의 도끼여야 한다.", "우리 안의 얼어붙은 바다를", "깨트리는 도끼여야 한다."],
     author: "프란츠 카프카",
+    bookTitle: "밀레나에게 보내는 편지",
+    searchKeyword: "프란츠 카프카 밀레나에게 보내는 편지",
     bg: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1200&q=80",
     imgFilter: "brightness(0.42) saturate(0.65)",
     tint: "bg-[#060614]/55",
@@ -105,6 +233,8 @@ const QUOTES = [
   {
     lines: ["독서는 완성된 사람을 만들고,", "대화는 재치 있는 사람을 만들며,", "글쓰기는 정확한 사람을 만든다."],
     author: "프랜시스 베이컨",
+    bookTitle: "학문의 진보",
+    searchKeyword: "프랜시스 베이컨 학문의 진보",
     bg: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=1200&q=80",
     imgFilter: "brightness(0.35) saturate(0.6)",
     tint: "bg-amber-950/45",
@@ -115,6 +245,8 @@ const QUOTES = [
   {
     lines: ["책을 읽는다는 것은", "자신의 삶을 사는 것 외에", "또 다른 삶을 사는 것이다."],
     author: "오스카 와일드",
+    bookTitle: "도리안 그레이의 초상",
+    searchKeyword: "도리안 그레이의 초상 민음사",
     bg: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=1200&q=80",
     imgFilter: "brightness(0.3) saturate(0.45) hue-rotate(200deg)",
     tint: "bg-slate-950/50",
@@ -125,6 +257,8 @@ const QUOTES = [
   {
     lines: ["어떤 책은 맛보고,", "어떤 책은 삼켜야 하고,", "소수만이 씹어서 소화해야 한다."],
     author: "프랜시스 베이컨",
+    bookTitle: "베이컨 에세이",
+    searchKeyword: "베이컨 에세이",
     bg: "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1200&q=80",
     imgFilter: "brightness(0.38) saturate(0.5)",
     tint: "bg-violet-950/52",
@@ -132,12 +266,97 @@ const QUOTES = [
     accent: "text-violet-300/65",
     particles: "stars",
   },
+  {
+    lines: ["우리는 우리가", "혼자가 아니라는 것을 알기 위해", "책을 읽는다."],
+    author: "C.S. 루이스",
+    bookTitle: "헤아려 본 슬픔",
+    searchKeyword: "헤아려 본 슬픔 홍성사",
+    bg: "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1200&q=80",
+    imgFilter: "brightness(0.4) saturate(0.5) hue-rotate(330deg)",
+    tint: "bg-rose-950/50",
+    blob: "from-rose-500/20 via-pink-500/15 to-red-400/10",
+    accent: "text-rose-300/65",
+    particles: "rays",
+  },
+  {
+    lines: ["고전이란 누구나", "읽은 척하지만,", "아무도 읽지 않는 책이다."],
+    author: "마크 트웨인",
+    bookTitle: "허클베리 핀의 모험",
+    searchKeyword: "허클베리 핀의 모험 민음사",
+    bg: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=1200&q=80",
+    imgFilter: "brightness(0.4) saturate(0.8)",
+    tint: "bg-emerald-950/40",
+    blob: "from-emerald-500/20 via-teal-500/15 to-green-400/10",
+    accent: "text-emerald-300/65",
+    particles: "rain",
+  },
+  {
+    lines: ["방에 책이 없는 것은", "마치 몸에 영혼이", "없는 것과 같다."],
+    author: "키케로",
+    bookTitle: "의무론",
+    searchKeyword: "키케로 의무론",
+    bg: "https://images.unsplash.com/photo-1491841550275-ad7854e35ca6?w=1200&q=80",
+    imgFilter: "brightness(0.35) saturate(0.6) hue-rotate(180deg)",
+    tint: "bg-sky-950/50",
+    blob: "from-sky-500/20 via-blue-500/15 to-cyan-400/10",
+    accent: "text-sky-300/65",
+    particles: "stars",
+  },
+  {
+    lines: ["단 한 권의 책밖에", "읽지 않은 사람을", "경계하라."],
+    author: "토마스 아퀴나스",
+    bookTitle: "신학대전",
+    searchKeyword: "토마스 아퀴나스 신학대전",
+    bg: "https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=1200&q=80",
+    imgFilter: "brightness(0.3) saturate(0.4)",
+    tint: "bg-stone-950/60",
+    blob: "from-stone-500/20 via-neutral-500/15 to-zinc-400/10",
+    accent: "text-stone-300/65",
+    particles: "rays",
+  },
+  {
+    lines: ["언제고 다시 읽을", "가치가 없는 책이라면,", "처음부터 읽을 가치가 없다."],
+    author: "카를 융",
+    bookTitle: "인간과 상징",
+    searchKeyword: "카를 융 인간과 상징",
+    bg: "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=1200&q=80",
+    imgFilter: "brightness(0.35) saturate(0.7) hue-rotate(45deg)",
+    tint: "bg-yellow-950/50",
+    blob: "from-yellow-500/20 via-amber-500/15 to-orange-400/10",
+    accent: "text-yellow-300/65",
+    particles: "rain",
+  },
+  {
+    lines: ["내가 세계를 알게 된 것은", "오직 책에 의해서였다.", "책은 내게 세상을 열어주었다."],
+    author: "장 폴 사르트르",
+    bookTitle: "말",
+    searchKeyword: "사르트르 말",
+    bg: "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=1200&q=80",
+    imgFilter: "brightness(0.4) saturate(0.6) hue-rotate(280deg)",
+    tint: "bg-fuchsia-950/50",
+    blob: "from-fuchsia-500/20 via-purple-500/15 to-pink-400/10",
+    accent: "text-fuchsia-300/65",
+    particles: "stars",
+  },
+  {
+    lines: ["만일 우리가 읽는 책이", "우리를 깨우지 않는다면,", "무엇 때문에 책을 읽는단 말인가?"],
+    author: "프란츠 카프카",
+    bookTitle: "변신",
+    searchKeyword: "카프카 변신 민음사",
+    bg: "https://images.unsplash.com/photo-1511108690759-009324a90311?w=1200&q=80",
+    imgFilter: "brightness(0.4) saturate(0.5) hue-rotate(10deg)",
+    tint: "bg-[#060614]/60",
+    blob: "from-indigo-400/25 via-slate-500/20 to-zinc-500/15",
+    accent: "text-indigo-300/70",
+    particles: "rain",
+  }
 ];
 
 export default function Home() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { recommendation, weather, timeState } = useWeather();
+  const { theme } = useTheme();
 
   const [shelf, setShelf]               = useState([]);
   const [shelfLoading, setShelfLoading] = useState(true);
@@ -145,7 +364,6 @@ export default function Home() {
   const [recLoading, setRecLoading]     = useState(true);
   const [, setRecError]                  = useState(false);
   const [weatherRecBooks, setWeatherRecBooks] = useState([]);
-  const [weatherRecLoading, setWeatherRecLoading] = useState(true);
   const [recommendGenre, setRecommendGenre] = useState("소설");
   const [bestBooks, setBestBooks] = useState([]);
   const [bestLoading, setBestLoading] = useState(true);
@@ -154,15 +372,13 @@ export default function Home() {
   // 캐러셀 상태
   const [activeSlide, setActiveSlide] = useState(0);
   const totalSlides = 7;
-  // 글귀 슬라이드 순환
-  const [quoteIndex, setQuoteIndex] = useState(0);
-  const quoteVisitRef = useRef(0);
+  // 글귀 슬라이드 랜덤 초기화
+  const [quoteIndex, setQuoteIndex] = useState(() => Math.floor(Math.random() * 11));
 
-  // 슬라이드 6이 보일 때마다 다른 글귀로 순환
+  // 배너가 한 바퀴 돌아 처음(0번)으로 올 때마다 명언을 새롭게 랜덤 지정
   useEffect(() => {
-    if (activeSlide === 6) {
-      setQuoteIndex(quoteVisitRef.current);
-      quoteVisitRef.current = (quoteVisitRef.current + 1) % QUOTES.length;
+    if (activeSlide === 0) {
+      setQuoteIndex(Math.floor(Math.random() * 11));
     }
   }, [activeSlide]);
 
@@ -172,7 +388,7 @@ export default function Home() {
       setActiveSlide((prev) => (prev + 1) % totalSlides);
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [activeSlide, totalSlides]);
 
   // ── 서재 로드 ──────────────────────────────────────────────
   useEffect(() => {
@@ -216,29 +432,12 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [profile]);
 
-  // ── 날씨/시간 기반 추천 도서 로드 (무드 키워드 검색) ──────────
+  // ── 날씨/시간 기반 추천 도서 로드 (Aladin 풀 → AI 선별 → 캐시) ──────
   useEffect(() => {
-    if (!weather && !timeState) return;
-
     let cancelled = false;
-    setWeatherRecLoading(true);
-
-    const keyword = pickMoodKeyword(weather?.main, timeState);
-    searchBooks(keyword, { start: 1, maxResults: 8 })
-      .then(({ items }) => {
-        if (!cancelled) {
-          if (!items || items.length === 0) {
-            // 키워드 결과 없으면 "감성 소설" 폴백
-            return searchBooks("감성 소설", { start: 1, maxResults: 6 }).then(({ items: fb }) => {
-              if (!cancelled) setWeatherRecBooks([...fb].sort(() => Math.random() - 0.5));
-            });
-          }
-          setWeatherRecBooks([...items].sort(() => Math.random() - 0.5));
-        }
-      })
-      .catch(() => { if (!cancelled) setWeatherRecBooks([]); })
-      .finally(() => { if (!cancelled) setWeatherRecLoading(false); });
-
+    fetchAIMoodBooks(weather?.main, timeState)
+      .then(items => { if (!cancelled) setWeatherRecBooks(items); })
+      .catch(() => { if (!cancelled) setWeatherRecBooks([]); });
     return () => { cancelled = true; };
   }, [weather?.main, timeState]);
 
@@ -252,26 +451,36 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── 데모 슬라이드별 무드 맞춤 도서 로드 ──────────────────────
-  // 각 슬라이드 분위기에 맞는 장르를 고정 — 만화/어린이 등 부적합 장르 배제
+  // ── 데모 슬라이드별 AI 무드 선별 — 순차 로딩으로 Groq 429 방지 ────
   useEffect(() => {
     let cancelled = false;
-    const rp = () => Math.floor(Math.random() * 6) + 1;
-    Promise.all([
-      getBooksByGenre("소설",      3, rp()),  // 비 오는 저녁 — 감성 소설
-      getBooksByGenre("에세이",    3, rp()),  // 고요한 새벽 — 사색 에세이
-      getBooksByGenre("자기계발",  3, rp()),  // 맑은 아침 — 자기계발
-      getBooksByGenre("인문학",    3, rp()),  // 눈 오는 날 — 따뜻한 인문
-    ]).then(([rain, dawn, morning, snow]) => {
-      if (!cancelled) {
-        setDemoSlideBooks({
-          rain:    rain.items.slice(0, 2),
-          dawn:    dawn.items.slice(0, 2),
-          morning: morning.items.slice(0, 2),
-          snow:    snow.items.slice(0, 2),
-        });
-      }
-    }).catch(() => {});
+    const usedIds = new Set();
+
+    const pick = (books) =>
+      books.filter(b => {
+        if (usedIds.has(b.id)) return false;
+        usedIds.add(b.id);
+        return true;
+      }).slice(0, 2);
+
+    const load = async () => {
+      // 순차 실행 — 각 Groq 호출이 완료된 뒤 다음 호출 시작
+      const rainBooks = await fetchAIMoodBooks("Rain",  "evening");
+      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, rain: pick(rainBooks) }));
+
+      const dawnBooks = await fetchAIMoodBooks(null,    "dawn");
+      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, dawn: pick(dawnBooks) }));
+
+      const morningBooks = await fetchAIMoodBooks("Clear", "morning");
+      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, morning: pick(morningBooks) }));
+
+      const snowBooks = await fetchAIMoodBooks("Snow",  "afternoon");
+      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, snow: pick(snowBooks) }));
+
+      if (!cancelled) console.log("[Rec] 🎨 모든 배너 로드 완료");
+    };
+
+    load().catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -306,6 +515,8 @@ export default function Home() {
     if (weather?.main === 'Rain' || weather?.main === 'Drizzle' || weather?.main === 'Thunderstorm') return '/assets/weather/rainy.png';
     return '/assets/weather/sunny.png';
   };
+
+  // ─── 렌더링 ────────────────────────────────────────────────────────────
 
   return (
     <div className="pb-16">
@@ -461,7 +672,7 @@ export default function Home() {
                 </div>
 
                 <div className="flex flex-col md:flex-row md:items-end gap-6">
-                  {!weatherRecLoading && weatherRecBooks && weatherRecBooks.length > 0 && (
+                  {weatherRecBooks && weatherRecBooks.length > 0 && (
                     <div className="flex gap-3 items-center flex-shrink-0">
                       {weatherRecBooks.slice(0, 2).map((book, idx) => (
                         <motion.div
@@ -809,15 +1020,30 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* ── 슬라이드 6: 명언 (순환) ── */}
+          {/* ── 슬라이드 6: 명언 (랜덤) ── */}
           {activeSlide === 6 && (
             <motion.div
-              key="quote-slide"
+              key={`quote-slide-${quoteIndex}`}
               initial={{ opacity: 0, filter: "blur(4px)" }}
               animate={{ opacity: 1, filter: "blur(0px)" }}
               exit={{ opacity: 0, filter: "blur(4px)" }}
               transition={{ duration: 0.5 }}
-              className="absolute inset-0 flex items-center justify-center overflow-hidden"
+              className="absolute inset-0 flex items-center justify-center overflow-hidden cursor-pointer group/quote"
+              onClick={async () => {
+                const quote = QUOTES[quoteIndex];
+                if (quote.searchKeyword) {
+                  try {
+                    const res = await searchBooks(quote.searchKeyword, { maxResults: 1 });
+                    if (res.items && res.items.length > 0) {
+                      navigate(`/book/${res.items[0].id}`);
+                    } else {
+                      navigate(`/search?q=${encodeURIComponent(quote.searchKeyword)}`);
+                    }
+                  } catch (e) {
+                    navigate(`/search?q=${encodeURIComponent(quote.searchKeyword)}`);
+                  }
+                }
+              }}
             >
               {/* 배경 사진 */}
               <img
@@ -875,7 +1101,7 @@ export default function Home() {
                 />
               ))}
               {/* 글귀 콘텐츠 — quoteIndex 변경 시 fade-in */}
-              <div className="relative z-10 text-center px-10 max-w-lg">
+              <div className="relative z-10 text-center px-10 max-w-lg transition-transform duration-500 group-hover/quote:scale-105">
                 <motion.div
                   key={quoteIndex}
                   initial={{ opacity: 0, y: 18 }}
@@ -892,7 +1118,7 @@ export default function Home() {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
-                    className="text-xl md:text-2xl font-medium text-white/90 leading-[1.8] tracking-tight"
+                    className="text-xl md:text-2xl font-medium text-white/90 leading-[1.8] tracking-tight drop-shadow-md"
                     style={{ fontFamily: 'Georgia, "Nanum Myeongjo", serif' }}
                   >
                     {QUOTES[quoteIndex].lines.map((line, i) => (
@@ -905,19 +1131,49 @@ export default function Home() {
                     transition={{ delay: 0.65, duration: 0.8 }}
                     className="h-px bg-white/25 mx-auto my-6"
                   />
-                  <motion.p
+                  <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.85 }}
-                    className="text-white/75 text-sm font-bold tracking-[0.3em] uppercase"
+                    className="flex flex-col items-center gap-1.5"
                   >
-                    {QUOTES[quoteIndex].author}
-                  </motion.p>
+                    <p className="text-white/75 text-sm font-bold tracking-[0.3em] uppercase">
+                      {QUOTES[quoteIndex].author}
+                    </p>
+                    <p className="text-white/50 text-[11px] font-medium tracking-widest drop-shadow-sm">
+                      — {QUOTES[quoteIndex].bookTitle} —
+                    </p>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 1 }}
+                    className="mt-8 text-[10px] text-white/50 tracking-[0.2em] uppercase flex items-center justify-center gap-2 opacity-0 group-hover/quote:opacity-100 transition-opacity duration-300"
+                  >
+                    <span className="w-6 h-px bg-white/20" />
+                    책 상세 보기
+                    <span className="w-6 h-px bg-white/20" />
+                  </motion.div>
                 </motion.div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* 좌우 화살표 (Hover 시 표시) */}
+        <button 
+          onClick={(e) => { e.stopPropagation(); setActiveSlide((prev) => (prev - 1 + totalSlides) % totalSlides); }}
+          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur-md transition-all hover:bg-black/40 z-20 shadow-lg"
+        >
+          <ChevronLeft size={24} />
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); setActiveSlide((prev) => (prev + 1) % totalSlides); }}
+          className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur-md transition-all hover:bg-black/40 z-20 shadow-lg"
+        >
+          <ChevronRight size={24} />
+        </button>
+
 
         {/* 인디케이터 — 7개, 활성 슬라이드만 넓게 */}
         <div className="absolute bottom-6 left-10 flex gap-2 z-20">
@@ -977,7 +1233,7 @@ export default function Home() {
       </div>
 
       {/* 도서 목록 섹션 */}
-      <div className="space-y-12 px-6 pb-12">
+      <div className="space-y-12 px-6 pb-4">
         {/* 지금 읽고 있어요 */}
         <section>
           <div className="flex items-end justify-between mb-6">
@@ -1147,6 +1403,23 @@ export default function Home() {
             </div>
           </motion.div>
         </section>
+
+        {/* 푸터 */}
+        <footer className="mt-16 pt-10 pb-4 border-t border-border/40 flex flex-col items-center">
+          <div className="flex items-center gap-2 mb-5 opacity-40 hover:opacity-80 transition-opacity cursor-default">
+            <BookOpen size={18} strokeWidth={2.5} />
+            <span className="text-lg font-black tracking-tighter uppercase">Booklog</span>
+          </div>
+          <div className="flex gap-5 text-[11px] font-semibold text-muted-foreground/50 tracking-wider mb-6 uppercase">
+            <span className="cursor-pointer hover:text-foreground transition-colors">About Us</span>
+            <span className="cursor-pointer hover:text-foreground transition-colors">Terms</span>
+            <span className="cursor-pointer hover:text-foreground transition-colors">Privacy</span>
+            <span className="cursor-pointer hover:text-foreground transition-colors">Contact</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground/40 tracking-[0.1em] uppercase">
+            &copy; {new Date().getFullYear()} Booklog. All rights reserved.
+          </p>
+        </footer>
       </div>
     </div>
   );

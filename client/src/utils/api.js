@@ -236,8 +236,10 @@ export const getBookDetail = (itemId) => {
   const key = `detail|${itemId}`;
 
   return deduplicate(key, async () => {
+    // 13자리 숫자인 경우 ISBN13으로 간주
+    const isISBN13 = String(itemId).length === 13 && /^\d+$/.test(String(itemId));
     const data = await apiFetch(`${PROXY_BASE}/ItemLookUp.aspx`, {
-      itemIdType: "ItemId",
+      itemIdType: isISBN13 ? "ISBN13" : "ItemId",
       ItemId: itemId,
       OptResult: "subInfo,previewImgList",
     });
