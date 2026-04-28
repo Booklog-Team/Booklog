@@ -361,6 +361,7 @@ export function ShelfProvider({ children }) {
         : Math.max(0, Math.min(requestedCurrentPage, totalPage || 99999));
     const pagesRead = Math.max(0, Number(entry.pagesRead) || 0);
     const memo = (entry.memo || "").trim();
+    const rating = Math.max(0, Math.min(5, Number(entry.rating) || 0));
 
     try {
       await addDoc(collection(db, "users", user.uid, "readingLogs"), {
@@ -376,6 +377,7 @@ export function ShelfProvider({ children }) {
         currentPage,
         totalPage,
         memo,
+        ...(nextStatus === "done" && { rating }),
         createdAt: serverTimestamp(),
       });
 
@@ -391,6 +393,11 @@ export function ShelfProvider({ children }) {
         updates.lastReadDate = date;
         updates.checkedDates = arrayUnion(date);
         if (!currentBook.startDate) updates.startDate = date;
+      }
+
+      if (nextStatus === "done") {
+        updates.rating = rating;
+        updates.endDate = date;
       }
 
       await updateDoc(bookRef, updates);
