@@ -251,7 +251,6 @@ function CenterModal({ open, onClose, title, children }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/40 flex-shrink-0">
           <h2
             className="text-base font-bold"
-            style={{ fontFamily: "'Noto Serif KR', serif" }}
           >
             {title}
           </h2>
@@ -288,6 +287,7 @@ export default function Profile() {
   const [shelfLoading, setShelfLoading] = useState(true);
   const [editNickname, setEditNickname] = useState('');
   const [editMotto, setEditMotto]       = useState('');
+  const [editGenres, setEditGenres]     = useState([]);
   const [saving, setSaving]             = useState(false);
   const [loggingOut, setLoggingOut]     = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -314,6 +314,7 @@ export default function Profile() {
   useEffect(() => {
     setEditNickname(profile?.nickname || user?.displayName || '');
     setEditMotto(profile?.motto || '');
+    setEditGenres(profile?.genres || []);
   }, [profile, user]);
 
   const effectiveShelf = shelfLoading ? [] : shelf;
@@ -484,7 +485,8 @@ export default function Profile() {
       await updateProfile(auth.currentUser, { displayName: trimmed });
       await setDoc(doc(db, 'users', user.uid), { 
         nickname: trimmed,
-        motto: editMotto.trim()
+        motto: editMotto.trim(),
+        genres: editGenres
       }, { merge: true });
       await refreshProfile();
       toast.success('프로필이 수정되었습니다!');
@@ -577,8 +579,8 @@ export default function Profile() {
           >
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-lg font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>
-            개인정보 수정
+          <h1 className="text-lg font-bold">
+            프로필 설정
           </h1>
         </div>
 
@@ -644,10 +646,46 @@ export default function Profile() {
                 />
                 <p className="text-xs text-muted-foreground">이메일은 변경할 수 없습니다.</p>
               </div>
-              <Button onClick={handleSave} disabled={saving} className="w-full h-11 rounded-xl font-semibold">
-                {saving ? <><Loader2 size={16} className="animate-spin mr-2" />저장 중...</> : '저장하기'}
-              </Button>
             </div>
+          </section>
+
+          {/* ── 선호 장르 설정 ───────────────────────────────────── */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <span className="w-1 h-4 rounded-full bg-primary inline-block" />
+                선호 장르 설정
+              </h2>
+              <p className="text-[10px] text-muted-foreground">최대 3개 선택</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {GENRE_LIST.map(({ id, emoji, label }) => {
+                const isSelected = editGenres.includes(id);
+                return (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      setEditGenres(prev => 
+                        prev.includes(id) 
+                          ? prev.filter(g => g !== id)
+                          : prev.length < 3 ? [...prev, id] : prev
+                      );
+                    }}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border transition-all ${
+                      isSelected 
+                        ? 'bg-primary/10 border-primary text-primary font-bold' 
+                        : 'bg-secondary/40 border-transparent text-muted-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    <span className="text-lg">{emoji}</span>
+                    <span className="text-xs">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <Button onClick={handleSave} disabled={saving} className="w-full h-11 rounded-xl font-semibold mt-6">
+              {saving ? <><Loader2 size={16} className="animate-spin mr-2" />저장 중...</> : '변경사항 저장'}
+            </Button>
           </section>
 
           {/* ── 보안 설정 ───────────────────────────────────── */}
@@ -969,13 +1007,12 @@ export default function Profile() {
       <div className="relative z-10 px-4 mt-8 mb-8 animate-fade-in-up grid grid-cols-2 gap-3.5">
         
         {/* 왼쪽: 아바타와 정보 + 선호 장르 카드 */}
-        <div className="bg-card/60 backdrop-blur-md rounded-[1.5rem] p-5 border border-border/50 shadow-sm flex flex-col justify-between h-full min-h-[340px]">
+        <div className="bg-card backdrop-blur-md rounded-[1.5rem] p-5 border border-border/50 shadow-sm flex flex-col justify-between h-full min-h-[340px]">
           <div className="flex items-center gap-5 mb-5">
             <AvatarImg src={profile?.photoURL || user?.photoURL} name={displayName} size={110} className="bg-background shadow-xl" />
             <div className="flex-1 min-w-0">
               <h1
-                className="text-2xl font-bold leading-tight truncate text-foreground/90 mb-1.5"
-                style={{ fontFamily: "'Noto Serif KR', serif" }}
+                className="text-2xl font-black leading-tight truncate text-foreground/90 mb-1.5 tracking-tighter"
               >
                 {displayName}
               </h1>
@@ -986,19 +1023,24 @@ export default function Profile() {
             </div>
           </div>
 
+          {/* 독서 모토 (Reading Motto) */}
+          <div className="mb-5 px-1">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <Edit3 size={12} className="text-primary/70" />
+              <p className="text-[11px] font-black text-primary/70 uppercase tracking-widest">Reading Motto</p>
+            </div>
+            <p className="text-sm italic text-foreground/70 leading-relaxed font-medium pl-2 border-l-2 border-primary/20">
+              {profile?.motto ? `"${profile.motto}"` : "등록된 독서 모토가 없습니다."}
+            </p>
+          </div>
+
           {/* 선호 장르 섹션 (Left Column) */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
-                <Star size={10} className="text-primary fill-primary" />
-                <p className="text-[9px] font-black text-primary uppercase tracking-widest">나의 선호 장르</p>
+                <Star size={12} className="text-primary fill-primary" />
+                <p className="text-[11px] font-black text-primary uppercase tracking-widest">나의 선호 장르</p>
               </div>
-              <button
-                onClick={() => { setTempGenres(genres); setGenreEditOpen(true); }}
-                className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-full bg-secondary/80 hover:bg-secondary"
-              >
-                <Edit3 size={10} />
-              </button>
             </div>
             <div className="flex flex-wrap gap-1.5 content-start">
               {genres.length > 0 ? (
@@ -1025,15 +1067,15 @@ export default function Profile() {
           <button
             onClick={() => setView('edit')}
             className="w-full flex items-center justify-center gap-1.5 text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground rounded-xl py-2.5 transition-colors shadow-sm"
-            aria-label="개인정보 수정"
+            aria-label="프로필 설정"
           >
             <Edit3 size={12} />
-            프로필 편집
+            프로필 설정
           </button>
         </div>
 
         {/* 오른쪽: 포인트 및 도서 레벨 카드 (이전 디자인 복구) */}
-        <div className="bg-card/60 backdrop-blur-md rounded-[1.5rem] p-5 border border-border/50 shadow-sm flex flex-col h-full min-h-[340px]">
+        <div className="bg-card backdrop-blur-md rounded-[1.5rem] p-5 border border-border/50 shadow-sm flex flex-col h-full min-h-[340px]">
           {/* 포인트 섹션 */}
           <div 
             className="mb-5 flex-1 cursor-pointer group"
@@ -1043,18 +1085,35 @@ export default function Profile() {
               <p className="text-[11px] font-bold text-foreground/70 uppercase tracking-wider">나의 포인트</p>
               <ChevronRight size={14} className="text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
-            <div className="flex items-baseline gap-1.5 mb-2">
-              <span className="text-4xl font-black text-amber-600 tracking-tighter">
-                {displayPoints.toLocaleString()}
-              </span>
-              <span className="text-lg font-bold text-amber-500">P</span>
+            <div className="flex items-end justify-between gap-1.5 mb-3">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl font-black text-amber-600 tracking-tighter">
+                  {displayPoints.toLocaleString()}
+                </span>
+                <span className="text-lg font-bold text-amber-500">P</span>
+              </div>
+              <button
+                onClick={e => { e.stopPropagation(); setActiveModal('points'); }}
+                className="text-[9px] text-amber-600 font-bold hover:text-amber-700 transition-colors bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20 shadow-sm"
+              >
+                적립 내역 보기 ›
+              </button>
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 rounded-xl border border-amber-500/10">
-              <span className="text-lg">🎁</span>
-              <p className="text-[10px] text-amber-700/80 font-medium leading-tight">
-                포인트로 기부에 참여하여<br/>독서의 가치를 나눠보세요
+            <div className="px-3 py-2.5 bg-amber-500/5 rounded-xl border border-amber-500/10 mb-2">
+              <div className="flex items-center gap-2.5">
+                <span className="text-lg flex-shrink-0">🎁</span>
+                <p className="text-[10px] text-amber-700/80 font-medium leading-tight">
+                  포인트로 기부에 참여하여 독서의 가치를 나눠보세요
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 px-3 py-2.5 bg-card rounded-xl border border-border/50 shadow-sm">
+              <Info size={14} className="text-amber-600 flex-shrink-0" />
+              <p className="text-[10px] text-muted-foreground font-medium leading-tight">
+                포인트는 하루 1회, 활동당 1회만 적립됩니다
               </p>
             </div>
+
           </div>
 
           {/* 도서 레벨 섹션 */}
@@ -1071,7 +1130,7 @@ export default function Profile() {
                 {levelInfo.current.emoji}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-bold text-foreground/90 truncate" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+                <p className="text-base font-bold text-foreground/90 truncate">
                   {levelInfo.current.label}
                 </p>
                 {levelInfo.next && (
@@ -1333,31 +1392,6 @@ export default function Profile() {
 
         </div>
 
-        {/* 포인트 카드 — 카드 클릭 시 /points 이동, 내역 버튼으로 모달 분리 */}
-        <div
-          className="book-card p-4 mb-5 cursor-pointer hover:shadow-md transition-shadow"
-          onClick={() => navigate('/points')}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">나의 포인트</p>
-              <p className="text-2xl font-bold text-amber-600">{displayPoints.toLocaleString()}P</p>
-              <p className="text-xs text-muted-foreground mt-0.5">포인트로 기부에 참여할 수 있어요</p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-3xl">🎁</span>
-              <ChevronRight size={16} className="text-muted-foreground" />
-            </div>
-          </div>
-          <div className="flex justify-end mt-2 pt-2 border-t border-border/30">
-            <button
-              onClick={e => { e.stopPropagation(); setActiveModal('points'); }}
-              className="text-[11px] text-amber-600 font-semibold hover:text-amber-700 transition-colors"
-            >
-              적립 내역 보기 ›
-            </button>
-          </div>
-        </div>
 
         {/* 로그아웃 */}
         <Button

@@ -175,7 +175,6 @@ export default function Auth() {
         <div className="mb-8 animate-fade-in-up">
           <h1
             className="text-2xl font-bold mb-1.5"
-            style={{ fontFamily: "'Noto Serif KR', serif" }}
           >
             {mode === 'login' ? '다시 만나서 반가워요' : '독서 여정을 시작하세요'}
           </h1>

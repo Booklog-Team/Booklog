@@ -653,7 +653,7 @@
 [data-theme="glass"] {
   --background: #CACACA;                 /* Apple Light Gray Base */
   --foreground: #1D1D1F;
-  --card: rgba(255, 255, 255, 0.45);     /* Frosted Glass */
+  --card: rgba(255, 255, 255, 0.6);     /* Frosted Glass */
   --card-foreground: #1D1D1F;
   --popover: rgba(255, 255, 255, 0.85);
   --popover-foreground: #1D1D1F;

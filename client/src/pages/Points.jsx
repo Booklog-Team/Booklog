@@ -134,7 +134,6 @@ export default function Points() {
           </button>
           <h1 className="text-xl font-bold">포인트 &amp; 기부</h1>
         </div>
-        <Gift size={22} className="text-primary" />
       </div>
 
       <div className="px-4 pb-10 stagger-children">
@@ -178,7 +177,7 @@ export default function Points() {
                 <span className="text-2xl leading-none">{levelInfo.current.emoji}</span>
                 <div>
                   <p className="text-[10px] text-white/50 leading-none mb-0.5">Lv.{levelInfo.current.level}</p>
-                  <p className="text-lg font-bold leading-tight" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+                  <p className="text-lg font-bold leading-tight">
                     {levelInfo.current.label}
                   </p>
                 </div>

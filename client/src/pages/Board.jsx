@@ -298,7 +298,6 @@ export default function Board() {
             </span>
             <h2
               className="text-xl font-bold mb-3 leading-snug pr-8"
-              style={{ fontFamily: "'Noto Serif KR', serif" }}
             >
               {selectedPost.title}
             </h2>
@@ -422,7 +421,7 @@ export default function Board() {
           >
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-xl font-bold" style={{ fontFamily: "'Noto Serif KR', serif" }}>
+          <h1 className="text-xl font-bold">
             자유 게시판
           </h1>
         </div>
