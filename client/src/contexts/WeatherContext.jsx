@@ -152,7 +152,6 @@ const CITY_NAME_MAP = {
   "Iksan-si": "익산",
   Gunsan: "군산",
   "Gunsan-si": "군산",
-  Jeonju: "전주",
   Andong: "안동",
   "Andong-si": "안동",
   Gyeongju: "경주",
@@ -160,9 +159,6 @@ const CITY_NAME_MAP = {
   Tongyeong: "통영",
   Jinju: "진주",
   "Jinju-si": "진주",
-  Jeju: "제주",
-  // 기타 소지명
-  Dongjinwon: "동진원",
 };
 
 export const WeatherProvider = ({ children }) => {
