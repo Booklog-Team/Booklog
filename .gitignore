@@ -111,5 +111,5 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 
-
+# Firebase Admin SDK 인증 키
 scripts/serviceAccountKey.json

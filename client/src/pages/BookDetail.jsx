@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import BookCard from "@/components/BookCard";
 import { getBookDetail, searchBooks, getHighQualityCover } from "@/utils/api";
@@ -34,24 +35,43 @@ const STATUS_OPTIONS = [
     value: "want",
     label: "읽고 싶음",
     emoji: "🔖",
-    active: "border-amber-400 bg-amber-100 text-amber-800",
-    inactive: "border-amber-200 bg-amber-50/70 text-amber-700 hover:bg-amber-100",
+    active: "bg-amber-400 text-white border border-amber-400",
+    inactive: "bg-amber-50 text-amber-600 border border-amber-200 hover:bg-amber-100",
   },
   {
     value: "reading",
     label: "읽는 중",
     emoji: "📖",
-    active: "border-primary bg-primary/10 text-primary",
-    inactive: "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10",
+    active: "bg-sky-50 text-sky-700 border-2 border-sky-400",
+    inactive: "bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10",
   },
   {
     value: "done",
     label: "완독",
     emoji: "✅",
-    active: "border-emerald-400 bg-emerald-100 text-emerald-800",
-    inactive: "border-emerald-200 bg-emerald-50/70 text-emerald-700 hover:bg-emerald-100",
+    active: "bg-emerald-500 text-white border border-emerald-500",
+    inactive: "bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100",
   },
 ];
+
+const DETAIL_STATUS_TAGS = {
+  unregistered: {
+    label: "미등록",
+    className: "border-border/70 bg-secondary/70 text-muted-foreground",
+  },
+  want: {
+    label: "읽고 싶음",
+    className: "border-amber-200 bg-amber-50 text-amber-600",
+  },
+  reading: {
+    label: "읽는 중",
+    className: "border-primary/20 bg-primary/10 text-primary",
+  },
+  done: {
+    label: "완독",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-600",
+  },
+};
 
 function getTodayKey() {
   const now = new Date();
@@ -235,6 +255,7 @@ export default function BookDetail() {
 
   const [shelfPopupOpen, setShelfPopupOpen]           = useState(false);
   const [pendingBookDetailStatus, setPendingBookDetailStatus] = useState(null);
+  const [pendingBookDetailMemo, setPendingBookDetailMemo] = useState("");
   const [prevReadingPage, setPrevReadingPage]         = useState(0);
 
   const [libState, setLibState]               = useState("idle");
@@ -438,36 +459,21 @@ export default function BookDetail() {
     }
   };
 
-  const handleGoToReading = async () => {
-    if (!status) {
-      toast.error("상태를 먼저 선택해주세요.");
-      return;
-    }
+  const openShelfPopup = () => {
+    setPendingBookDetailStatus(null);
+    setPendingBookDetailMemo(memo || savedMemo || "");
+    setShelfPopupOpen(true);
+  };
 
-    const shouldSaveFirst =
-      status !== savedStatus ||
-      currentPage !== savedCurrentPage ||
-      memo !== savedMemo;
-
-    if (shouldSaveFirst) {
-      const saved = await handleSave({
-        silent: true,
-        createLog: false,
-        awardPoints: false,
-      });
-      if (!saved) {
-        toast.error("내 서재로 이동하기 전에 상태를 저장하지 못했어요.");
-        return;
-      }
-    }
-
-    navigate(`/library?bookId=${id}&record=1`);
+  const closeShelfPopup = () => {
+    setShelfPopupOpen(false);
+    setPendingBookDetailStatus(null);
+    setPendingBookDetailMemo("");
   };
 
   const handlePopupStatusSelect = async (newStatus) => {
     if (!user || !book) { toast.error("로그인이 필요합니다."); return; }
-    setShelfPopupOpen(false);
-    setPendingBookDetailStatus(null);
+    if (!newStatus) { toast.error("상태를 선택해주세요."); return; }
     setSaving(true);
     try {
       const bookRef = doc(db, "users", user.uid, "shelf", id);
@@ -486,6 +492,8 @@ export default function BookDetail() {
       }
 
       const isFirstAdd = !savedStatus;
+      const statusChanged = isFirstAdd || newStatus !== savedStatus;
+      const nextMemo = pendingBookDetailMemo.trim();
       await setDoc(bookRef, {
         title: info.title || "제목 없음",
         author: info.authors?.[0] || "",
@@ -493,30 +501,39 @@ export default function BookDetail() {
         status: newStatus,
         currentPage: targetPage,
         totalPage,
-        memo: savedMemo || "",
+        memo: nextMemo,
         rating,
         genre: info.categories || [],
         ...(newStatus !== "want" && { lastReadDate: today, checkedDates: arrayUnion(today) }),
+        ...(newStatus !== "want" && (isFirstAdd || savedStatus === "want") && { startDate: today }),
         ...(isFirstAdd && { addedAt: today }),
       }, { merge: true });
 
       const isFirstCompletion = newStatus === "done" && savedStatus !== "done";
 
-      if (isFirstCompletion) {
+      if (statusChanged) {
         const fromPage = savedCurrentPage || 0;
+        const pagesRead = newStatus === "done"
+          ? Math.max(0, totalPage - fromPage)
+          : 0;
         await addDoc(collection(db, "users", user.uid, "readingLogs"), {
           bookId: id,
           title: info.title || "제목 없음",
           author: info.authors?.[0] || "",
           thumbnail: book._cover || "",
-          status: "done",
+          status: newStatus,
+          eventType: {
+            want: "want_added",
+            reading: "reading_started",
+            done: "completed",
+          }[newStatus],
           date: today,
-          pagesRead: Math.max(0, totalPage - fromPage),
-          fromPage,
-          toPage: totalPage,
-          currentPage: totalPage,
+          pagesRead,
+          fromPage: newStatus === "done" ? fromPage : 0,
+          toPage: newStatus === "done" ? targetPage : 0,
+          currentPage: targetPage,
           totalPage,
-          memo: "",
+          memo: nextMemo,
           createdAt: serverTimestamp(),
         });
       }
@@ -525,11 +542,14 @@ export default function BookDetail() {
       setSavedStatus(newStatus);
       setCurrentPage(targetPage);
       setSavedCurrentPage(targetPage);
+      setMemo(nextMemo);
+      setSavedMemo(nextMemo);
+      closeShelfPopup();
       if (isFirstCompletion) {
         fireCompletionConfetti();
         toast.success("🎉 완독을 축하드려요!");
       } else {
-        toast.success(savedStatus ? "독서 상태를 변경했습니다." : "서재에 추가했습니다.");
+        toast.success(savedStatus ? "서재 정보를 저장했습니다." : "서재에 추가했습니다.");
       }
     } catch (err) {
       console.error(err);
@@ -538,6 +558,10 @@ export default function BookDetail() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleShelfPopupSave = () => {
+    handlePopupStatusSelect(pendingBookDetailStatus || savedStatus);
   };
 
   // ── 공유 ──────────────────────────────────────────────────
@@ -654,7 +678,7 @@ export default function BookDetail() {
   const author       = authors.join(", ") || "저자 정보 없음";
   const cover        = getHighQualityCover(book._cover);
   const publisher    = info.publisher || "";
-  const publishYear  = info.publishedDate ? info.publishedDate.split("-")[0] : "";
+  const publishedDate = info.publishedDate || "";
   const totalPages   = info.pageCount || 0;
   const genres       = info.categories || [];
   const aladinPrice  = book._price || 0;
@@ -666,7 +690,13 @@ export default function BookDetail() {
 
   const isbn13      = book._isbn13 || null;
   const selectedLib = libraries.find((l) => l.libCode === selectedLibCode) ?? null;
-  const progress    = totalPages ? Math.round((currentPage / totalPages) * 100) : 0;
+  const detailStatusTag =
+    DETAIL_STATUS_TAGS[savedStatus || status] || DETAIL_STATUS_TAGS.unregistered;
+  const detailMeta = [
+    publisher,
+    publishedDate,
+    totalPages > 0 ? `${totalPages}p` : null,
+  ].filter(Boolean);
 
   return (
     <div>
@@ -676,7 +706,7 @@ export default function BookDetail() {
           <ArrowLeft size={22} />
         </button>
         <span className="text-sm font-black tracking-widest uppercase opacity-40">Detail</span>
-        <button onClick={handleShare} className="p-2 hover:bg-secondary rounded-full transition-colors text-muted-foreground hover:text-primary transition-colors">
+        <button onClick={handleShare} className="p-2 hover:bg-secondary rounded-full transition-colors text-muted-foreground hover:text-primary">
           <Share2 size={20} />
         </button>
       </div>
@@ -689,6 +719,11 @@ export default function BookDetail() {
             <DetailCover src={cover} alt={title} />
             <div className="flex-1 min-w-0 flex flex-col">
               <div className="space-y-2">
+                <span
+                  className={`inline-flex w-fit rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${detailStatusTag.className}`}
+                >
+                  {detailStatusTag.label}
+                </span>
                 <h2 className="text-lg font-bold leading-snug">{title}</h2>
                 {/* 저자 클릭 → 저자 검색 */}
                 <div className="flex flex-wrap gap-1">
@@ -704,13 +739,16 @@ export default function BookDetail() {
                     <span className="text-sm text-muted-foreground">{author}</span>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground/80">
-                  {publisher && <span>{publisher}</span>}
-                  {publisher && publishYear && <span>•</span>}
-                  {publishYear && <span>{publishYear}년</span>}
-                  {totalPages > 0 && <><span>•</span><span>{totalPages}p</span></>}
-                </div>
-                {aladinRating > 0 && <RatingStars rating={aladinRating} />}
+                {detailMeta.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground/80">
+                    {detailMeta.map((item, index) => (
+                      <span key={`${item}-${index}`} className="inline-flex items-center gap-1.5">
+                        {index > 0 && <span className="text-muted-foreground/50">•</span>}
+                        <span>{item}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   {genres.map((g) => (
                     <span key={g} className="px-2.5 py-0.5 bg-secondary text-muted-foreground text-[11px] rounded-full border border-border/60">
@@ -718,6 +756,7 @@ export default function BookDetail() {
                     </span>
                   ))}
                 </div>
+                {aladinRating > 0 && <RatingStars rating={aladinRating} />}
               </div>
               {aladinPrice > 0 && (
                 <div className="mt-auto pt-2">
@@ -734,7 +773,13 @@ export default function BookDetail() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setShelfPopupOpen(true)}
+                onClick={() => {
+                  if (savedStatus) {
+                    navigate(`/library?bookId=${encodeURIComponent(id)}&record=1`);
+                    return;
+                  }
+                  openShelfPopup();
+                }}
                 className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border text-sm font-bold transition-colors ${
                   savedStatus
                     ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
@@ -742,7 +787,7 @@ export default function BookDetail() {
                 }`}
               >
                 <PenLine size={15} />
-                {savedStatus ? STATUS_OPTIONS.find(s => s.value === savedStatus)?.label : "내 서재에 추가"}
+                {savedStatus ? "기록 · 상태 변경" : "내 서재에 추가"}
               </button>
               {aladinLink && (
                 <a
@@ -756,16 +801,6 @@ export default function BookDetail() {
                 </a>
               )}
             </div>
-            {savedStatus && (
-              <button
-                type="button"
-                onClick={handleGoToReading}
-                className="flex w-full items-center justify-center gap-1.5 py-1.5 text-xs text-primary/60 transition-colors hover:text-primary hover:underline"
-              >
-                <PenLine size={11} />
-                기록하러 가기
-              </button>
-            )}
           </div>
         </div>
 
@@ -942,10 +977,12 @@ export default function BookDetail() {
       <Dialog
         open={shelfPopupOpen}
         onOpenChange={open => {
-          if (!open) { setShelfPopupOpen(false); setPendingBookDetailStatus(null); }
+          if (!open) {
+            closeShelfPopup();
+          }
         }}
       >
-        <DialogContent className="max-w-xs rounded-2xl p-5">
+        <DialogContent className="max-w-sm rounded-2xl p-5">
           <DialogHeader>
             <DialogTitle className="text-base font-bold">
               {savedStatus ? "독서 상태" : "내 서재에 추가"}
@@ -961,8 +998,9 @@ export default function BookDetail() {
                   type="button"
                   disabled={saving}
                   onClick={() => {
-                    if (isCurrentSaved && !pendingBookDetailStatus) return;
-                    setPendingBookDetailStatus(isCurrentSaved ? null : opt.value);
+                    setPendingBookDetailStatus(
+                      pendingBookDetailStatus === opt.value ? null : opt.value
+                    );
                   }}
                   className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs font-bold transition-all disabled:opacity-60 ${
                     isPending
@@ -979,39 +1017,58 @@ export default function BookDetail() {
             })}
           </div>
 
-          {pendingBookDetailStatus && (() => {
-            const bannerColors = {
-              done: { wrap: "bg-emerald-50 border-emerald-200", text: "text-emerald-800", btn: "bg-emerald-500 hover:bg-emerald-600" },
-              reading: { wrap: "bg-sky-50 border-sky-200", text: "text-sky-800", btn: "bg-sky-500 hover:bg-sky-600" },
-              want: { wrap: "bg-amber-50 border-amber-200", text: "text-amber-800", btn: "bg-amber-500 hover:bg-amber-600" },
-            };
-            const bc = bannerColors[pendingBookDetailStatus] || bannerColors.want;
-            const label = STATUS_OPTIONS.find(o => o.value === pendingBookDetailStatus)?.label;
-            return (
-              <div className={`mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 ${bc.wrap}`}>
-                <span className={`flex-1 text-xs ${bc.text}`}>
-                  <span className="font-bold">{label}</span>으로 {savedStatus ? "변경" : "등록"}할까요?
-                </span>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handlePopupStatusSelect(pendingBookDetailStatus)}
-                  className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white transition-colors disabled:opacity-60 ${bc.btn}`}
-                >
-                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                  저장
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingBookDetailStatus(null)}
-                  className="flex items-center gap-1 rounded-lg bg-white/70 px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:bg-white/90"
-                >
-                  <X size={11} />
-                  취소
-                </button>
-              </div>
-            );
-          })()}
+          <label className="mt-3 block space-y-1.5">
+            <span className="text-xs font-semibold text-muted-foreground">
+              메모
+            </span>
+            <Textarea
+              value={pendingBookDetailMemo}
+              onChange={e => setPendingBookDetailMemo(e.target.value)}
+              maxLength={200}
+              placeholder={
+                (pendingBookDetailStatus || savedStatus) === "want"
+                  ? "이 책을 읽고 싶은 이유나 기대평을 적어보세요."
+                  : (pendingBookDetailStatus || savedStatus) === "done"
+                    ? "완독 후 남기고 싶은 감상을 적어보세요."
+                    : "이 책에 대해 간단히 메모해보세요."
+              }
+              className="h-24 resize-none rounded-xl bg-secondary/40 text-sm"
+            />
+            <span className="block text-right text-[10px] text-muted-foreground/60">
+              {pendingBookDetailMemo.length}/200
+            </span>
+          </label>
+
+          <div className="mt-4 flex gap-2 border-t border-border/40 pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={closeShelfPopup}
+              className="h-10 flex-1 rounded-xl"
+            >
+              <X size={14} className="mr-1.5" />
+              취소
+            </Button>
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={handleShelfPopupSave}
+              className="h-10 flex-1 rounded-xl font-bold"
+            >
+              {saving ? (
+                <>
+                  <Loader2 size={14} className="mr-2 animate-spin" />
+                  저장 중
+                </>
+              ) : (
+                <>
+                  <Check size={14} className="mr-1.5" />
+                  저장하기
+                </>
+              )}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

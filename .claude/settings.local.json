@@ -4,7 +4,8 @@
       "Bash(npx vite *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
       "Bash(node scripts/seedFirestore.cjs)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(node *)"
     ]
   }
 }
