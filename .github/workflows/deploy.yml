@@ -94,11 +94,11 @@ jobs:
               docker stop booklog 2>/dev/null || true
               docker rm   booklog 2>/dev/null || true
 
-              echo "▶ 새 컨테이너 실행 (포트 80:80)"
+              echo "▶ 새 컨테이너 실행 (포트 3000:80)"
               docker run -d \
                 --name booklog \
                 --restart always \
-                -p 80:80 \
+                -p 3000:80 \
                 booklog:latest
 
               echo "▶ 이전 이미지 정리"
