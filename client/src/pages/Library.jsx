@@ -1614,7 +1614,7 @@ export default function Library() {
                       className="flex aspect-square cursor-pointer items-center justify-center"
                     >
                       <div
-                        className={`flex h-[92%] w-[92%] items-center justify-center rounded-full text-xs transition-all duration-200 ${
+                        className={`flex h-[92%] w-[92%] transform-gpu items-center justify-center rounded-full text-xs transition-all duration-200 hover:-translate-y-0.5 hover:scale-105 hover:shadow-md ${
                           isSelected
                             ? "font-bold shadow-md"
                             : level > 0
@@ -1652,7 +1652,7 @@ export default function Library() {
 
                 {/* 독서한 날 · 총 페이지 · 일 평균 */}
                 <div className="mb-3 grid grid-cols-3 divide-x divide-border/40 rounded-xl bg-secondary/50 py-3">
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-card/35">
                     <span className="text-[10px] text-muted-foreground">
                       독서한 날
                     </span>
@@ -1666,7 +1666,7 @@ export default function Library() {
                       <span className="text-xs text-muted-foreground">일</span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-card/35">
                     <span className="text-[10px] text-muted-foreground">
                       총 페이지
                     </span>
@@ -1677,7 +1677,7 @@ export default function Library() {
                       {monthStats.totalPages.toLocaleString()}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center gap-1">
+                  <div className="flex flex-col items-center gap-1 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-card/35">
                     <span className="text-[10px] text-muted-foreground">
                       하루 평균
                     </span>
@@ -1763,7 +1763,7 @@ export default function Library() {
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="flex-1 rounded-lg py-2 text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                  className="flex-1 transform-gpu rounded-lg py-2 text-xs transition-all duration-200 hover:-translate-y-0.5 hover:bg-card/70 hover:text-foreground data-[state=active]:bg-card data-[state=active]:shadow-sm"
                 >
                   {tab.label}
                   <span className="ml-1 text-[10px] text-muted-foreground">
