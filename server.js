@@ -48,9 +48,9 @@ app.use(
 // 정적 파일 서빙 (빌드된 결과물)
 app.use(express.static(path.join(__dirname, "dist/public")));
 
-// SPA 라우팅 (모든 요청을 index.html로 보내 React가 처리하게 함)
-// Express 5 버전과 호환되도록 (.*) 형식을 사용합니다.
-app.get("(.*)", (req, res) => {
+// SPA 라우팅 (모든 요청을 index.html로 보냄)
+// 문자열 "(.*)" 대신 정규표현식 객체 /.*/ 를 사용하세요.
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "dist/public/index.html"));
 });
 
