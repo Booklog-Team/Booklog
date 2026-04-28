@@ -1004,7 +1004,7 @@ export default function Profile() {
   return (
     <>
       {/* 아바타 + 정보 + 장르 행 (50:50 분할 카드 그리드) */}
-      <div className="relative z-10 px-4 mt-8 mb-8 animate-fade-in-up grid grid-cols-2 gap-3.5">
+      <div className="relative px-4 mt-8 mb-8 animate-fade-in-up grid grid-cols-2 gap-3.5">
         
         {/* 왼쪽: 아바타와 정보 + 선호 장르 카드 */}
         <div className="bg-card backdrop-blur-md rounded-[1.5rem] p-5 border border-border/50 shadow-sm flex flex-col justify-between h-full min-h-[340px]">
