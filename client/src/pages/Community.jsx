@@ -5,6 +5,7 @@ import { db } from "@/firebase/config";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { getMeetingStatus, sortMeetings, sortPosts } from "@/utils/community";
 import {
   Plus,
   Users,
@@ -34,8 +35,31 @@ const MEETING_GENRES = [
   "역사",
   "기타",
 ];
-const MEETING_FILTERS = ["전체", "참가 중", ...MEETING_GENRES];
+const MEETING_FILTERS = ["전체", "참가 중", "모집중", "마감", ...MEETING_GENRES];
 const PAGE_SIZE = 8;
+
+const MEETING_SORT_OPTIONS = [
+  { value: "latest", label: "최신개설순" },
+  { value: "deadline", label: "마감임박순" },
+  { value: "popular", label: "참여많은순" },
+];
+
+const BOARD_SORT_OPTIONS = [
+  { value: "latest", label: "최신등록순" },
+  { value: "likes", label: "좋아요순" },
+];
+
+const MEETING_STATUS_LABEL = {
+  joined: "참가 중",
+  recruiting: "모집중",
+  closed: "마감",
+};
+
+const MEETING_STATUS_BADGE = {
+  joined: "bg-primary text-primary-foreground",
+  recruiting: "bg-accent text-accent-foreground",
+  closed: "bg-destructive text-destructive-foreground",
+};
 
 const CAT_STYLE = {
   자유: { bg: "bg-secondary", text: "text-secondary-foreground" },
@@ -66,7 +90,9 @@ export default function Community() {
   const defaultTab = location.state?.tab ?? "meeting";
 
   const [meetingFilter, setMeetingFilter] = useState("전체");
+  const [meetingSort, setMeetingSort] = useState("latest");
   const [filterCat, setFilterCat] = useState("전체");
+  const [boardSort, setBoardSort] = useState("latest");
   const [imgErrors, setImgErrors] = useState({});
   const [meetingPage, setMeetingPage] = useState(1);
   const [boardPage, setBoardPage] = useState(1);
@@ -99,19 +125,27 @@ export default function Community() {
     );
   }, []);
 
-  const filteredMeetings =
+  const baseFilteredMeetings =
     meetingFilter === "전체"
       ? meetings
       : meetingFilter === "참가 중"
         ? meetings.filter(m => m.members?.includes(user?.uid))
-        : meetings.filter(m => m.genre === meetingFilter);
+        : meetingFilter === "모집중"
+          ? meetings.filter(m => getMeetingStatus(m, user?.uid).isRecruiting)
+          : meetingFilter === "마감"
+            ? meetings.filter(m => getMeetingStatus(m, user?.uid).isClosed)
+            : meetings.filter(m => m.genre === meetingFilter);
 
-  const filteredPosts =
+  const filteredMeetings = sortMeetings(baseFilteredMeetings, meetingSort);
+
+  const baseFilteredPosts =
     filterCat === "전체"
       ? posts
       : filterCat === "내 게시글"
         ? posts.filter(p => p.authorUid === user?.uid)
         : posts.filter(p => p.category === filterCat);
+
+  const filteredPosts = sortPosts(baseFilteredPosts, boardSort);
 
   const totalMeetingPages = Math.ceil(filteredMeetings.length / PAGE_SIZE);
   const pagedMeetings = filteredMeetings.slice(
@@ -191,6 +225,25 @@ export default function Community() {
               ))}
             </div>
 
+            <div className="flex gap-1 rounded-xl bg-secondary p-1 mb-4">
+              {MEETING_SORT_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setMeetingSort(option.value);
+                    setMeetingPage(1);
+                  }}
+                  className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                    meetingSort === option.value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
             {loadingMeetings ? (
               <div className="flex justify-center pt-16">
                 <Loader2
@@ -206,7 +259,11 @@ export default function Community() {
                     ? "아직 개설된 모임이 없어요"
                     : meetingFilter === "참가 중"
                       ? "참가 중인 모임이 없어요"
-                      : `${meetingFilter} 장르 모임이 없어요`}
+                      : meetingFilter === "모집중"
+                        ? "모집 중인 모임이 없어요"
+                        : meetingFilter === "마감"
+                          ? "마감된 모임이 없어요"
+                          : `${meetingFilter} 장르 모임이 없어요`}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {meetingFilter === "전체" &&
@@ -217,12 +274,16 @@ export default function Community() {
               <>
                 <div className="grid grid-cols-2 gap-3 stagger-children">
                   {pagedMeetings.map((meeting, idx) => {
-                    const memberCount = meeting.members?.length ?? 0;
-                    const isJoined = meeting.members?.includes(user?.uid);
-                    const isFull = memberCount >= (meeting.maxMembers || 10);
+                    const {
+                      memberCount,
+                      maxMembers,
+                      statusKey,
+                    } = getMeetingStatus(meeting, user?.uid);
+                    const statusLabel = MEETING_STATUS_LABEL[statusKey];
+                    const statusClass = MEETING_STATUS_BADGE[statusKey];
                     const pct = Math.min(
                       100,
-                      (memberCount / (meeting.maxMembers || 1)) * 100
+                      (memberCount / maxMembers) * 100
                     );
 
                     return (
@@ -254,16 +315,11 @@ export default function Community() {
                             </div>
                           )}
                           <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
-                          {isJoined && (
-                            <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-primary text-primary-foreground text-[10px] font-semibold rounded-full">
-                              참여 중
-                            </span>
-                          )}
-                          {isFull && !isJoined && (
-                            <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-semibold rounded-full">
-                              마감
-                            </span>
-                          )}
+                          <span
+                            className={`absolute top-2 right-2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ring-1 ring-white/35 ${statusClass}`}
+                          >
+                            {statusLabel}
+                          </span>
                         </div>
 
                         <div className="p-3">
@@ -285,7 +341,7 @@ export default function Community() {
                           <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
                             <span className="flex items-center gap-0.5">
                               <Users size={10} /> {memberCount}/
-                              {meeting.maxMembers}명
+                              {maxMembers}명
                             </span>
                             {meeting.deadline && (
                               <span className="flex items-center gap-0.5">
@@ -367,6 +423,25 @@ export default function Community() {
                   }`}
                 >
                   {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-1 rounded-xl bg-secondary p-1 mb-4">
+              {BOARD_SORT_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setBoardSort(option.value);
+                    setBoardPage(1);
+                  }}
+                  className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                    boardSort === option.value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
                 </button>
               ))}
             </div>
