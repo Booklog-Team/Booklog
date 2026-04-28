@@ -38,6 +38,7 @@ jobs:
           VITE_ALADIN_API_KEY=${{ secrets.VITE_ALADIN_API_KEY }}
           VITE_GOOGLE_MAPS_KEY=${{ secrets.VITE_GOOGLE_MAPS_KEY }}
           VITE_LIBRARY_API_KEY=${{ secrets.VITE_LIBRARY_API_KEY }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
           EOF
 
           # client 폴더용 .env 생성
