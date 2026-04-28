@@ -21,7 +21,7 @@ app.use(
 app.use(
   "/api/aladin",
   createProxyMiddleware({
-    target: "https://www.aladin.co.kr",
+    target: "http://www.aladin.co.kr",
     changeOrigin: true,
     pathRewrite: { "^/api/aladin": "/ttb/api" },
   })
