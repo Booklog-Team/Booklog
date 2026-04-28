@@ -17,6 +17,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import {
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { usePoint } from '@/contexts/PointContext';
 
 // ─── 헬퍼 ────────────────────────────────────────────────
@@ -61,6 +65,7 @@ export default function Board() {
   const [view, setView]                     = useState('list');
   const [fbPosts, setFbPosts]               = useState([]);
   const [selectedPostId, setSelectedPostId] = useState(null);
+  const [mockPost, setMockPost]             = useState(null);
   const [fbComments, setFbComments]         = useState([]);
   const [loadingPosts, setLoadingPosts]     = useState(true);
   const [submitting, setSubmitting]         = useState(false);
@@ -68,6 +73,9 @@ export default function Board() {
   const [commentText, setCommentText]       = useState('');
   const [newPost, setNewPost]               = useState({ title: '', content: '', category: '자유' });
   const [fromCommunity, setFromCommunity]   = useState(false);
+  const [confirmState, setConfirmState]     = useState({ open: false, title: '', body: '', action: null });
+  function openConfirm(title, body, action) { setConfirmState({ open: true, title, body, action }); }
+  function closeConfirm() { setConfirmState({ open: false, title: '', body: '', action: null }); }
 
   // board 목록 실시간 구독
   useEffect(() => {
@@ -89,8 +97,8 @@ export default function Board() {
   const posts    = fbPosts;
   const comments = fbComments;
 
-  // onSnapshot이 posts를 갱신할 때 selectedPost도 자동 최신화
-  const selectedPost = posts.find(p => p.id === selectedPostId) ?? null;
+  // onSnapshot이 posts를 갱신할 때 selectedPost도 자동 최신화 (없으면 mockPost 사용)
+  const selectedPost = posts.find(p => p.id === selectedPostId) ?? mockPost ?? null;
 
   // Community.jsx에서 navigation state로 넘어온 경우 처리
   useEffect(() => {
@@ -98,8 +106,10 @@ export default function Board() {
     if (!state) return;
     if (state.view === 'create') {
       setView('create');
+      setFromCommunity(true);
     } else if (state.view === 'detail' && state.postId) {
       setSelectedPostId(state.postId);
+      if (state.post) setMockPost(state.post);
       setView('detail');
       setFromCommunity(true);
     }
@@ -151,15 +161,15 @@ export default function Board() {
 
   // 게시글 삭제
   async function handleDeletePost() {
-    if (!window.confirm('게시글을 삭제할까요?')) return;
-    try {
-      await deleteDoc(doc(db, 'board', selectedPostId));
-      toast.success('게시글이 삭제됐어요.');
-      setSelectedPostId(null);
-      setView('list');
-    } catch {
-      toast.error('삭제 중 오류가 발생했어요.');
-    }
+    openConfirm('게시글을 삭제할까요?', '이 작업은 되돌릴 수 없어요.', async () => {
+      try {
+        await deleteDoc(doc(db, 'board', selectedPostId));
+        toast.success('게시글이 삭제됐어요.');
+        navigate('/community', { state: { tab: 'board' } });
+      } catch {
+        toast.error('삭제 중 오류가 발생했어요.');
+      }
+    });
   }
 
   // 댓글 삭제
@@ -198,7 +208,10 @@ export default function Board() {
       <>
         <div className="flex items-center gap-3 px-4 pt-6 pb-4">
           <button
-            onClick={() => setView('list')}
+            onClick={() => fromCommunity
+              ? navigate('/community', { state: { tab: 'board' } })
+              : setView('list')
+            }
             className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary hover:bg-secondary/80 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -267,24 +280,24 @@ export default function Board() {
             <ArrowLeft size={18} />
           </button>
           <h1 className="text-lg font-bold flex-1 line-clamp-1">게시글</h1>
-          {isAuthor && (
-            <button
-              onClick={handleDeletePost}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
-            >
-              <Trash2 size={16} />
-            </button>
-          )}
         </div>
 
         <div className="px-4 pb-10 max-w-2xl">
           {/* 본문 */}
-          <div className="mb-5">
+          <div className="book-card p-5 mb-5 relative">
+            {isAuthor && (
+              <button
+                onClick={handleDeletePost}
+                className="absolute top-3 right-3 flex items-center justify-center w-7 h-7 rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
             <span className={`inline-block text-[10px] font-semibold ${catStyle.bg} ${catStyle.text} rounded-full px-2.5 py-1 mb-3`}>
               {selectedPost.category}
             </span>
             <h2
-              className="text-xl font-bold mb-3 leading-snug"
+              className="text-xl font-bold mb-3 leading-snug pr-8"
               style={{ fontFamily: "'Noto Serif KR', serif" }}
             >
               {selectedPost.title}
@@ -359,7 +372,7 @@ export default function Board() {
               placeholder="댓글을 입력하세요..."
               value={commentText}
               onChange={e => setCommentText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAddComment()}
+              onKeyUp={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { handleAddComment(); } }}
               className="flex-1 h-10 bg-secondary border-none rounded-xl text-sm"
             />
             <button
@@ -371,6 +384,29 @@ export default function Board() {
             </button>
           </div>
         </div>
+
+        <Dialog open={confirmState.open} onOpenChange={open => !open && closeConfirm()}>
+          <DialogContent showCloseButton={false} className="max-w-[320px]">
+            <DialogHeader>
+              <DialogTitle>{confirmState.title}</DialogTitle>
+              <DialogDescription>{confirmState.body}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2 mt-2">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 h-9 rounded-xl border border-border text-sm hover:bg-secondary transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => { confirmState.action?.(); closeConfirm(); }}
+                className="flex-1 h-9 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition-colors"
+              >
+                삭제
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     );
   }
