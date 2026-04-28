@@ -12,11 +12,11 @@ jobs:
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ── 2. Node.js 20 설정 ───────────────────────────────────────────────────
       - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
@@ -52,6 +52,7 @@ jobs:
           VITE_ALADIN_API_KEY=${{ secrets.VITE_ALADIN_API_KEY }}
           VITE_GOOGLE_MAPS_KEY=${{ secrets.VITE_GOOGLE_MAPS_KEY }}
           VITE_LIBRARY_API_KEY=${{ secrets.VITE_LIBRARY_API_KEY }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
           EOF
 
       # ── 4. 빌드 ──────────────────────────────────────────────────────────────
@@ -81,10 +82,13 @@ jobs:
 
       # ── 8. EC2 SSH 접속 → 이미지 로드 + 컨테이너 교체 ───────────────────────
       - name: Deploy on EC2
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           ssh -i /tmp/ec2_key \
             -o StrictHostKeyChecking=no \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
+              export GROQ_API_KEY="'"$GROQ_API_KEY"'"
               set -e
 
               echo "▶ Docker 이미지 로드"
@@ -99,6 +103,7 @@ jobs:
                 --name booklog \
                 --restart always \
                 -p 3000:80 \
+                -e GROQ_API_KEY="$GROQ_API_KEY" \
                 booklog:latest
 
               echo "▶ 이전 이미지 정리"
