@@ -616,7 +616,7 @@ export default function Search() {
                   {recentSearches.map(term => (
                     <div
                       key={term}
-                      className="flex items-center bg-secondary/60 rounded-full text-sm font-medium border border-transparent hover:border-primary/20 transition-all"
+                      className="flex items-center bg-card rounded-full text-sm font-medium border border-border/40 hover:border-primary/20 transition-all shadow-sm"
                     >
                       <button
                         onClick={() => handleRecentSearch(term)}

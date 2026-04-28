@@ -1113,7 +1113,6 @@ export default function Meeting() {
             </div>
             <h2
               className="text-xl font-bold mb-2 pr-8"
-              style={{ fontFamily: "'Noto Serif KR', serif" }}
             >
               {selectedMeeting.title}
             </h2>
@@ -1447,7 +1446,6 @@ export default function Meeting() {
           </button>
           <h1
             className="text-xl font-bold"
-            style={{ fontFamily: "'Noto Serif KR', serif" }}
           >
             독서 모임
           </h1>
@@ -1537,7 +1535,6 @@ export default function Meeting() {
                     )}
                     <h3
                       className="font-bold text-xs leading-snug mb-1 line-clamp-1"
-                      style={{ fontFamily: "'Noto Serif KR', serif" }}
                     >
                       {meeting.title}
                     </h3>

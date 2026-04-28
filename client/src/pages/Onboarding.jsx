@@ -148,7 +148,6 @@ export default function Onboarding() {
 
             <h1
               className="text-3xl font-bold leading-tight mb-3"
-              style={{ fontFamily: "'Noto Serif KR', serif" }}
             >
               독서를 기록하고,
               <br />공유하며,
@@ -198,7 +197,6 @@ export default function Onboarding() {
         </div>
         <h1
           className="text-2xl font-bold text-foreground mb-2"
-          style={{ fontFamily: "'Noto Serif KR', serif" }}
         >
           어떤 책을 좋아하세요?
         </h1>

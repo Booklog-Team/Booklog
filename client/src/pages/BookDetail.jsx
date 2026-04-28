@@ -374,6 +374,7 @@ export default function BookDetail() {
         totalPage,
         memo,
         rating,
+        genre: info.categories || [],
       };
 
       if (status === "reading" || status === "done") {
@@ -494,6 +495,7 @@ export default function BookDetail() {
         totalPage,
         memo: savedMemo || "",
         rating,
+        genre: info.categories || [],
         ...(newStatus !== "want" && { lastReadDate: today, checkedDates: arrayUnion(today) }),
         ...(isFirstAdd && { addedAt: today }),
       }, { merge: true });
