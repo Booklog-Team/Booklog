@@ -70,6 +70,12 @@ export const THEMES = [
     swatches: ["#0F172A", "#E11D48", "#10B981"],
     dark: true,
   },
+  {
+    id: "glass",
+    label: "유리 (Glass) 💎",
+    desc: "투명하고 세련된 글래스모피즘 디자인",
+    swatches: ["#E5E7EB", "#007AFF", "#FFFFFF"],
+  },
 ];
 
 const DARK_THEMES = new Set(THEMES.filter(t => t.dark).map(t => t.id));
