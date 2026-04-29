@@ -47,6 +47,8 @@ async function startServer() {
         body: JSON.stringify(req.body),
       });
       const data = await response.json();
+      const retryAfter = response.headers.get('retry-after');
+      if (retryAfter) res.set('retry-after', retryAfter);
       res.status(response.status).json(data);
     } catch (e) {
       res.status(500).json({ error: e.message });
