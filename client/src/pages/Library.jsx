@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { toast } from "sonner";
@@ -302,10 +302,6 @@ function timestampMs(value) {
   return 0;
 }
 
-function logDateMs(log) {
-  return timestampMs(log?.date);
-}
-
 function logUpdateMs(log) {
   return (
     timestampMs(log?.orderUpdatedAt) ||
@@ -333,12 +329,6 @@ function compareLogsSameDate(a, b) {
   const updateDiff = logUpdateMs(b) - logUpdateMs(a);
   if (updateDiff !== 0) return updateDiff;
   return String(a.id || "").localeCompare(String(b.id || ""));
-}
-
-function logActivityMs(log) {
-  const day = logDateMs(log);
-  const withinDay = Math.min(logUpdateMs(log) % 86_400_000, 86_399_999);
-  return day + withinDay / 86_400_000;
 }
 
 function sortLogs(logs, order = "latest") {
@@ -370,13 +360,12 @@ function shouldShowStatusBadge(logs, index) {
   return logs[index - 1]?.status !== logs[index]?.status;
 }
 
-function getLatestBookActivityMs(book, latestLogActivityMsByBook) {
+function getLatestBookActivityMs(book, latestLogUpdatedMsByBook) {
   return Math.max(
     timestampMs(book?.updatedAt),
     timestampMs(book?.addedAt),
-    timestampMs(book?.lastReadDate),
     timestampMs(book?.createdAt),
-    latestLogActivityMsByBook.get(book?.id) || 0
+    latestLogUpdatedMsByBook.get(book?.id) || 0
   );
 }
 
@@ -510,6 +499,7 @@ export default function Library() {
   const [draggedLogId, setDraggedLogId] = useState(null);
   const [dragOverLogId, setDragOverLogId] = useState(null);
   const [dragOverDate, setDragOverDate] = useState(null);
+  const draggedLogIdRef = useRef(null);
   const [shelfPage, setShelfPage] = useState(1);
   const [confirmDeleteShelfBookId, setConfirmDeleteShelfBookId] =
     useState(null);
@@ -524,10 +514,10 @@ export default function Library() {
     () => buildDisplayLogs(books, readingLogs),
     [books, readingLogs]
   );
-  const latestLogActivityMsByBook = useMemo(() => {
+  const latestLogUpdatedMsByBook = useMemo(() => {
     const map = new Map();
     readingLogs.forEach(log => {
-      const next = logActivityMs(log);
+      const next = logUpdateMs(log);
       if (next > (map.get(log.bookId) || 0)) map.set(log.bookId, next);
     });
     return map;
@@ -536,12 +526,12 @@ export default function Library() {
     () =>
       [...books].sort((a, b) => {
         const activityDiff =
-          getLatestBookActivityMs(b, latestLogActivityMsByBook) -
-          getLatestBookActivityMs(a, latestLogActivityMsByBook);
+          getLatestBookActivityMs(b, latestLogUpdatedMsByBook) -
+          getLatestBookActivityMs(a, latestLogUpdatedMsByBook);
         if (activityDiff !== 0) return activityDiff;
         return (a.title || "").localeCompare(b.title || "", "ko");
       }),
-    [books, latestLogActivityMsByBook]
+    [books, latestLogUpdatedMsByBook]
   );
 
   const readingActivityBooks = useMemo(
@@ -825,13 +815,17 @@ export default function Library() {
   };
 
   const clearDragState = () => {
+    draggedLogIdRef.current = null;
     setDraggedLogId(null);
     setDragOverLogId(null);
     setDragOverDate(null);
   };
 
   const getDraggedLog = event => {
-    const id = event?.dataTransfer?.getData("text/plain") || draggedLogId;
+    const id =
+      event?.dataTransfer?.getData("text/plain") ||
+      draggedLogIdRef.current ||
+      draggedLogId;
     if (!id) return null;
     return displayLogs.find(log => log.id === id && !log.isSnapshot) || null;
   };
@@ -874,13 +868,14 @@ export default function Library() {
     if (log.isSnapshot) return;
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", log.id);
+    event.dataTransfer.setData("application/x-booklog-log-id", log.id);
+    draggedLogIdRef.current = log.id;
     setDraggedLogId(log.id);
   };
 
   const handleLogDragOver = (event, targetLog) => {
-    if (!draggedLogId || !targetLog || targetLog.isSnapshot) return;
     const draggedLog = getDraggedLog(event);
-    if (!draggedLog) return;
+    if (!draggedLog || !targetLog || targetLog.isSnapshot) return;
     event.preventDefault();
     event.stopPropagation();
     const isBlocked =
@@ -995,6 +990,8 @@ export default function Library() {
     e.preventDefault();
     if (!recordBook) return;
 
+    const selectedRecordDate = recordDate || todayStr;
+    const isBackdatedRecord = selectedRecordDate < todayStr;
     const maxPage = recordBook.totalPage || 99999;
     const fromPage =
       recordStatus === "want"
@@ -1021,6 +1018,7 @@ export default function Library() {
     if (
       !statusChanged &&
       !ratingChanged &&
+      !isBackdatedRecord &&
       recordStatus !== "want" &&
       pagesRead <= 0 &&
       !recordMemo.trim()
@@ -1032,7 +1030,7 @@ export default function Library() {
     setRecordSaving(true);
     try {
       await addReadingLog(recordBook.id, {
-        date: recordDate || todayStr,
+        date: selectedRecordDate,
         status: recordStatus,
         pagesRead,
         fromPage,
@@ -1465,6 +1463,11 @@ export default function Library() {
                           return (
                             <div
                               key={bookId}
+                              draggable={!primaryLog?.isSnapshot}
+                              onDragStart={event =>
+                                handleLogDragStart(event, primaryLog)
+                              }
+                              onDragEnd={clearDragState}
                               onDragOver={event =>
                                 handleLogDragOver(event, primaryLog)
                               }
@@ -1475,6 +1478,10 @@ export default function Library() {
                               className={`rounded-xl border border-border/60 overflow-hidden ${
                                 dragOverLogId === primaryLog?.id
                                   ? "outline outline-2 outline-primary/35"
+                                  : ""
+                              } ${
+                                !primaryLog?.isSnapshot
+                                  ? "cursor-grab active:cursor-grabbing"
                                   : ""
                               }`}
                             >
