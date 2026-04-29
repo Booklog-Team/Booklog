@@ -28,7 +28,11 @@ import {
   Tag,
   Library as LibraryIcon,
   PenTool,
-  ArrowDown
+  ArrowDown,
+  User,
+  Rocket,
+  Shield,
+  Monitor
 } from "lucide-react";
 
 /**
@@ -207,6 +211,12 @@ const Presentation = () => {
         { from: "상태 동기화", to: "Firebase Firestore", result: "사용자 활동 데이터 실시간 저장" }
       ]
     },
+    // 16.5 시스템 아키텍처
+    {
+      type: "system",
+      title: "System Architecture",
+      image: "/features/CICD Pipeline for GitHub-2026-04-29-062613.png"
+    },
     // 17-23. 주요 기능 7개
     // 17-29. 주요 기능 상세
     {
@@ -319,7 +329,7 @@ const Presentation = () => {
         "사용자 서재 데이터를 분석하여 중복 없는 미독 도서 제안",
         "대화 문맥에서 도서 의도를 파악하여 즉시 카드 출력"
       ],
-      images: ["/features/chatbot.png"]
+      images: ["/features/chatbot.png", "/features/chatbot1.png"]
     },
     {
       type: "feature",
@@ -329,7 +339,7 @@ const Presentation = () => {
         "포인트로 도서 관련 단체에 기부",
         "전체 기부 현황 실시간 Firestore 구독"
       ],
-      images: ["/features/points.png", "/features/donation.png"]
+      images: ["/features/points.png"]
     },
     {
       type: "feature",
@@ -413,17 +423,25 @@ const Presentation = () => {
         }
       ]
     },
-    // 22. 회고 & 배운 점
+    // 22. 프로젝트 회고 & 배운 점
     {
       type: "retrospective",
-      title: "프로젝트 회고 & 배운 점",
-      items: [
-        "복합 외부 API 연동 및 데이터 가공 역량 확보",
-        "LLM(AI)의 한계를 기술적으로 극복하는 아키텍처 설계 경험",
-        "Firebase 기반 실시간 데이터 처리 및 사용자 경험 최적화",
-        "협업 브랜치 전략 및 역할 분담을 통한 생산성 향상"
+      title: "🌱 프로젝트 회고 & 배운 점",
+      members: [
+        {
+          name: "신민서",
+          feedback: "UI 구현을 넘어 Firestore 데이터 설계, Docker 환경 구성, GitHub Actions를 통한 CI/CD 구축 과정에서 시스템 전체를 조망하는 재미를 느꼈습니다. 단순히 '동작하는 코드'가 아닌 '운영 가능한 서비스'를 만드는 것의 가치를 배웠습니다."
+        },
+        {
+          name: "이예진",
+          feedback: "사용자 입장에서 이해하기 쉬운 구조를 고민하며 점진적으로 완성도를 높여가는 방식의 중요성을 깨달았습니다. AI(바이브코딩)를 활용할 때도 요구사항을 얼마나 명확하게 전달하느냐에 따라 품질이 결정된다는 점을 실전에서 체득했습니다."
+        },
+        {
+          name: "홍준화",
+          feedback: "API 연동 시 근본 원인(Rate Limit 등)을 파악하고 직렬화 큐와 캐시 전략으로 해결하며 문제를 깊이 있게 이해하는 법을 배웠습니다. 배포 과정에서 겪은 환경변수 및 서버 아키텍처 이슈들은 실무 역량을 키우는 값진 경험이 되었습니다."
+        }
       ],
-      future: "PWA 전환 및 백엔드 보완을 통한 완성도 향상"
+      future: "단순 독서 기록을 넘어 AI와 데이터가 결합된 '독서 가치 확장 플랫폼'으로의 성장"
     },
     // 23. 클로징
     {
@@ -1361,6 +1379,24 @@ const SlideContent = ({ slide, currentSlide }) => {
         </div>
       );
 
+    case "system":
+      return (
+        <div className="space-y-10 h-full flex flex-col">
+          <SlideHeader title={title} />
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="flex-1 w-full max-w-6xl mx-auto rounded-[3rem] overflow-hidden border border-white/10 shadow-2xl bg-white/5 p-4 flex items-center justify-center"
+          >
+            <img 
+              src={slide.image} 
+              alt="System Architecture" 
+              className="max-w-full max-h-full object-contain rounded-2xl"
+            />
+          </motion.div>
+        </div>
+      );
+
     case "architecture":
       return (
         <div className="space-y-16 h-full flex flex-col justify-center py-10">
@@ -1481,44 +1517,48 @@ const SlideContent = ({ slide, currentSlide }) => {
 
     case "retrospective":
       return (
-        <div className="space-y-12">
+        <div className="space-y-10">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-2 gap-16 text-left max-w-6xl mx-auto w-full">
-            <div className="space-y-10">
-              <h3 className="text-2xl font-black text-primary mb-8 flex items-center gap-4 uppercase tracking-widest"><Terminal size={32} /> Technical Growth</h3>
-              <div className="space-y-6">
-                {items.map((item, i) => (
-                  <motion.div 
-                    key={i}
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: i * 0.1 }}
-                    className="flex items-center gap-6 p-8 rounded-[2rem] bg-white/5 border border-white/10 shadow-xl group hover:bg-white/[0.08] transition-all"
-                  >
-                    <CheckCircle2 className="text-primary group-hover:scale-110 transition-transform" size={28} />
-                    <p className="text-slate-200 font-bold text-xl text-left">{item}</p>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-10">
-              <h3 className="text-2xl font-black text-blue-400 mb-8 flex items-center gap-4 uppercase tracking-widest"><Lightbulb size={32} /> Future Roadmap</h3>
-              <div className="p-12 rounded-[3.5rem] bg-blue-500/10 border border-blue-500/20 h-full flex flex-col justify-center shadow-2xl relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent" />
-                <p className="text-3xl font-black text-blue-100 leading-tight relative z-10">{slide.future}</p>
-                <div className="mt-12 space-y-6 relative z-10">
-                  <div className="flex items-center gap-4 text-slate-300 font-black text-lg group-hover:translate-x-2 transition-transform">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">✨</div>
-                    PWA 전환 (Offline 지원)
-                  </div>
-                  <div className="flex items-center gap-4 text-slate-300 font-black text-lg group-hover:translate-x-2 transition-transform">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">✨</div>
-                    추천 알고리즘 고도화
-                  </div>
+          <div className="grid grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch">
+            {slide.members.map((m, i) => (
+              <motion.div 
+                key={i}
+                initial={{ y: 30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: i * 0.15 }}
+                className="flex flex-col p-8 rounded-[2.5rem] bg-white/5 border border-white/10 shadow-2xl group hover:border-primary/50 transition-all"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center text-primary mb-6 group-hover:scale-110 transition-transform">
+                  <User size={28} />
                 </div>
+                <h3 className="text-2xl font-black text-white mb-4 text-left">{m.name}</h3>
+                <div className="h-px bg-white/10 mb-6" />
+                <p className="text-slate-300 text-base leading-relaxed text-left font-medium break-keep">
+                  {m.feedback}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.div 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.6 }}
+            className="p-10 rounded-[3rem] bg-blue-500/10 border border-blue-500/20 max-w-5xl mx-auto mt-8 relative overflow-hidden group"
+          >
+            <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+              <Lightbulb size={120} />
+            </div>
+            <div className="flex items-center gap-6 relative z-10">
+              <div className="w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
+                <Rocket size={32} />
+              </div>
+              <div className="text-left">
+                <h4 className="text-blue-400 font-black text-sm uppercase tracking-widest mb-1">Future Roadmap</h4>
+                <p className="text-2xl font-black text-blue-100">{slide.future}</p>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       );
 

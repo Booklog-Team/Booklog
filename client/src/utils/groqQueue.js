@@ -35,13 +35,20 @@ export async function groqFetch(body) {
   return res;
 }
 
-// 챗봇용: 1초 간격 + 429 시 재시도 없이 즉시 반환 (UI에서 처리)
+// 챗봇용: 1초 간격 + 502/503(일시 장애) 5초 후 1회 재시도, 429는 즉시 반환(UI 처리)
 export async function groqFetchChat(body) {
-  return enqueueGroq(() =>
+  const doFetch = () => enqueueGroq(() =>
     fetch("/api/groq/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }), 1000
   );
+
+  let res = await doFetch();
+  if (res.status === 502 || res.status === 503) {
+    await new Promise(r => setTimeout(r, 5000));
+    res = await doFetch();
+  }
+  return res;
 }
