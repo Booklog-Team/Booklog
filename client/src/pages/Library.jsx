@@ -255,6 +255,31 @@ function getStatusEventText(log, dateOverride, { isFirstLog = false } = {}) {
   return null;
 }
 
+function getDateSummaryText(log, dateOverride) {
+  const dateLabel = formatDateShort(dateOverride || log?.date);
+  if (!dateLabel || !log?.status) return null;
+
+  if (log.status === "want") {
+    return {
+      text: `${dateLabel}에 내 서재에 등록`,
+      className: "text-muted-foreground",
+    };
+  }
+  if (log.status === "reading") {
+    return {
+      text: `${dateLabel}부터 읽기 시작`,
+      className: "text-muted-foreground",
+    };
+  }
+  if (log.status === "done") {
+    return {
+      text: "완독했어요! 🎉",
+      className: "font-semibold text-emerald-600",
+    };
+  }
+  return null;
+}
+
 function getStatusEventClassName(log) {
   if (log?.status === "done") return "text-emerald-600";
   if (log?.status === "reading") return "text-primary";
@@ -1422,13 +1447,10 @@ export default function Library() {
                             dateDetailSort
                           );
                           const latestDateLogId = getLatestLogId(dateLogs);
-                          const eventText =
-                            log.status === "done"
-                              ? null
-                              : getStatusEventText(log, selectedDate, {
-                                  isFirstLog:
-                                    log.id === firstLogIdByBook.get(bookId),
-                                });
+                          const summaryText = getDateSummaryText(
+                            log,
+                            selectedDate
+                          );
                           return (
                             <div
                               key={bookId}
@@ -1476,15 +1498,11 @@ export default function Library() {
                                     <p className="line-clamp-1 text-[11px] text-muted-foreground">
                                       {log.author}
                                     </p>
-                                    {eventText ? (
+                                    {summaryText ? (
                                       <p
-                                        className={`mt-1 text-[11px] font-semibold ${getStatusEventClassName(log)}`}
+                                        className={`mt-1 text-[11px] ${summaryText.className}`}
                                       >
-                                        {eventText}
-                                      </p>
-                                    ) : log.status === "done" ? (
-                                      <p className="mt-1 text-[11px] font-semibold text-emerald-600">
-                                        완독했어요! 🎉
+                                        {summaryText.text}
                                       </p>
                                     ) : startDate ? (
                                       <p className="mt-1 text-[11px] text-muted-foreground">
