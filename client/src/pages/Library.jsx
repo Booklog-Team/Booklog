@@ -19,7 +19,7 @@ import {
   FileText,
   Trash2,
   X,
-  Check,
+  GripVertical,
   Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -140,7 +140,11 @@ function RatingPicker({ value, onChange, disabled = false }) {
           >
             <Star
               size={22}
-              className={active ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}
+              className={
+                active
+                  ? "fill-amber-400 text-amber-400"
+                  : "text-muted-foreground/30"
+              }
             />
           </button>
         );
@@ -240,11 +244,12 @@ function getSliderThumbAlignedStyle(value, max) {
   return { left: `calc(${percent}% + ${thumbOffset}px)` };
 }
 
-function getStatusEventText(log, dateOverride) {
+function getStatusEventText(log, dateOverride, { isFirstLog = false } = {}) {
   const dateLabel = formatDateShort(dateOverride || log?.date);
-  if (!dateLabel || !log?.eventType) return null;
+  if (!dateLabel) return null;
 
-  if (log.eventType === "want_added") return `${dateLabel}에 읽고싶음에 등록`;
+  if (isFirstLog) return `${dateLabel}에 내 서재에 등록`;
+  if (!log?.eventType || log.eventType === "want_added") return null;
   if (log.eventType === "reading_started") return `${dateLabel}에 읽기 시작`;
   if (log.eventType === "completed") return `${dateLabel}에 완독`;
   return null;
@@ -254,6 +259,11 @@ function getStatusEventClassName(log) {
   if (log?.status === "done") return "text-emerald-600";
   if (log?.status === "reading") return "text-primary";
   return "text-muted-foreground";
+}
+
+function shouldShowLogPages(log) {
+  if (log?.status === "want") return false;
+  return Number(log?.fromPage || 0) > 0 || Number(log?.toPage || 0) > 0;
 }
 
 function timestampMs(value) {
@@ -267,16 +277,55 @@ function timestampMs(value) {
   return 0;
 }
 
-function logOrderMs(log) {
-  return timestampMs(log?.createdAt) || timestampMs(log?.date);
+function logDateMs(log) {
+  return timestampMs(log?.date);
+}
+
+function logUpdateMs(log) {
+  return (
+    timestampMs(log?.orderUpdatedAt) ||
+    timestampMs(log?.updatedAt) ||
+    timestampMs(log?.createdAt) ||
+    timestampMs(log?.date)
+  );
+}
+
+function hasManualSortOrder(log) {
+  return Number.isFinite(Number(log?.sortOrder));
+}
+
+function compareLogsSameDate(a, b) {
+  const aManual = hasManualSortOrder(a);
+  const bManual = hasManualSortOrder(b);
+  if (aManual || bManual) {
+    if (aManual && bManual) {
+      const diff = Number(a.sortOrder) - Number(b.sortOrder);
+      if (diff !== 0) return diff;
+    }
+    if (aManual !== bManual) return aManual ? -1 : 1;
+  }
+
+  const updateDiff = logUpdateMs(b) - logUpdateMs(a);
+  if (updateDiff !== 0) return updateDiff;
+  return String(a.id || "").localeCompare(String(b.id || ""));
+}
+
+function logActivityMs(log) {
+  const day = logDateMs(log);
+  const withinDay = Math.min(logUpdateMs(log) % 86_400_000, 86_399_999);
+  return day + withinDay / 86_400_000;
 }
 
 function sortLogs(logs, order = "latest") {
-  const direction = order === "oldest" ? 1 : -1;
+  const compareLatest = (a, b) => {
+    const dateDiff = (b.date || "").localeCompare(a.date || "");
+    if (dateDiff !== 0) return dateDiff;
+    return compareLogsSameDate(a, b);
+  };
+
   return [...logs].sort((a, b) => {
-    const diff = logOrderMs(a) - logOrderMs(b);
-    if (diff !== 0) return diff * direction;
-    return String(a.id || "").localeCompare(String(b.id || "")) * direction;
+    const result = compareLatest(a, b);
+    return order === "oldest" ? -result : result;
   });
 }
 
@@ -286,18 +335,23 @@ function getLatestLogId(logs) {
   return sortLogs(candidates, "latest")[0]?.id || null;
 }
 
+function getFirstLogId(logs) {
+  const realLogs = logs.filter(log => !log.isSnapshot);
+  return sortLogs(realLogs, "oldest")[0]?.id || null;
+}
+
 function shouldShowStatusBadge(logs, index) {
   if (index <= 0) return true;
   return logs[index - 1]?.status !== logs[index]?.status;
 }
 
-function getLatestBookActivityMs(book, latestLogMsByBook) {
+function getLatestBookActivityMs(book, latestLogActivityMsByBook) {
   return Math.max(
     timestampMs(book?.updatedAt),
     timestampMs(book?.addedAt),
     timestampMs(book?.lastReadDate),
     timestampMs(book?.createdAt),
-    latestLogMsByBook.get(book?.id) || 0
+    latestLogActivityMsByBook.get(book?.id) || 0
   );
 }
 
@@ -380,11 +434,7 @@ function buildDisplayLogs(books, logs) {
     });
   });
 
-  return [...normalized, ...fallbackLogs].sort((a, b) => {
-    if ((b.date || "") !== (a.date || ""))
-      return (b.date || "").localeCompare(a.date || "");
-    return timestampMs(b.createdAt) - timestampMs(a.createdAt);
-  });
+  return sortLogs([...normalized, ...fallbackLogs], "latest");
 }
 
 export default function Library() {
@@ -400,6 +450,7 @@ export default function Library() {
     updateStatus,
     addReadingLog,
     deleteReadingLog,
+    moveReadingLog,
   } = useShelf();
   const { addPoint } = usePoint();
 
@@ -431,8 +482,12 @@ export default function Library() {
   const [recordMemo, setRecordMemo] = useState("");
   const [recordRating, setRecordRating] = useState(0);
   const [confirmDeleteLogId, setConfirmDeleteLogId] = useState(null);
+  const [draggedLogId, setDraggedLogId] = useState(null);
+  const [dragOverLogId, setDragOverLogId] = useState(null);
+  const [dragOverDate, setDragOverDate] = useState(null);
   const [shelfPage, setShelfPage] = useState(1);
-  const [confirmDeleteShelfBookId, setConfirmDeleteShelfBookId] = useState(null);
+  const [confirmDeleteShelfBookId, setConfirmDeleteShelfBookId] =
+    useState(null);
   const [removeBookConfirm, setRemoveBookConfirm] = useState(false);
 
   const calendarBooks = books;
@@ -444,10 +499,10 @@ export default function Library() {
     () => buildDisplayLogs(books, readingLogs),
     [books, readingLogs]
   );
-  const latestLogMsByBook = useMemo(() => {
+  const latestLogActivityMsByBook = useMemo(() => {
     const map = new Map();
     readingLogs.forEach(log => {
-      const next = logOrderMs(log);
+      const next = logActivityMs(log);
       if (next > (map.get(log.bookId) || 0)) map.set(log.bookId, next);
     });
     return map;
@@ -456,12 +511,12 @@ export default function Library() {
     () =>
       [...books].sort((a, b) => {
         const activityDiff =
-          getLatestBookActivityMs(b, latestLogMsByBook) -
-          getLatestBookActivityMs(a, latestLogMsByBook);
+          getLatestBookActivityMs(b, latestLogActivityMsByBook) -
+          getLatestBookActivityMs(a, latestLogActivityMsByBook);
         if (activityDiff !== 0) return activityDiff;
         return (a.title || "").localeCompare(b.title || "", "ko");
       }),
-    [books, latestLogMsByBook]
+    [books, latestLogActivityMsByBook]
   );
 
   const readingActivityBooks = useMemo(
@@ -469,7 +524,7 @@ export default function Library() {
     [sortedBooks]
   );
 
-  // 가장 최근 기록된 읽는 중 도서 — 로그 생성 시각 우선
+  // 가장 최근 날짜에 기록된 읽는 중 도서
   const featured = useMemo(() => {
     if (readingActivityBooks.length === 0) return null;
     return readingActivityBooks[0];
@@ -570,9 +625,8 @@ export default function Library() {
         };
       })
       .sort((a, b) => {
-        const diff =
-          logOrderMs(a.primaryLog) - logOrderMs(b.primaryLog);
-        return dateDetailSort === "oldest" ? diff : -diff;
+        const result = compareLogsSameDate(a.primaryLog, b.primaryLog);
+        return dateDetailSort === "oldest" ? -result : result;
       });
   }, [logsOnDate, dateDetailSort]);
 
@@ -600,6 +654,14 @@ export default function Library() {
     () => getLatestLogId(focusedBookLogs),
     [focusedBookLogs]
   );
+  const focusedFirstLogId = useMemo(
+    () => getFirstLogId(focusedBookLogs),
+    [focusedBookLogs]
+  );
+  const focusedRegistrationDate = useMemo(() => {
+    const firstLog = focusedBookLogs.find(log => log.id === focusedFirstLogId);
+    return firstLog?.date || null;
+  }, [focusedBookLogs, focusedFirstLogId]);
 
   const focusedBookStartDate = useMemo(
     () => (focusedBook ? getBookStartDate(focusedBook, focusedBookLogs) : null),
@@ -619,6 +681,25 @@ export default function Library() {
     () => getLatestLogId(logModalLogs),
     [logModalLogs]
   );
+  const logModalFirstLogId = useMemo(
+    () => getFirstLogId(logModalLogs),
+    [logModalLogs]
+  );
+
+  const firstLogIdByBook = useMemo(() => {
+    const groups = new Map();
+    displayLogs.forEach(log => {
+      if (log.isSnapshot) return;
+      if (!groups.has(log.bookId)) groups.set(log.bookId, []);
+      groups.get(log.bookId).push(log);
+    });
+
+    const map = new Map();
+    groups.forEach((logs, bookId) => {
+      map.set(bookId, getFirstLogId(logs));
+    });
+    return map;
+  }, [displayLogs]);
 
   const featuredProgress = bookProgress(featured);
 
@@ -636,9 +717,7 @@ export default function Library() {
 
     const fromPage = nextStatus === "want" ? 0 : effectiveCurrentPage;
     const toPage =
-      nextStatus === "done" && book.totalPage
-        ? book.totalPage
-        : fromPage;
+      nextStatus === "done" && book.totalPage ? book.totalPage : fromPage;
 
     setPrevFromMarker(lastRealLog ? Number(lastRealLog.fromPage) || 0 : 0);
     setPrevToMarker(fromPage);
@@ -661,7 +740,9 @@ export default function Library() {
   const openRecordForBook = (bookId, { syncLeftPanel = true } = {}) => {
     const book = bookMap.get(bookId);
     if (!book) return;
-    const bookLogs = displayLogs.filter(l => l.bookId === bookId && !l.isSnapshot);
+    const bookLogs = displayLogs.filter(
+      l => l.bookId === bookId && !l.isSnapshot
+    );
     if (syncLeftPanel) {
       setFocusedBookId(bookId);
     }
@@ -718,6 +799,142 @@ export default function Library() {
     }
   };
 
+  const clearDragState = () => {
+    setDraggedLogId(null);
+    setDragOverLogId(null);
+    setDragOverDate(null);
+  };
+
+  const getDraggedLog = event => {
+    const id = event?.dataTransfer?.getData("text/plain") || draggedLogId;
+    if (!id) return null;
+    return displayLogs.find(log => log.id === id && !log.isSnapshot) || null;
+  };
+
+  const getBlockedDropMessage = (draggedLog, targetDate) => {
+    if (!draggedLog || !targetDate || draggedLog.date === targetDate) {
+      return null;
+    }
+    if (targetDate < draggedLog.date) {
+      return "설정한 날짜보다 이전 날짜로는 이동할 수 없어요.";
+    }
+    return "로그 날짜는 기록할 때 선택한 날짜로 유지돼요.";
+  };
+
+  const buildDropOrder = (draggedLog, targetDate, targetLog, insertAfter) => {
+    const sameDateLogs = sortLogs(
+      displayLogs.filter(
+        log =>
+          !log.isSnapshot &&
+          log.bookId === draggedLog.bookId &&
+          log.date === targetDate &&
+          log.id !== draggedLog.id
+      ),
+      "latest"
+    );
+    let targetIndex = sameDateLogs.length;
+
+    if (targetLog) {
+      const foundIndex = sameDateLogs.findIndex(log => log.id === targetLog.id);
+      targetIndex = foundIndex >= 0 ? foundIndex : sameDateLogs.length;
+      if (insertAfter) targetIndex += 1;
+    }
+
+    const nextLogs = [...sameDateLogs];
+    nextLogs.splice(targetIndex, 0, draggedLog);
+    return nextLogs.map(log => log.id);
+  };
+
+  const handleLogDragStart = (event, log) => {
+    if (log.isSnapshot) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", log.id);
+    setDraggedLogId(log.id);
+  };
+
+  const handleLogDragOver = (event, targetLog) => {
+    if (!draggedLogId || !targetLog || targetLog.isSnapshot) return;
+    const draggedLog = getDraggedLog(event);
+    if (!draggedLog) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const isBlocked =
+      draggedLog.bookId !== targetLog.bookId ||
+      !!getBlockedDropMessage(draggedLog, targetLog.date);
+    event.dataTransfer.dropEffect = isBlocked ? "none" : "move";
+    setDragOverLogId(isBlocked ? null : targetLog.id);
+  };
+
+  const handleLogDropOnLog = async (event, targetLog) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const draggedLog = getDraggedLog(event);
+    if (!draggedLog || !targetLog || targetLog.isSnapshot) {
+      clearDragState();
+      return;
+    }
+    if (draggedLog.id === targetLog.id) {
+      clearDragState();
+      return;
+    }
+    if (draggedLog.bookId !== targetLog.bookId) {
+      toast.error("같은 책의 로그끼리만 순서를 바꿀 수 있어요.");
+      clearDragState();
+      return;
+    }
+    const blockedMessage = getBlockedDropMessage(draggedLog, targetLog.date);
+    if (blockedMessage) {
+      toast.error(blockedMessage);
+      clearDragState();
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const insertAfter = event.clientY > rect.top + rect.height / 2;
+    const orderedLogIds = buildDropOrder(
+      draggedLog,
+      targetLog.date,
+      targetLog,
+      insertAfter
+    );
+
+    try {
+      await moveReadingLog({
+        logId: draggedLog.id,
+        targetDate: targetLog.date,
+        orderedLogIds,
+      });
+      toast.success("로그 순서를 변경했습니다.");
+    } catch (err) {
+      console.error(err);
+      toast.error("로그 이동에 실패했어요.");
+    } finally {
+      clearDragState();
+    }
+  };
+
+  const handleLogDropOnDate = async (event, targetDate) => {
+    const draggedLog = getDraggedLog(event);
+    if (!draggedLog) {
+      clearDragState();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const blockedMessage = getBlockedDropMessage(draggedLog, targetDate);
+    if (blockedMessage) {
+      toast.error(blockedMessage);
+      clearDragState();
+      return;
+    }
+
+    toast.info("같은 날짜 안의 로그 위에 놓으면 순서를 바꿀 수 있어요.");
+    clearDragState();
+  };
+
   const handleRecordStatusChange = nextStatus => {
     setRecordStatus(nextStatus);
     if (nextStatus === "done") {
@@ -746,19 +963,33 @@ export default function Library() {
     const maxPage = recordBook.totalPage || 99999;
     const fromPage =
       recordStatus === "want"
-        ? Number(recordBook.currentPage) || 0
+        ? 0
         : clampNumber(recordFromPage, 0, maxPage);
     const toPage =
       recordStatus === "want"
-        ? fromPage
+        ? 0
         : clampNumber(recordToPage, fromPage, maxPage);
     const pagesRead = Math.max(0, toPage - fromPage);
     const statusChanged = recordStatus !== recordBook.status;
     const ratingChanged =
       recordStatus === "done" &&
       recordRating !== (Number(recordBook.rating) || 0);
+    const eventType =
+      recordStatus === "done"
+        ? "completed"
+        : statusChanged && recordStatus === "reading"
+          ? "reading_started"
+          : statusChanged && recordStatus === "want"
+            ? "want_added"
+            : undefined;
 
-    if (!statusChanged && !ratingChanged && recordStatus !== "want" && pagesRead <= 0 && !recordMemo.trim()) {
+    if (
+      !statusChanged &&
+      !ratingChanged &&
+      recordStatus !== "want" &&
+      pagesRead <= 0 &&
+      !recordMemo.trim()
+    ) {
       toast.error("읽은 페이지나 메모를 남겨주세요.");
       return;
     }
@@ -773,6 +1004,7 @@ export default function Library() {
         currentPage: toPage,
         memo: recordMemo,
         rating: recordStatus === "done" ? recordRating : undefined,
+        eventType,
       });
 
       if (recordStatus === "reading" || recordStatus === "done") {
@@ -915,12 +1147,16 @@ export default function Library() {
                             {formatDateKo(focusedBookStartDate)}부터 읽기 시작
                           </p>
                         ) : focusedBook.status === "want" &&
-                          (focusedBook.addedAt || focusedBook.lastReadDate) ? (
+                          (focusedRegistrationDate ||
+                            focusedBook.addedAt ||
+                            focusedBook.lastReadDate) ? (
                           <p className="mt-1.5 text-xs text-muted-foreground">
                             {formatDateKo(
-                              focusedBook.addedAt || focusedBook.lastReadDate
+                              focusedRegistrationDate ||
+                                focusedBook.addedAt ||
+                                focusedBook.lastReadDate
                             )}
-                            에 내서재에 등록
+                            에 내 서재에 등록
                           </p>
                         ) : null}
                         {focusedBook.totalPage > 0 && (
@@ -1012,13 +1248,33 @@ export default function Library() {
                               sortedFocusedBookLogs,
                               idx
                             );
-                            const eventText = getStatusEventText(log);
+                            const eventText = getStatusEventText(log, null, {
+                              isFirstLog: log.id === focusedFirstLogId,
+                            });
                             return (
                               <div
                                 key={log.id}
+                                draggable={!log.isSnapshot}
+                                onDragStart={event =>
+                                  handleLogDragStart(event, log)
+                                }
+                                onDragEnd={clearDragState}
+                                onDragOver={event =>
+                                  handleLogDragOver(event, log)
+                                }
+                                onDragLeave={() => setDragOverLogId(null)}
+                                onDrop={event => handleLogDropOnLog(event, log)}
                                 className={`flex gap-3 rounded-xl px-2 py-2 -mx-2 ${
                                   isLatestLog
                                     ? "bg-black/[0.04] ring-1 ring-black/10 dark:bg-white/[0.06] dark:ring-white/10"
+                                    : ""
+                                } ${
+                                  dragOverLogId === log.id
+                                    ? "outline outline-2 outline-primary/35"
+                                    : ""
+                                } ${
+                                  !log.isSnapshot
+                                    ? "cursor-grab active:cursor-grabbing"
                                     : ""
                                 }`}
                               >
@@ -1033,6 +1289,12 @@ export default function Library() {
                                 <div className="mb-3 min-w-0 flex-1">
                                   <div className="mb-1.5 flex items-center justify-between">
                                     <div className="flex flex-wrap items-center gap-1.5">
+                                      {!log.isSnapshot && (
+                                        <GripVertical
+                                          size={12}
+                                          className="shrink-0 text-muted-foreground/35"
+                                        />
+                                      )}
                                       <span className="text-xs font-bold text-foreground">
                                         {formatDateKo(log.date)}
                                       </span>
@@ -1091,7 +1353,7 @@ export default function Library() {
                                       {eventText}
                                     </p>
                                   )}
-                                  {(log.fromPage > 0 || log.toPage > 0) && (
+                                  {shouldShowLogPages(log) && (
                                     <div className="mb-1.5 flex items-baseline gap-1.5">
                                       <span className="text-sm font-bold text-foreground">
                                         {pagesRead > 0
@@ -1160,14 +1422,28 @@ export default function Library() {
                             dateDetailSort
                           );
                           const latestDateLogId = getLatestLogId(dateLogs);
-                          const eventText = getStatusEventText(
-                            log,
-                            selectedDate
-                          );
+                          const eventText =
+                            log.status === "done"
+                              ? null
+                              : getStatusEventText(log, selectedDate, {
+                                  isFirstLog:
+                                    log.id === firstLogIdByBook.get(bookId),
+                                });
                           return (
                             <div
                               key={bookId}
-                              className="rounded-xl border border-border/60 overflow-hidden"
+                              onDragOver={event =>
+                                handleLogDragOver(event, primaryLog)
+                              }
+                              onDragLeave={() => setDragOverLogId(null)}
+                              onDrop={event =>
+                                handleLogDropOnLog(event, primaryLog)
+                              }
+                              className={`rounded-xl border border-border/60 overflow-hidden ${
+                                dragOverLogId === primaryLog?.id
+                                  ? "outline outline-2 outline-primary/35"
+                                  : ""
+                              }`}
                             >
                               <div className="flex items-stretch">
                                 <button
@@ -1210,11 +1486,6 @@ export default function Library() {
                                       <p className="mt-1 text-[11px] font-semibold text-emerald-600">
                                         완독했어요! 🎉
                                       </p>
-                                    ) : log.status === "want" ? (
-                                      <p className="mt-1 text-[11px] text-muted-foreground">
-                                        {formatDateShort(selectedDate)}에
-                                        내서재에 등록
-                                      </p>
                                     ) : startDate ? (
                                       <p className="mt-1 text-[11px] text-muted-foreground">
                                         {formatDateShort(startDate)}부터 읽기
@@ -1253,23 +1524,53 @@ export default function Library() {
                                     const rlPagesRead = Number(
                                       rl.pagesRead || 0
                                     );
-                                    const rlStatusStyle = getStatusStyle(rl.status);
+                                    const rlStatusStyle = getStatusStyle(
+                                      rl.status
+                                    );
                                     const isLatestDateLog =
                                       rl.id === latestDateLogId;
-                                    const showStatusBadge = shouldShowStatusBadge(
-                                      dateLogs,
-                                      i
-                                    );
-                                    const rlEventText = getStatusEventText(
-                                      rl,
-                                      selectedDate
-                                    );
+                                    const showStatusBadge =
+                                      shouldShowStatusBadge(dateLogs, i);
+                                    const rlEventText =
+                                      rl.status === "done"
+                                        ? null
+                                        : getStatusEventText(
+                                            rl,
+                                            selectedDate,
+                                            {
+                                              isFirstLog:
+                                                rl.id ===
+                                                firstLogIdByBook.get(bookId),
+                                            }
+                                          );
                                     return (
                                       <div
                                         key={rl.id}
+                                        draggable={!rl.isSnapshot}
+                                        onDragStart={event =>
+                                          handleLogDragStart(event, rl)
+                                        }
+                                        onDragEnd={clearDragState}
+                                        onDragOver={event =>
+                                          handleLogDragOver(event, rl)
+                                        }
+                                        onDragLeave={() =>
+                                          setDragOverLogId(null)
+                                        }
+                                        onDrop={event =>
+                                          handleLogDropOnLog(event, rl)
+                                        }
                                         className={`flex gap-2.5 rounded-lg px-2 py-1 -mx-2 ${
                                           isLatestDateLog
                                             ? "bg-black/[0.04] ring-1 ring-black/10 dark:bg-white/[0.06] dark:ring-white/10"
+                                            : ""
+                                        } ${
+                                          dragOverLogId === rl.id
+                                            ? "outline outline-2 outline-primary/35"
+                                            : ""
+                                        } ${
+                                          !rl.isSnapshot
+                                            ? "cursor-grab active:cursor-grabbing"
                                             : ""
                                         }`}
                                       >
@@ -1283,6 +1584,12 @@ export default function Library() {
                                         </div>
                                         <div className="mb-2.5 min-w-0 flex-1">
                                           <div className="mb-0.5 flex items-center gap-1.5">
+                                            {!rl.isSnapshot && (
+                                              <GripVertical
+                                                size={11}
+                                                className="shrink-0 text-muted-foreground/35"
+                                              />
+                                            )}
                                             <span className="text-[10px] font-semibold text-muted-foreground">
                                               기록 {i + 1}
                                             </span>
@@ -1304,10 +1611,12 @@ export default function Library() {
                                             >
                                               {rlEventText}
                                             </p>
-                                          ) : rl.status === "done" && (
-                                            <p className="text-[11px] font-semibold text-emerald-600">
-                                              완독했어요! 🎉
-                                            </p>
+                                          ) : (
+                                            rl.status === "done" && (
+                                              <p className="text-[11px] font-semibold text-emerald-600">
+                                                완독했어요! 🎉
+                                              </p>
+                                            )
                                           )}
                                           {rl.status !== "want" &&
                                             rl.status !== "done" &&
@@ -1322,7 +1631,8 @@ export default function Library() {
                                                 {rl.fromPage > 0 &&
                                                   rl.toPage > 0 && (
                                                     <span className="ml-1 text-[10px] text-muted-foreground/70">
-                                                      ({rl.fromPage}~{rl.toPage}p)
+                                                      ({rl.fromPage}~{rl.toPage}
+                                                      p)
                                                     </span>
                                                   )}
                                               </p>
@@ -1372,7 +1682,10 @@ export default function Library() {
                           className="h-28 w-[76px] shrink-0 rounded-xl object-cover shadow-md"
                         />
                         <div className="min-w-0 flex-1">
-                          <StatusBadge status={featured.status} className="mb-1" />
+                          <StatusBadge
+                            status={featured.status}
+                            className="mb-1"
+                          />
                           <h3 className="line-clamp-2 text-lg font-bold leading-snug">
                             {featured.title}
                           </h3>
@@ -1611,6 +1924,17 @@ export default function Library() {
                     <div
                       key={dateKey}
                       onClick={() => handleDateSelect(dateKey)}
+                      onDragOver={event => {
+                        const draggedLog = getDraggedLog(event);
+                        if (!draggedLog) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "none";
+                        setDragOverDate(
+                          draggedLog.date === dateKey ? dateKey : null
+                        );
+                      }}
+                      onDragLeave={() => setDragOverDate(null)}
+                      onDrop={event => handleLogDropOnDate(event, dateKey)}
                       className="flex aspect-square cursor-pointer items-center justify-center"
                     >
                       <div
@@ -1622,6 +1946,10 @@ export default function Library() {
                               : isToday
                                 ? "bg-secondary font-semibold text-foreground ring-2 ring-primary/40"
                                 : "text-muted-foreground hover:bg-secondary/60"
+                        } ${
+                          dragOverDate === dateKey
+                            ? "ring-2 ring-primary ring-offset-2 ring-offset-card"
+                            : ""
                         }`}
                         style={
                           isSelected
@@ -1688,7 +2016,9 @@ export default function Library() {
                       >
                         {monthStats.avgPages}
                       </span>
-                      <span className="text-xs text-muted-foreground">페이지</span>
+                      <span className="text-xs text-muted-foreground">
+                        페이지
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1928,7 +2258,10 @@ export default function Library() {
                     className="h-20 w-14 shrink-0 rounded-lg object-cover shadow-md"
                   />
                   <div className="min-w-0 flex-1">
-                    <StatusBadge status={logModalBook.status} className="mb-0.5" />
+                    <StatusBadge
+                      status={logModalBook.status}
+                      className="mb-0.5"
+                    />
                     <DialogTitle className="line-clamp-2 text-base font-bold leading-snug">
                       {logModalBook.title}
                     </DialogTitle>
@@ -2029,13 +2362,31 @@ export default function Library() {
                           sortedLogModalLogs,
                           idx
                         );
-                        const eventText = getStatusEventText(log);
+                        const eventText = getStatusEventText(log, null, {
+                          isFirstLog: log.id === logModalFirstLogId,
+                        });
                         return (
                           <div
                             key={log.id}
+                            draggable={!log.isSnapshot}
+                            onDragStart={event =>
+                              handleLogDragStart(event, log)
+                            }
+                            onDragEnd={clearDragState}
+                            onDragOver={event => handleLogDragOver(event, log)}
+                            onDragLeave={() => setDragOverLogId(null)}
+                            onDrop={event => handleLogDropOnLog(event, log)}
                             className={`flex gap-3 rounded-xl px-2 py-2 -mx-2 ${
                               isLatestLog
                                 ? "bg-black/[0.04] ring-1 ring-black/10 dark:bg-white/[0.06] dark:ring-white/10"
+                                : ""
+                            } ${
+                              dragOverLogId === log.id
+                                ? "outline outline-2 outline-primary/35"
+                                : ""
+                            } ${
+                              !log.isSnapshot
+                                ? "cursor-grab active:cursor-grabbing"
                                 : ""
                             }`}
                           >
@@ -2050,6 +2401,12 @@ export default function Library() {
                             <div className="mb-3 min-w-0 flex-1">
                               <div className="mb-1.5 flex items-center justify-between">
                                 <div className="flex flex-wrap items-center gap-1.5">
+                                  {!log.isSnapshot && (
+                                    <GripVertical
+                                      size={12}
+                                      className="shrink-0 text-muted-foreground/35"
+                                    />
+                                  )}
                                   <span className="text-xs font-bold text-foreground">
                                     {formatDateKo(log.date)}
                                   </span>
@@ -2106,7 +2463,7 @@ export default function Library() {
                                   {eventText}
                                 </p>
                               )}
-                              {(log.fromPage > 0 || log.toPage > 0) && (
+                              {shouldShowLogPages(log) && (
                                 <div className="mb-1.5 flex items-baseline gap-1.5">
                                   <span className="text-sm font-bold text-foreground">
                                     {pagesRead > 0
@@ -2199,7 +2556,10 @@ export default function Library() {
           }
         }}
       >
-        <DialogContent showCloseButton={false} className="max-h-[90vh] w-full max-w-sm overflow-hidden rounded-2xl p-0 flex flex-col">
+        <DialogContent
+          showCloseButton={false}
+          className="max-h-[90vh] w-full max-w-sm overflow-hidden rounded-2xl p-0 flex flex-col"
+        >
           {recordBook && (
             <form
               onSubmit={handleRecordSubmit}
@@ -2362,7 +2722,10 @@ export default function Library() {
                           setRecordFromStr(raw);
                           const n = parseInt(raw, 10);
                           if (raw !== "" && Number.isFinite(n) && n >= 0) {
-                            const clamped = Math.min(n, recordBook.totalPage || 99999);
+                            const clamped = Math.min(
+                              n,
+                              recordBook.totalPage || 99999
+                            );
                             setRecordFromPage(clamped);
                             if (recordToPage < clamped) {
                               setRecordToPage(clamped);
@@ -2373,7 +2736,8 @@ export default function Library() {
                         onBlur={() => {
                           const n = parseInt(recordFromStr, 10);
                           const max = recordBook.totalPage || 99999;
-                          const clamped = Number.isFinite(n) && n >= 0 ? Math.min(n, max) : 0;
+                          const clamped =
+                            Number.isFinite(n) && n >= 0 ? Math.min(n, max) : 0;
                           setRecordFromPage(clamped);
                           setRecordFromStr(String(clamped));
                           if (recordToPage < clamped) {
@@ -2398,9 +2762,10 @@ export default function Library() {
                         onBlur={() => {
                           const n = parseInt(recordToStr, 10);
                           const max = recordBook.totalPage || 99999;
-                          const clamped = Number.isFinite(n) && n >= 0
-                            ? Math.max(recordFromPage, Math.min(n, max))
-                            : recordFromPage;
+                          const clamped =
+                            Number.isFinite(n) && n >= 0
+                              ? Math.max(recordFromPage, Math.min(n, max))
+                              : recordFromPage;
                           setRecordToPage(clamped);
                           setRecordToStr(String(clamped));
                         }}
