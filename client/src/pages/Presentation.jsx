@@ -25,6 +25,7 @@ import {
   Trophy,
   CheckCircle2,
   Quote,
+  Tag,
   Library as LibraryIcon,
   PenTool,
   ArrowDown
@@ -68,26 +69,27 @@ const Presentation = () => {
     {
       type: "problems",
       title: "선정 배경 & 문제 정의",
-      items: [
+      sections: [
         {
-          id: 1,
-          title: "도서 선택 장애",
-          desc: "연간 6~7만 종의 신간 홍수 속에서 '나의 지금 기분'에 맞는 책을 찾기 어려움",
-          tag: "Selection Overload"
+          title: "기존 서비스의 한계",
+          subtitle: "Existing Service Limits",
+          items: [
+            "도서 정보 / 리뷰 중심",
+            "독서 “과정” 기록 불가",
+            "지속적인 독서 유도 부족"
+          ]
         },
         {
-          id: 2,
-          title: "독서 습관 단절",
-          desc: "성인 월평균 독서량 0.6권. 성취감과 보상 없이는 꾸준한 유지가 힘듦",
-          tag: "Low Retention"
-        },
-        {
-          id: 3,
-          title: "독서 고립",
-          desc: "오프라인 모임의 시공간적 장벽과 파편화된 SNS 독서 커뮤니티",
-          tag: "Social Isolation"
+          title: "문제 정의 → 출발",
+          subtitle: "Problem Definition",
+          items: [
+            "독서 경험이 축적되지 않음",
+            "기록 구조 부재",
+            "지속성 부족"
+          ]
         }
       ],
+      question: "독서를 기록하고 관리할 수 있는 서비스는 없을까?",
       solution: "날씨 × AI × 게이미피케이션을 통한 선순환 구조 구축"
     },
     // 04. 핵심 키워드 / 서비스
@@ -99,32 +101,106 @@ const Presentation = () => {
           num: "01",
           title: "독서 기록화",
           items: [
-            "서재, 읽는 중/완독 상태, 페이지 진행률",
-            "메모, 별점, 독서 캘린더, 연속 독서일"
+            "3단계 상태 관리 (읽는 중/완독/읽고 싶음)",
+            "진행률 자동 계산 & 완독 축하 애니메이션",
+            "캘린더 스트릭 시각화 및 독서 메모/별점"
           ],
-          tagline: "흩어진 독서 경험을 데이터로 축적하는 개인 서재"
+          tagline: "사용자의 모든 독서 '과정'을 데이터로 축적하여 습관 형성을 지원합니다."
         },
         {
           num: "02",
           title: "맞춤형 도서 발견",
           items: [
-            "알라딘 API 검색, 장르 기반 추천",
-            "홈 화면 추천, 날씨/시간대 기반 AI 추천"
+            "날씨·시간대 기반 실시간 AI 추천 (LLM)",
+            "장르 기반 추천 및 알라딘 API 도서 검색",
+            "주변 도서관 찾기 & 실시간 대출 가능 여부 확인"
           ],
-          tagline: "사용자 취향과 상황에 맞는 도서 탐색 경험"
+          tagline: "상황에 맞는 최적의 도서를 제안하고 실제 대출까지 연결합니다."
         },
         {
           num: "03",
           title: "독서 가치 확장",
           items: [
-            "커뮤니티 독서 모임 / 게시판",
-            "포인트 적립, 기부 시스템"
+            "포인트 기부 시스템 (어린이재단·장애인도서관 등)",
+            "독서 모임 개설·참여 및 실시간 채팅 소통",
+            "커뮤니티 (독후감, 추천, 질문)를 통한 지식 공유"
           ],
-          tagline: "개인의 독서를 커뮤니티와 기부로 연결하는 플랫폼"
+          tagline: "개인의 독서 활동이 사회적 가치와 커뮤니티로 연결됩니다."
         }
       ]
     },
-    // 05. 주요 기능: 날씨 × AI 홈 배너
+    // 10. 타겟 설정
+    {
+      type: "target",
+      title: "타겟 설정",
+      heavy: {
+        title: "주요 타겟: 헤비 유저 (다독가 / 애독가)",
+        desc: "이미 독서를 꾸준히 하는 사용자, 기록 / 관리 니즈 존재",
+        needs: [
+          "언제 읽었는지",
+          "무엇을 읽었는지",
+          "얼마나 읽었는지",
+          "어떤 생각을 했는지"
+        ],
+        summary: "기록과 관리"
+      },
+      light: {
+        title: "라이트 유저 (확장)",
+        desc: "독서를 꾸준히 하지 못하는 사용자, 습관 형성 필요",
+        summary: "동기부여 제공"
+      }
+    },
+    // 11-12. 페르소나 2개 (헤비/라이트)
+    {
+      type: "persona",
+      title: "페르소나 : 헤비 유저 - 기록 분석가 & 토론가",
+      persona: {
+        name: "김선유",
+        age: "28세",
+        job: "다독가",
+        vibe: "기록 분석가 & 토론가",
+        profile: "이미 읽은 책이 많아 개인 독서 데이터를 정교하게 관리하고 싶음. 단순 독서를 넘어 깊이 있는 토론과 지식 공유를 위한 커뮤니티 공간과 새로운 미독 도서 발견이 필요함.",
+        scenario: "독서 통계 분석 → AI 챗봇에게 미독 도서 추천 요청 → 커뮤니티 독후감 공유 및 모임 참여",
+        keywords: ["데이터 시각화", "지식 공유 커뮤니티", "미독 기반 추천"],
+        image: "/persona_d.png",
+        position: "object-top"
+      }
+    },
+    {
+      type: "persona",
+      title: "페르소나 : 라이트 유저 - 습관 형성자",
+      persona: {
+        name: "박지우",
+        age: "22세",
+        job: "대학생",
+        vibe: "습관 형성자",
+        profile: "독서 습관이 부족해 매번 작심삼일에 그침. 무엇을 읽을지 고민하는 시간이 길어 상황에 맞는 추천과 함께, 독서를 지속할 시각적인 보상이 필요함.",
+        scenario: "기분에 맞는 AI 추천 도서 발견 → 매일 읽은 페이지 기록 → 완독 Confetti와 포인트 기부",
+        keywords: ["맞춤 도서 발견", "시각적 성취", "독서 습관 형성"],
+        image: "/persona_b.png",
+        position: "object-top"
+      }
+    },
+    // 15. 개발 환경 & 기술 스택
+    {
+      type: "tech",
+      title: "개발 환경 & 기술 스택",
+      frontend: ["React 19", "Vite 6", "Tailwind CSS 4", "shadcn/ui", "Framer Motion", "Recharts"],
+      backend: ["Firebase Auth", "Firestore", "Express.js Proxy"],
+      apis: ["OpenWeatherMap", "Aladin API", "Groq AI", "Google Maps"]
+    },
+    // 16. API 연동 아키텍처
+    {
+      type: "architecture",
+      title: "API 연동 아키텍처",
+      flow: [
+        { from: "위치/날씨", to: "Geolocation + OpenWeatherMap", result: "실시간 환경 인식" },
+        { from: "도서 데이터", to: "Aladin API", result: "70만 종 도서 메타데이터" },
+        { from: "지능형 선별", to: "Groq AI (LLM)", result: "날씨/감성 필터링" },
+        { from: "사용자 활동", to: "Firebase Firestore", result: "실시간 동기화" }
+      ]
+    },
+    // 17-23. 주요 기능 7개
     {
       type: "feature",
       title: "주요 기능: 날씨 × AI 홈 배너",
@@ -136,7 +212,6 @@ const Presentation = () => {
         "AI 환각을 방지하기 위해 실제 API 데이터 인덱스 기반 추천"
       ]
     },
-    // 06. 주요 기능: 도서 검색 & 상세
     {
       type: "feature",
       title: "주요 기능: 도서 검색 & 상세",
@@ -148,7 +223,6 @@ const Presentation = () => {
         "서재 즉시 추가 및 상태 관리"
       ]
     },
-    // 07. 주요 기능: 내 서재 & 독서 캘린더
     {
       type: "feature",
       title: "주요 기능: 내 서재 & 독서 캘린더",
@@ -160,7 +234,6 @@ const Presentation = () => {
         "완독 시 애니메이션 효과와 포인트 보상"
       ]
     },
-    // 08. 주요 기능: 포인트 & 기부 시스템
     {
       type: "feature",
       title: "주요 기능: 포인트 & 기부 시스템",
@@ -172,7 +245,6 @@ const Presentation = () => {
         "독서 활동이 사회 기부로 이어지는 선순환 구조"
       ]
     },
-    // 09. 주요 기능: 커뮤니티 & 독서 모임
     {
       type: "feature",
       title: "주요 기능: 커뮤니티 & 독서 모임",
@@ -184,7 +256,6 @@ const Presentation = () => {
         "방장 전용 공지 및 모임 관리 기능"
       ]
     },
-    // 10. 주요 기능: AI 챗봇 사서
     {
       type: "feature",
       title: "주요 기능: AI 챗봇 사서",
@@ -196,7 +267,6 @@ const Presentation = () => {
         "대화 문맥에서 도서 의도를 파악하여 즉시 카드 출력"
       ]
     },
-    // 11. 주요 기능: 온보딩 & 프로필
     {
       type: "feature",
       title: "주요 기능: 온보딩 & 프로필",
@@ -208,101 +278,7 @@ const Presentation = () => {
         "개인 취향과 레벨을 관리하는 프로필 허브"
       ]
     },
-    // 12. 페르소나 5개
-    {
-      type: "persona",
-      title: "페르소나 & 유저 시나리오 (1)",
-      persona: {
-        name: "이민우",
-        age: "28세",
-        job: "직장인",
-        vibe: "감성 독자",
-        profile: "퇴근 후 무엇을 읽을지 고민하는 시간이 아까움. 기분에 따른 맞춤 추천 희망.",
-        scenario: "비 오는 금요일 퇴근길 → 앱 실행 → 홈 배너의 '감성 소설' 발견 → 서재 추가",
-        keywords: ["상황 맞춤 추천", "무입력 발견", "즉시 시작"],
-        image: "/persona_a.png"
-      }
-    },
-    {
-      type: "persona",
-      title: "페르소나 & 유저 시나리오 (2)",
-      persona: {
-        name: "박지우",
-        age: "22세",
-        job: "대학생",
-        vibe: "습관 형성자",
-        profile: "작심삼일 독서 습관. 시각적인 성취와 보상이 있어야 계속할 동력이 생김.",
-        scenario: "서재 진행률 100% 기록 → 완독 Confetti → 레벨업 → 포인트 기부",
-        keywords: ["독서 습관 추적", "시각적 성취", "사회적 가치"],
-        image: "/persona_b.png",
-        position: "object-top"
-      }
-    },
-    {
-      type: "persona",
-      title: "페르소나 & 유저 시나리오 (3)",
-      persona: {
-        name: "이서연",
-        age: "25세",
-        job: "직장인",
-        vibe: "깊이 토론가",
-        profile: "책 이야기를 나눌 진지한 공간 필요. 오프라인 모임은 부담스럽고 온라인은 산만함.",
-        scenario: "독후감 게시 → '소설 모임' 발견 → 실시간 채팅 참여 및 토론",
-        keywords: ["책 중심 소셜", "낮은 진입 장벽", "온라인 독서 모임"],
-        image: "/persona_c.png",
-        position: "object-top"
-      }
-    },
-    {
-      type: "persona",
-      title: "페르소나 & 유저 시나리오 (4)",
-      persona: {
-        name: "김선유",
-        age: "28세",
-        job: "다독가",
-        vibe: "감성 다독가",
-        profile: "이미 읽은 책이 많아 비슷한 책만 고르게 됨. 신선한 새 책 발견이 어려움.",
-        scenario: "AI 챗봇에게 '내 서재에 없는 비슷한 분위기 책' 요청 → 미독 도서 추천",
-        keywords: ["미독 기반 추천", "취향 정교화", "발견의 신선함"],
-        image: "/persona_d.png",
-        position: "object-top"
-      }
-    },
-    {
-      type: "persona",
-      title: "페르소나 & 유저 시나리오 (5)",
-      persona: {
-        name: "박민서",
-        age: "22세",
-        job: "대학생",
-        vibe: "기록 분석가",
-        profile: "독서 이력을 데이터로 관리하고 싶음. 장르 편중을 인식하고 성장을 확인하고 싶음.",
-        scenario: "월별 캘린더 확인 → 장르 분포 차트 분석 → 부족한 장르 도서 탐색",
-        keywords: ["데이터 분석", "장르 균형", "성장 지표"],
-        image: "/persona_e.png",
-        position: "object-top"
-      }
-    },
-    // 17. 개발 환경 & 기술 스택
-    {
-      type: "tech",
-      title: "개발 환경 & 기술 스택",
-      frontend: ["React 19", "Vite 6", "Tailwind CSS 4", "shadcn/ui", "Framer Motion", "Recharts"],
-      backend: ["Firebase Auth", "Firestore", "Express.js Proxy"],
-      apis: ["OpenWeatherMap", "Aladin API", "Groq AI", "Google Maps"]
-    },
-    // 18. API 연동 아키텍처
-    {
-      type: "architecture",
-      title: "API 연동 아키텍처",
-      flow: [
-        { from: "위치/날씨", to: "Geolocation + OpenWeatherMap", result: "실시간 환경 인식" },
-        { from: "도서 데이터", to: "Aladin API", result: "70만 종 도서 메타데이터" },
-        { from: "지능형 선별", to: "Groq AI (LLM)", result: "날씨/감성 필터링" },
-        { from: "사용자 활동", to: "Firebase Firestore", result: "실시간 동기화" }
-      ]
-    },
-    // 19. 시연 영상
+    // 24. 시연 영상
     {
       type: "demo",
       title: "시연 영상",
@@ -871,41 +847,72 @@ const SlideContent = ({ slide, currentSlide }) => {
 
     case "problems":
       return (
-        <div className="space-y-16">
+        <div className="space-y-12">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-3 gap-10">
-            {items.map((item, i) => (
+          <div className="grid grid-cols-2 gap-12">
+            {slide.sections.map((section, i) => (
               <motion.div 
                 key={i}
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
+                initial={{ x: i === 0 ? -30 : 30, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: i * 0.2 }}
-                className="p-10 rounded-[3rem] bg-white/5 border border-white/10 flex flex-col justify-between min-h-[400px] group hover:border-primary/50 transition-all hover:bg-primary/5 shadow-2xl text-left relative overflow-hidden"
+                className="p-12 rounded-[3.5rem] bg-white/5 border border-white/10 flex flex-col min-h-[380px] group hover:border-primary/50 transition-all hover:bg-primary/5 shadow-2xl text-left relative overflow-hidden"
               >
-                <div>
-                  <div className="w-16 h-16 rounded-[1.5rem] bg-primary/20 text-primary flex items-center justify-center mb-8 font-black text-2xl shadow-inner">
-                    0{item.id}
-                  </div>
-                  <h3 className="text-3xl font-black mb-6 group-hover:text-primary transition-colors leading-tight">{item.title}</h3>
-                  <p className="text-slate-400 text-lg leading-relaxed font-medium">{item.desc}</p>
+                <div className="absolute top-0 right-0 p-8 text-primary/5 font-black text-6xl group-hover:text-primary/10 transition-colors uppercase tracking-widest">
+                  {i === 0 ? "LIMIT" : "START"}
                 </div>
-                <div className="text-xs font-black uppercase tracking-[0.3em] text-primary/60 mt-10 flex items-center gap-2">
-                  <div className="w-8 h-px bg-primary/40" /> {item.tag}
+                <div className="mb-8">
+                  <div className="text-primary font-black text-xs uppercase tracking-[0.3em] mb-3">{section.subtitle}</div>
+                  <h3 className="text-4xl font-black text-white group-hover:text-primary transition-colors leading-tight">
+                    {section.title}
+                  </h3>
+                </div>
+                <div className="space-y-5 flex-1">
+                  {section.items.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-4 text-xl font-bold text-slate-300 break-keep">
+                      <div className="w-2 h-2 rounded-full bg-primary/60 group-hover:scale-125 transition-transform" />
+                      {item}
+                    </div>
+                  ))}
                 </div>
               </motion.div>
             ))}
           </div>
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            className="p-10 rounded-[2.5rem] bg-gradient-to-r from-primary to-orange-500 text-white font-black text-center text-3xl shadow-[0_25px_60px_rgba(var(--primary),0.4)] border border-white/20"
-          >
-            <div className="flex items-center justify-center gap-4">
-              <Lightbulb size={36} />
-              Solution: {slide.solution}
-            </div>
-          </motion.div>
+          
+          <div className="space-y-6">
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="flex items-center justify-center gap-6"
+            >
+            </motion.div>
+
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              whileHover={{ scale: 1.02 }}
+              transition={{ delay: 0.8, type: "spring" }}
+              className="p-10 rounded-[3.5rem] bg-gradient-to-br from-primary via-[#ff4d00] to-orange-400 text-white font-black text-center text-4xl shadow-[0_25px_80px_rgba(255,77,0,0.5)] border-2 border-white/30 relative overflow-hidden group cursor-default"
+            >
+              <motion.div 
+                animate={{ 
+                  opacity: [0.1, 0.3, 0.1],
+                  scale: [1, 1.1, 1]
+                }}
+                transition={{ duration: 4, repeat: Infinity }}
+                className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none" 
+              />
+              <div className="absolute -inset-1 bg-gradient-to-r from-primary/0 via-white/20 to-primary/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+              <div className="flex items-center justify-center gap-8 relative z-10">
+                <Quote size={54} className="text-white/20 -scale-x-100" />
+                <span className="drop-shadow-[0_2px_10px_rgba(0,0,0,0.3)] tracking-tight break-keep">
+                  {slide.question}
+                </span>
+                <Quote size={54} className="text-white/20" />
+              </div>
+            </motion.div>
+          </div>
         </div>
       );
 
@@ -935,11 +942,80 @@ const SlideContent = ({ slide, currentSlide }) => {
                     ))}
                   </ul>
                 </div>
-                <div className="mt-10 p-6 rounded-2xl bg-white/5 border border-white/10 group-hover:border-primary/20 transition-all">
-                  <p className="text-primary font-bold text-lg leading-relaxed italic">"{kw.tagline}"</p>
+                <div className="mt-10 p-8 rounded-[2rem] bg-gradient-to-r from-primary to-orange-500 relative group-hover:shadow-[0_15px_40px_rgba(255,77,0,0.3)] transition-all shadow-xl overflow-hidden border border-white/20">
+                  <Quote size={32} className="text-white/20 absolute -top-1 -left-1 rotate-12" />
+                  <p className="text-white font-black text-xl leading-relaxed italic relative z-10 break-keep">
+                    "{kw.tagline}"
+                  </p>
                 </div>
               </motion.div>
             ))}
+          </div>
+        </div>
+      );
+
+    case "target":
+      return (
+        <div className="space-y-12">
+          <SlideHeader title={slide.title} />
+          <div className="grid grid-cols-2 gap-12 max-w-6xl mx-auto items-stretch">
+            {/* 헤비 유저 */}
+            <motion.div
+              initial={{ x: -50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="p-12 rounded-[4rem] bg-white/5 border border-white/10 flex flex-col justify-between hover:border-primary/50 transition-all group relative overflow-hidden shadow-2xl"
+            >
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-colors" />
+              <div className="relative z-10 space-y-8">
+                <div className="space-y-4">
+                  <div className="px-5 py-2 rounded-full bg-primary/20 text-primary font-black text-sm w-fit uppercase tracking-widest">Main Target</div>
+                  <h3 className="text-3xl font-black text-white break-keep leading-tight">{slide.heavy.title}</h3>
+                  <p className="text-xl text-slate-400 font-bold break-keep">{slide.heavy.desc}</p>
+                </div>
+                
+                <div className="space-y-4">
+                  <p className="text-primary font-black text-sm uppercase tracking-widest">헤비 유저가 원하는 것</p>
+                  <div className="grid grid-cols-1 gap-3">
+                    {slide.heavy.needs.map((need, i) => (
+                      <div key={i} className="flex items-center gap-4 text-xl font-bold text-slate-200">
+                        <CheckCircle2 size={24} className="text-primary" /> {need}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-12 p-8 rounded-[2.5rem] bg-gradient-to-r from-primary to-orange-500 text-white font-black text-3xl text-center shadow-lg relative overflow-hidden">
+                <div className="absolute inset-0 bg-white/10 animate-pulse" />
+                <span className="relative z-10">“{slide.heavy.summary}”</span>
+              </div>
+            </motion.div>
+
+            {/* 라이트 유저 */}
+            <motion.div
+              initial={{ x: 50, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="p-12 rounded-[4rem] bg-white/5 border border-white/10 flex flex-col justify-between hover:border-slate-500/50 transition-all group relative overflow-hidden shadow-2xl"
+            >
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-slate-500/10 rounded-full blur-3xl group-hover:bg-slate-500/20 transition-colors" />
+              <div className="relative z-10 space-y-8">
+                <div className="space-y-4">
+                  <div className="px-5 py-2 rounded-full bg-slate-500/20 text-slate-400 font-black text-sm w-fit uppercase tracking-widest">Expansion</div>
+                  <h3 className="text-3xl font-black text-white break-keep leading-tight">{slide.light.title}</h3>
+                  <p className="text-xl text-slate-400 font-bold break-keep">{slide.light.desc}</p>
+                </div>
+
+                <div className="p-10 rounded-[3rem] bg-white/5 border border-white/10 text-slate-300 font-bold text-xl leading-relaxed italic break-keep flex items-center justify-center min-h-[160px]">
+                  "독서를 습관으로 만들 수 있는 강력한 동기부여와 재미 요소가 필요함"
+                </div>
+              </div>
+
+              <div className="mt-12 p-8 rounded-[2.5rem] bg-slate-700 text-white font-black text-3xl text-center shadow-lg">
+                <span>“{slide.light.summary}”</span>
+              </div>
+            </motion.div>
           </div>
         </div>
       );
@@ -1022,15 +1098,22 @@ const SlideContent = ({ slide, currentSlide }) => {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="p-10 rounded-[3rem] bg-white/5 border border-white/10 text-left space-y-6 flex-1 flex flex-col justify-center shadow-xl backdrop-blur-sm"
+                className="p-12 rounded-[3.5rem] bg-white/5 border border-white/10 text-left space-y-6 flex-1 flex flex-col justify-center shadow-xl backdrop-blur-md relative overflow-hidden"
               >
-                <Quote className="text-primary opacity-40" size={48} />
-                <p className="text-3xl font-bold italic leading-relaxed text-slate-100">
+                <div className="absolute top-10 right-10 opacity-5">
+                  <Users size={120} className="text-primary" />
+                </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <p className="text-primary font-black text-lg uppercase tracking-widest">유저 니즈</p>
+                </div>
+                <Quote className="text-primary opacity-40" size={54} />
+                <p className="text-3xl font-black italic leading-relaxed text-slate-100 break-keep">
                   {persona.profile}
                 </p>
-                <div className="flex flex-wrap gap-3 pt-4">
+                <div className="flex flex-wrap gap-3 pt-6">
                   {persona.keywords.map(kw => (
-                    <span key={kw} className="px-6 py-2 rounded-2xl bg-white/5 text-slate-300 font-black text-sm border border-white/10 hover:bg-white/10 transition-colors cursor-default">#{kw}</span>
+                    <span key={kw} className="px-6 py-2 rounded-2xl bg-white/5 text-slate-400 font-bold text-base border border-white/10 hover:bg-white/10 transition-colors cursor-default">#{kw}</span>
                   ))}
                 </div>
               </motion.div>
@@ -1039,14 +1122,17 @@ const SlideContent = ({ slide, currentSlide }) => {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.4 }}
-                className="p-10 rounded-[3rem] bg-primary/10 border border-primary/20 text-left relative overflow-hidden group shadow-xl"
+                className="p-12 rounded-[3.5rem] bg-primary/10 border border-primary/20 text-left relative overflow-hidden group shadow-2xl"
               >
                 <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-500">
-                  <PlayCircle size={100} className="text-primary" />
+                  <PlayCircle size={120} className="text-primary" />
                 </div>
-                <p className="text-slate-500 font-black uppercase tracking-[0.3em] text-xs mb-6">Real User Scenario</p>
+                <div className="flex items-center gap-3 mb-8">
+                  <PlayCircle size={28} className="text-primary" />
+                  <p className="text-primary font-black uppercase tracking-[0.3em] text-lg">유저 시나리오</p>
+                </div>
                 <div className="space-y-6">
-                  <p className="text-2xl font-black leading-relaxed text-white">
+                  <p className="text-2xl font-black leading-snug text-white break-keep drop-shadow-lg">
                     {persona.scenario}
                   </p>
                 </div>
