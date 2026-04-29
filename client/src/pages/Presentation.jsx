@@ -23,7 +23,11 @@ import {
   Database,
   Terminal,
   Trophy,
-  CheckCircle2
+  CheckCircle2,
+  Quote,
+  Library as LibraryIcon,
+  PenTool,
+  ArrowDown
 } from "lucide-react";
 
 /**
@@ -56,7 +60,7 @@ const Presentation = () => {
         { label: "타겟", value: "독서 습관 형성을 원하는 입문자 및 다독가" },
         { label: "핵심 가치", value: "날씨·감성 맞춤 추천 / 게이미피케이션 / 커뮤니티" },
         { label: "개발 기간", value: "2026. 04. 22 ~ 04. 29" },
-        { label: "주요 기능", value: "홈, 검색, 서재, 커뮤니티, 독서모임, 포인트, AI 챗봇" },
+        { label: "주요 기능", value: "홈, 검색, 내 서재, 커뮤니티, 독서모임, 포인트, AI 챗봇" },
         { label: "배포 환경", value: "GitHub Actions / Docker / AWS EC2" }
       ]
     },
@@ -97,7 +101,8 @@ const Presentation = () => {
         vibe: "감성 독자",
         profile: "퇴근 후 무엇을 읽을지 고민하는 시간이 아까움. 기분에 따른 맞춤 추천 희망.",
         scenario: "비 오는 금요일 퇴근길 → 앱 실행 → 홈 배너의 '감성 소설' 발견 → 서재 추가",
-        keywords: ["상황 맞춤 추천", "무입력 발견", "즉시 시작"]
+        keywords: ["상황 맞춤 추천", "무입력 발견", "즉시 시작"],
+        image: "/persona_a.png"
       }
     },
     // Slide 4-2: Persona B
@@ -111,7 +116,8 @@ const Presentation = () => {
         vibe: "습관 형성자",
         profile: "작심삼일 독서 습관. 시각적인 성취와 보상이 있어야 계속할 동력이 생김.",
         scenario: "서재 진행률 100% 기록 → 완독 Confetti → 레벨업 → 포인트 기부",
-        keywords: ["독서 습관 추적", "시각적 성취", "사회적 가치"]
+        keywords: ["독서 습관 추적", "시각적 성취", "사회적 가치"],
+        image: "https://images.unsplash.com/photo-1543269664-5a67091ece10?q=80&w=800"
       }
     },
     // Slide 4-3: Persona C
@@ -125,7 +131,8 @@ const Presentation = () => {
         vibe: "깊이 토론가",
         profile: "책 이야기를 나눌 진지한 공간 필요. 오프라인 모임은 부담스럽고 온라인은 산만함.",
         scenario: "독후감 게시 → '소설 모임' 발견 → 실시간 채팅 참여 및 토론",
-        keywords: ["책 중심 소셜", "낮은 진입 장벽", "온라인 독서 모임"]
+        keywords: ["책 중심 소셜", "낮은 진입 장벽", "온라인 독서 모임"],
+        image: "https://images.unsplash.com/photo-1525134479668-1bee5c7c6845?q=80&w=800"
       }
     },
     // Slide 4-4: Persona D
@@ -139,7 +146,8 @@ const Presentation = () => {
         vibe: "감성 다독가",
         profile: "이미 읽은 책이 많아 비슷한 책만 고르게 됨. 신선한 새 책 발견이 어려움.",
         scenario: "AI 챗봇에게 '내 서재에 없는 비슷한 분위기 책' 요청 → 미독 도서 추천",
-        keywords: ["미독 기반 추천", "취향 정교화", "발견의 신선함"]
+        keywords: ["미독 기반 추천", "취향 정교화", "발견의 신선함"],
+        image: "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?q=80&w=800"
       }
     },
     // Slide 4-5: Persona E
@@ -153,7 +161,8 @@ const Presentation = () => {
         vibe: "기록 분석가",
         profile: "독서 이력을 데이터로 관리하고 싶음. 장르 편중을 인식하고 성장을 확인하고 싶음.",
         scenario: "월별 캘린더 확인 → 장르 분포 차트 분석 → 부족한 장르 도서 탐색",
-        keywords: ["데이터 분석", "장르 균형", "성장 지표"]
+        keywords: ["데이터 분석", "장르 균형", "성장 지표"],
+        image: "https://images.unsplash.com/photo-1485893086445-ed75865251e0?q=80&w=800"
       }
     },
     // Slide 5: Team
@@ -332,11 +341,29 @@ const Presentation = () => {
   }, [currentSlide]);
 
   return (
-    <div className="fixed inset-0 bg-[#0f172a] text-slate-100 overflow-hidden font-sans selection:bg-primary/30 z-[9999]">
+    <div className="fixed inset-0 bg-[#0c111d] text-slate-100 overflow-hidden font-sans selection:bg-primary/30 z-[9999]">
       {/* Background Ornaments */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[120px]" />
+        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=2000')] bg-cover bg-center opacity-[0.25]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0c111d]/40 via-[#0c111d]/80 to-[#0c111d]" />
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-primary/20 rounded-full blur-[120px]" />
         <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-blue-500/10 rounded-full blur-[120px]" />
+        
+        {/* Floating Icons */}
+        <motion.div 
+          animate={{ y: [0, -20, 0], rotate: [0, 5, 0] }}
+          transition={{ duration: 5, repeat: Infinity }}
+          className="absolute top-[15%] right-[10%] text-primary/20 opacity-30"
+        >
+          <BookOpen size={120} />
+        </motion.div>
+        <motion.div 
+          animate={{ y: [0, 20, 0], rotate: [0, -5, 0] }}
+          transition={{ duration: 7, repeat: Infinity }}
+          className="absolute bottom-[15%] left-[10%] text-slate-500/20 opacity-30"
+        >
+          <PenTool size={100} />
+        </motion.div>
       </div>
 
       {/* Progress Bar */}
@@ -372,15 +399,15 @@ const Presentation = () => {
       </div>
 
       {/* Content Area */}
-      <div className="relative h-full w-full flex items-center justify-center p-20">
+      <div className="relative h-full w-full flex items-center justify-center px-24 py-16">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentSlide}
-            initial={{ opacity: 0, x: 20, scale: 0.98 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -20, scale: 0.98 }}
-            transition={{ duration: 0.5, ease: "circOut" }}
-            className="w-full max-w-6xl h-full flex flex-col justify-center"
+            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.98 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full max-w-7xl h-full flex flex-col justify-center"
           >
             <SlideContent slide={slides[currentSlide]} currentSlide={currentSlide} />
           </motion.div>
@@ -488,88 +515,111 @@ const SlideContent = ({ slide, currentSlide }) => {
       return (
         <div className="space-y-16">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-3 gap-10">
             {items.map((item, i) => (
               <motion.div 
                 key={i}
-                initial={{ y: 20, opacity: 0 }}
+                initial={{ y: 30, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: i * 0.2 }}
-                className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 flex flex-col justify-between h-80 group hover:border-primary/50 transition-all hover:bg-primary/5 shadow-2xl text-left"
+                className="p-10 rounded-[3rem] bg-white/5 border border-white/10 flex flex-col justify-between min-h-[400px] group hover:border-primary/50 transition-all hover:bg-primary/5 shadow-2xl text-left relative overflow-hidden"
               >
-                <div>
-                  <div className="w-12 h-12 rounded-2xl bg-primary/20 text-primary flex items-center justify-center mb-6 font-black text-xl">
-                    {item.id}
-                  </div>
-                  <h3 className="text-2xl font-black mb-4 group-hover:text-primary transition-colors">{item.title}</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">{item.desc}</p>
+                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
                 </div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-600 mt-6">{item.tag}</div>
+                <div>
+                  <div className="w-16 h-16 rounded-[1.5rem] bg-primary/20 text-primary flex items-center justify-center mb-8 font-black text-2xl shadow-inner">
+                    0{item.id}
+                  </div>
+                  <h3 className="text-3xl font-black mb-6 group-hover:text-primary transition-colors leading-tight">{item.title}</h3>
+                  <p className="text-slate-400 text-lg leading-relaxed font-medium">{item.desc}</p>
+                </div>
+                <div className="text-xs font-black uppercase tracking-[0.3em] text-primary/60 mt-10 flex items-center gap-2">
+                  <div className="w-8 h-px bg-primary/40" /> {item.tag}
+                </div>
               </motion.div>
             ))}
           </div>
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
-            className="p-8 rounded-3xl bg-primary text-white font-black text-center text-2xl shadow-[0_20px_50px_rgba(var(--primary),0.3)]"
+            className="p-10 rounded-[2.5rem] bg-gradient-to-r from-primary to-orange-500 text-white font-black text-center text-3xl shadow-[0_25px_60px_rgba(var(--primary),0.4)] border border-white/20"
           >
-            Solution: {slide.solution}
+            <div className="flex items-center justify-center gap-4">
+              <Lightbulb size={36} />
+              Solution: {slide.solution}
+            </div>
           </motion.div>
         </div>
       );
 
     case "persona":
       return (
-        <div className="space-y-12 h-full">
+        <div className="space-y-12 h-full flex flex-col justify-center">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-2 gap-12 items-center flex-1">
+          <div className="grid grid-cols-12 gap-12 items-stretch flex-1">
+            {/* Persona Image Card */}
             <motion.div 
-              initial={{ x: -30, opacity: 0 }}
+              initial={{ x: -40, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              className="space-y-8 text-left"
+              className="col-span-4 rounded-[4rem] overflow-hidden relative group shadow-2xl border border-white/10"
             >
-              <div className="flex items-center gap-6">
-                <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center text-4xl shadow-2xl">
-                  👤
-                </div>
-                <div>
-                  <div className="inline-block px-3 py-1 rounded-lg bg-primary/20 text-primary font-bold text-xs mb-2">{persona.vibe}</div>
-                  <h3 className="text-4xl font-black">{persona.name} <span className="text-xl text-slate-500 font-medium">({persona.age}, {persona.job})</span></h3>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
-                  <p className="text-slate-300 italic">"{persona.profile}"</p>
-                </div>
-                <div className="flex gap-3">
-                  {persona.keywords.map(kw => (
-                    <span key={kw} className="px-4 py-1.5 rounded-full bg-white/10 text-white font-bold text-xs border border-white/10">#{kw}</span>
-                  ))}
-                </div>
+              <img src={persona.image} alt={persona.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0c111d] via-transparent to-transparent opacity-60" />
+              <div className="absolute bottom-10 left-10 right-10">
+                <div className="inline-block px-4 py-1 rounded-full bg-primary text-white font-black text-xs mb-3 shadow-xl uppercase tracking-widest">{persona.vibe}</div>
+                <h3 className="text-5xl font-black text-white drop-shadow-lg">{persona.name}</h3>
+                <p className="text-slate-300 font-bold mt-1 text-lg">{persona.age} · {persona.job}</p>
               </div>
             </motion.div>
 
-            <motion.div 
-              initial={{ x: 30, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="p-10 rounded-[3rem] bg-white/5 border border-white/10 relative overflow-hidden h-full flex flex-col justify-center"
-            >
-              <div className="absolute top-0 left-0 w-2 h-full bg-primary" />
-              <div className="space-y-6 text-left">
-                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">User Scenario</p>
-                <p className="text-2xl font-bold leading-relaxed text-slate-200">{persona.scenario}</p>
-                <div className="pt-6">
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-4">Needs</p>
-                  <ul className="space-y-3">
-                    <li className="flex items-center gap-3 text-slate-300 font-medium text-left"><CheckCircle2 className="text-primary" size={18} /> {persona.keywords[0]}</li>
-                    <li className="flex items-center gap-3 text-slate-300 font-medium text-left"><CheckCircle2 className="text-primary" size={18} /> {persona.keywords[1]}</li>
-                  </ul>
+            {/* Persona Info */}
+            <div className="col-span-8 flex flex-col gap-8">
+              <motion.div 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="p-10 rounded-[3rem] bg-white/5 border border-white/10 text-left space-y-6 flex-1 flex flex-col justify-center shadow-xl backdrop-blur-sm"
+              >
+                <Quote className="text-primary opacity-40" size={48} />
+                <p className="text-3xl font-bold italic leading-relaxed text-slate-100">
+                  {persona.profile}
+                </p>
+                <div className="flex flex-wrap gap-3 pt-4">
+                  {persona.keywords.map(kw => (
+                    <span key={kw} className="px-6 py-2 rounded-2xl bg-white/5 text-slate-300 font-black text-sm border border-white/10 hover:bg-white/10 transition-colors cursor-default">#{kw}</span>
+                  ))}
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
+
+              <motion.div 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="p-10 rounded-[3rem] bg-primary/10 border border-primary/20 text-left relative overflow-hidden group shadow-xl"
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-500">
+                  <PlayCircle size={100} className="text-primary" />
+                </div>
+                <p className="text-slate-500 font-black uppercase tracking-[0.3em] text-xs mb-6">Real User Scenario</p>
+                <div className="space-y-6">
+                  <p className="text-2xl font-black leading-relaxed text-white">
+                    {persona.scenario}
+                  </p>
+                  <div className="flex gap-10 pt-4">
+                    <div className="space-y-3">
+                      <p className="text-primary/60 font-black text-xs uppercase tracking-widest">Pain Point</p>
+                      <p className="text-slate-400 font-bold">도서 선택의 번거로움</p>
+                    </div>
+                    <div className="w-px bg-white/10" />
+                    <div className="space-y-3">
+                      <p className="text-primary/60 font-black text-xs uppercase tracking-widest">Expected Goal</p>
+                      <p className="text-slate-400 font-bold">감성 기반의 즉각적 발견</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           </div>
         </div>
       );
@@ -606,33 +656,39 @@ const SlideContent = ({ slide, currentSlide }) => {
 
     case "tech":
       return (
-        <div className="space-y-12">
+        <div className="space-y-12 flex flex-col justify-center">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-3 gap-10">
-            <TechCategory icon={<Code2 className="text-blue-400" />} title="Frontend" items={frontend} />
-            <TechCategory icon={<Database className="text-orange-400" />} title="Backend & Infrastructure" items={backend} />
-            <TechCategory icon={<Globe className="text-emerald-400" />} title="External APIs" items={apis} />
+          <div className="grid grid-cols-3 gap-12">
+            <TechCategory icon={<Code2 className="text-blue-400" size={32} />} title="Frontend" items={frontend} color="blue" />
+            <TechCategory icon={<Database className="text-orange-400" size={32} />} title="Backend" items={backend} color="orange" />
+            <TechCategory icon={<Globe className="text-emerald-400" size={32} />} title="APIs" items={apis} color="emerald" />
           </div>
         </div>
       );
 
     case "architecture":
       return (
-        <div className="space-y-12">
+        <div className="space-y-12 flex flex-col justify-center">
           <SlideHeader title={title} />
-          <div className="space-y-4 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 gap-6 max-w-5xl mx-auto items-center">
             {flow.map((step, i) => (
               <motion.div 
                 key={i}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, x: -50 }}
+                animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.15 }}
-                className="flex items-center gap-6"
+                className="flex items-center gap-10 group"
               >
-                <div className="w-40 text-right font-black text-slate-500 text-sm uppercase tracking-widest">{step.from}</div>
-                <div className="flex-1 p-6 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between">
-                  <div className="font-bold text-slate-200">→ {step.to}</div>
-                  <div className="px-4 py-1 rounded-lg bg-primary/10 text-primary font-black text-xs uppercase">{step.result}</div>
+                <div className="w-48 text-right font-black text-slate-500 text-sm uppercase tracking-[0.2em] group-hover:text-primary transition-colors">{step.from}</div>
+                <div className="flex-1 p-10 rounded-[2.5rem] bg-white/5 border border-white/10 flex items-center justify-between group-hover:bg-white/[0.08] transition-all group-hover:border-primary/30 shadow-xl relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="font-black text-2xl text-slate-100 flex items-center gap-4 relative z-10">
+                    <ArrowDown className="text-primary -rotate-90" />
+                    {step.to}
+                  </div>
+                  <div className="px-6 py-2 rounded-xl bg-primary/20 text-primary font-black text-sm uppercase tracking-widest relative z-10 shadow-lg border border-primary/20">
+                    {step.result}
+                  </div>
                 </div>
               </motion.div>
             ))}
@@ -643,40 +699,45 @@ const SlideContent = ({ slide, currentSlide }) => {
     case "feature":
       return (
         <div className="space-y-12 h-full flex flex-col justify-center">
-          <div className="space-y-4 text-left">
-            <SlideHeader title={title} />
-            <p className="text-primary font-bold tracking-wider">{subtitle}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-16 items-center flex-1">
-            <div className="space-y-6 text-left">
-              {points.map((p, i) => (
-                <motion.div 
-                  key={i}
-                  initial={{ x: -20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="flex items-start gap-4"
-                >
-                  <div className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-primary flex items-center justify-center text-[10px] font-black text-white">{i + 1}</div>
-                  <p className="text-xl text-slate-300 leading-relaxed font-medium text-left">{p}</p>
-                </motion.div>
-              ))}
+          <SlideHeader title={title} />
+          <div className="grid grid-cols-2 gap-20 items-center flex-1">
+            <div className="space-y-10 text-left">
+              <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 inline-block">
+                <p className="text-primary font-black tracking-[0.2em] text-sm uppercase">{subtitle}</p>
+              </div>
+              <div className="space-y-8">
+                {points.map((p, i) => (
+                  <motion.div 
+                    key={i}
+                    initial={{ x: -30, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: i * 0.15 }}
+                    className="flex items-start gap-6 group"
+                  >
+                    <div className="mt-1 flex-shrink-0 w-10 h-10 rounded-2xl bg-primary/20 flex items-center justify-center text-sm font-black text-primary border border-primary/20 shadow-lg group-hover:bg-primary group-hover:text-white transition-all">
+                      0{i + 1}
+                    </div>
+                    <p className="text-2xl text-slate-200 leading-relaxed font-bold text-left group-hover:translate-x-2 transition-transform">{p}</p>
+                  </motion.div>
+                ))}
+              </div>
             </div>
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="relative aspect-square max-w-md mx-auto flex items-center justify-center"
+              initial={{ scale: 0.85, opacity: 0, rotate: 5 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              transition={{ delay: 0.5, type: "spring" }}
+              className="relative aspect-square max-w-lg mx-auto flex items-center justify-center"
             >
-              <div className="absolute inset-0 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-              <div className="relative z-10 w-full h-full rounded-[3rem] bg-white/5 border border-white/20 backdrop-blur-2xl shadow-2xl flex items-center justify-center overflow-hidden p-8 text-white">
-                {title.includes("홈") && <Cloud size={160} className="text-primary opacity-60" />}
-                {title.includes("검색") && <Search size={160} className="text-primary opacity-60" />}
-                {title.includes("서재") && <Calendar size={160} className="text-primary opacity-60" />}
-                {title.includes("포인트") && <Trophy size={160} className="text-primary opacity-60" />}
-                {title.includes("커뮤니티") && <Users size={160} className="text-primary opacity-60" />}
-                {title.includes("챗봇") && <MessageCircle size={160} className="text-primary opacity-60" />}
-                {title.includes("온보딩") && <Smartphone size={160} className="text-primary opacity-60" />}
+              <div className="absolute inset-0 bg-primary/20 rounded-full blur-[100px] animate-pulse" />
+              <div className="relative z-10 w-full h-full rounded-[4rem] bg-white/5 border border-white/20 backdrop-blur-3xl shadow-[0_50px_100px_-20px_rgba(0,0,0,0.5)] flex items-center justify-center overflow-hidden p-12 text-white group hover:scale-[1.02] transition-transform">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
+                {title.includes("홈") && <Cloud size={240} className="text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />}
+                {title.includes("검색") && <Search size={240} className="text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />}
+                {title.includes("서재") && <Calendar size={240} className="text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />}
+                {title.includes("포인트") && <Trophy size={240} className="text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />}
+                {title.includes("커뮤니티") && <Users size={240} className="text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />}
+                {title.includes("챗봇") && <MessageCircle size={240} className="text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />}
+                {title.includes("온보딩") && <Smartphone size={240} className="text-primary drop-shadow-[0_0_30px_rgba(var(--primary),0.5)]" />}
               </div>
             </motion.div>
           </div>
@@ -807,27 +868,43 @@ const SlideContent = ({ slide, currentSlide }) => {
 };
 
 const SlideHeader = ({ title }) => (
-  <div className="space-y-2 mb-10 text-left">
-    <div className="h-1.5 w-20 bg-primary rounded-full mb-4" />
-    <h2 className="text-5xl font-black tracking-tighter text-white">{title}</h2>
+  <div className="space-y-4 mb-16 text-left relative">
+    <div className="flex items-center gap-4">
+      <div className="h-1.5 w-24 bg-primary rounded-full" />
+      <div className="h-1.5 w-4 bg-primary/30 rounded-full" />
+    </div>
+    <h2 className="text-7xl font-black tracking-tighter text-white drop-shadow-xl flex items-center gap-4">
+      {title}
+    </h2>
   </div>
 );
 
-const TechCategory = ({ icon, title, items }) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="p-8 rounded-[3rem] bg-white/5 border border-white/10 space-y-6 shadow-2xl h-full flex flex-col text-left"
-  >
-    <div className="flex items-center gap-3 text-lg font-bold text-white">
-      {icon} {title}
-    </div>
-    <div className="flex flex-wrap gap-2 flex-1">
-      {items.map(item => (
-        <span key={item} className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 font-bold text-[10px] border border-white/10">{item}</span>
-      ))}
-    </div>
-  </motion.div>
-);
+const TechCategory = ({ icon, title, items, color }) => {
+  const colors = {
+    blue: "from-blue-500/20 to-blue-600/5 border-blue-500/30",
+    orange: "from-orange-500/20 to-orange-600/5 border-orange-500/30",
+    emerald: "from-emerald-500/20 to-emerald-600/5 border-emerald-500/30"
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`p-12 rounded-[4rem] bg-gradient-to-br ${colors[color]} border backdrop-blur-xl space-y-10 shadow-2xl flex flex-col text-left group hover:scale-[1.02] transition-transform`}
+    >
+      <div className="flex items-center gap-5 text-3xl font-black text-white">
+        <div className="p-4 rounded-3xl bg-white/5 shadow-inner">
+          {icon}
+        </div>
+        {title}
+      </div>
+      <div className="flex flex-wrap gap-3 flex-1 items-start">
+        {items.map(item => (
+          <span key={item} className="px-5 py-2.5 rounded-2xl bg-white/5 text-slate-200 font-black text-sm border border-white/10 group-hover:bg-white/10 transition-colors shadow-sm">{item}</span>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
 
 export default Presentation;
