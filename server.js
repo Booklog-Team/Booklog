@@ -42,32 +42,26 @@ app.use("/api/aladin", async (req, res) => {
   }
 });
 
-// 3. Groq API 프록시 — http-proxy-middleware 대신 직접 fetch 사용
-// (Express 5 + proxy-middleware 조합의 POST body 미전달 / 504 타임아웃 문제 회피)
+// 3. Groq API 프록시
 app.post("/api/groq/chat/completions", async (req, res) => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
-
   try {
-    const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(req.body),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    const data = await upstream.json();
-    res.status(upstream.status).json(data);
-  } catch (e) {
-    clearTimeout(timer);
-    const status = e.name === "AbortError" ? 504 : 500;
-    res.status(status).json({ error: e.message });
+    const response = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      req.body,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error("Groq error:", error.response?.data || error.message);
+    res
+      .status(error.response?.status || 500)
+      .json(error.response?.data || { error: "Groq API 오류" });
   }
 });
 

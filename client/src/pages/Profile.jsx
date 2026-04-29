@@ -10,13 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/firebase/config';
 import { logout } from '@/firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { usePoint } from '@/contexts/PointContext';
+import { useShelf } from '@/contexts/ShelfContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { motion } from 'framer-motion';
 
@@ -24,8 +25,9 @@ import { motion } from 'framer-motion';
 
 function getHeatLevel(count) {
   if (!count) return 0;
-  if (count === 1) return 2;
-  if (count === 2) return 3;
+  if (count === 1) return 1;
+  if (count === 2) return 2;
+  if (count === 3) return 3;
   return 4;
 }
 
@@ -129,6 +131,11 @@ const monthKeyFromDate = (date) => {
   return `${year}-${month}`;
 };
 
+const getLocalDateKey = (date = new Date()) => {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+};
+
 const getBookMonthKeys = (book) => {
   const keys = new Set();
   (book.checkedDates || []).forEach(date => {
@@ -140,14 +147,49 @@ const getBookMonthKeys = (book) => {
   return keys;
 };
 
+function getCalendarActivity(shelf, readingLogs) {
+  const todayStr = getLocalDateKey();
+  const bookIds = new Set(shelf.map(book => book.id).filter(Boolean));
+  const dateBooks = new Map();
+  const realLogKeys = new Set();
+
+  const addDateBook = (date, bookId) => {
+    if (!date || date > todayStr || !bookId || !bookIds.has(bookId)) return;
+    if (!dateBooks.has(date)) dateBooks.set(date, new Set());
+    dateBooks.get(date).add(bookId);
+  };
+
+  readingLogs.forEach(log => {
+    if (!log?.date || !log?.bookId) return;
+    realLogKeys.add(`${log.bookId}|${log.date}`);
+    addDateBook(log.date, log.bookId);
+  });
+
+  shelf.forEach(book => {
+    (book.checkedDates || []).forEach(date => {
+      if (!realLogKeys.has(`${book.id}|${date}`)) {
+        addDateBook(date, book.id);
+      }
+    });
+  });
+
+  const readCountByDate = Object.fromEntries(
+    [...dateBooks.entries()].map(([date, books]) => [date, books.size])
+  );
+
+  return {
+    allReadDates: new Set(dateBooks.keys()),
+    readCountByDate,
+  };
+}
+
 // ─── 헬퍼 함수 ────────────────────────────────────────────────────────────
-function calculateStreak(shelf) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const all = new Set();
-  shelf.forEach(b => (b.checkedDates || []).forEach(d => { if (d <= todayStr) all.add(d); }));
+function calculateStreakFromDates(readDates) {
+  const todayStr = getLocalDateKey();
+  const all = new Set([...readDates].filter(d => d <= todayStr));
   if (!all.size) return 0;
   const sorted = [...all].sort().reverse();
-  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const yesterday = getLocalDateKey(new Date(Date.now() - 86_400_000));
   if (sorted[0] !== todayStr && sorted[0] !== yesterday) return 0;
   let count = 1;
   for (let i = 1; i < sorted.length; i++) {
@@ -158,10 +200,9 @@ function calculateStreak(shelf) {
   return count;
 }
 
-function calculateLongestStreak(shelf) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const all = new Set();
-  shelf.forEach(b => (b.checkedDates || []).forEach(d => { if (d <= todayStr) all.add(d); }));
+function calculateLongestStreakFromDates(readDates) {
+  const todayStr = getLocalDateKey();
+  const all = new Set([...readDates].filter(d => d <= todayStr));
   if (!all.size) return 0;
   const sorted = [...all].sort();
   let longest = 1, current = 1;
@@ -276,6 +317,11 @@ export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
   const { theme } = useTheme();
   const { myPoints } = usePoint();
+  const {
+    books: shelfBooks,
+    readingLogs,
+    loading: shelfLoading,
+  } = useShelf();
 
   const displayPoints = myPoints ?? (profile?.totalPoints ?? 0);
   const levelInfo     = getLevelInfo(displayPoints);
@@ -283,8 +329,6 @@ export default function Profile() {
   const chartColors = THEME_CHART_COLORS[theme] || THEME_CHART_COLORS.default;
 
   const [view, setView]                 = useState('main');
-  const [shelf, setShelf]               = useState([]);
-  const [shelfLoading, setShelfLoading] = useState(true);
   const [editNickname, setEditNickname] = useState('');
   const [editMotto, setEditMotto]       = useState('');
   const [editGenres, setEditGenres]     = useState([]);
@@ -301,15 +345,6 @@ export default function Profile() {
   const [sendingReset, setSendingReset]   = useState(false);
   const [activeGenre, setActiveGenre]     = useState(null);
 
-  // Firestore 서재 로드
-  useEffect(() => {
-    if (!user) { setShelfLoading(false); return; }
-    getDocs(collection(db, 'users', user.uid, 'shelf'))
-      .then(snap => setShelf(snap.docs.map(d => d.data())))
-      .catch(err => console.error('[Profile] shelf 로드 실패:', err))
-      .finally(() => setShelfLoading(false));
-  }, [user]);
-
   // 편집 폼 동기화
   useEffect(() => {
     setEditNickname(profile?.nickname || user?.displayName || '');
@@ -317,7 +352,10 @@ export default function Profile() {
     setEditGenres(profile?.genres || []);
   }, [profile, user]);
 
-  const effectiveShelf = shelfLoading ? [] : shelf;
+  const effectiveShelf = useMemo(
+    () => (shelfLoading ? [] : shelfBooks),
+    [shelfBooks, shelfLoading]
+  );
 
   // 파생 통계
   const doneCount     = effectiveShelf.filter(b => b.status === 'done').length;
@@ -326,36 +364,24 @@ export default function Profile() {
   const totalBooks    = effectiveShelf.length;
   const totalPages    = effectiveShelf.reduce((s, b) => s + (b.currentPage || 0), 0);
 
-  const streakShelf = effectiveShelf;
   const genreShelf  = effectiveShelf;
 
-  const streak        = calculateStreak(streakShelf);
-  const longestStreak = calculateLongestStreak(streakShelf);
-
-  // 날짜 집합 + 날짜별 체크 수 — 단일 패스
   const { allReadDates, readCountByDate } = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const dates = new Set();
-    const counts = {};
-    streakShelf.forEach(b => {
-      (b.checkedDates || []).forEach(d => {
-        if (d <= todayStr) {
-          dates.add(d);
-          counts[d] = (counts[d] || 0) + 1;
-        }
-      });
-    });
-    return { allReadDates: dates, readCountByDate: counts };
-  }, [streakShelf]);
+    if (shelfLoading) return { allReadDates: new Set(), readCountByDate: {} };
+    return getCalendarActivity(effectiveShelf, readingLogs);
+  }, [effectiveShelf, readingLogs, shelfLoading]);
+
+  const streak        = calculateStreakFromDates(allReadDates);
+  const longestStreak = calculateLongestStreakFromDates(allReadDates);
 
   // 이번 달 독서한 날
-  const thisMonth     = new Date().toISOString().slice(0, 7);
+  const thisMonth     = getLocalDateKey().slice(0, 7);
   const thisMonthDays = [...allReadDates].filter(d => d.startsWith(thisMonth)).length;
 
   const monthlyShelf = useMemo(() => {
     if (shelfLoading) return [];
-    return shelf;
-  }, [shelf, shelfLoading]);
+    return effectiveShelf;
+  }, [effectiveShelf, shelfLoading]);
 
   const genreData = useMemo(() => {
     const counts = {};
@@ -371,7 +397,7 @@ export default function Profile() {
   // 최근 28일 (4주) 날짜 배열
   const last28Days = Array.from({ length: 28 }, (_, i) => {
     const d = new Date(Date.now() - (27 - i) * 86_400_000);
-    return d.toISOString().slice(0, 10);
+    return getLocalDateKey(d);
   });
 
   // 바 차트 데이터
@@ -749,7 +775,7 @@ export default function Profile() {
   }
 
   // ── 모달 콘텐츠 정의 ───────────────────────────────────────────────────
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateKey();
 
   const MODAL_CONFIG = {
     // ── 총 도서 ──────────────────────────────────────────────────────────
@@ -840,33 +866,62 @@ export default function Profile() {
       content: (
         <div>
           {/* 요약 3가지 */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="mb-4 grid grid-cols-3 divide-x divide-border/40 rounded-xl bg-secondary/50 py-3">
             {[
-              { label: '현재 연속', value: `${streak}일`,        color: 'text-primary' },
-              { label: '최장 연속', value: `${longestStreak}일`, color: 'text-accent-foreground' },
-              { label: '이번달 독서일', value: `${thisMonthDays}일`, color: 'text-amber-600' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-secondary/60 rounded-xl p-3 text-center">
-                <p className={`text-lg font-bold ${color}`}>{value}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+              { label: '현재 연속', value: streak, suffix: '일', color: 'var(--stat-color-1)' },
+              { label: '최장 연속', value: longestStreak, suffix: '일', color: 'var(--stat-color-2)' },
+              { label: '이번달 독서일', value: thisMonthDays, suffix: '일', color: 'var(--stat-color-1)' },
+            ].map(({ label, value, suffix, color }) => (
+              <div
+                key={label}
+                className="flex flex-col items-center gap-1 rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-card/35"
+              >
+                <span className="text-[10px] text-muted-foreground">
+                  {label}
+                </span>
+                <div className="flex items-baseline gap-0.5">
+                  <span
+                    className="text-xl font-bold leading-none"
+                    style={{ color }}
+                  >
+                    {value}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {suffix}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
 
           {/* 최근 4주 미니 캘린더 */}
-          <p className="text-xs font-semibold text-muted-foreground mb-2">최근 4주</p>
-          <div className="grid grid-cols-7 gap-1 mb-1">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            최근 4주
+          </p>
+          <div className="mb-2 grid grid-cols-7">
             {['일', '월', '화', '수', '목', '금', '토'].map(d => (
-              <div key={d} className="text-center text-[10px] text-muted-foreground">{d}</div>
+              <div
+                key={d}
+                className="py-1 text-center text-[11px] font-medium text-muted-foreground"
+              >
+                {d}
+              </div>
             ))}
           </div>
           {(() => {
             const firstDay = new Date(last28Days[0]).getDay();
             const cells = [...Array(firstDay).fill(null), ...last28Days];
             return (
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5">
                 {cells.map((date, i) => {
-                  if (!date) return <div key={`pad-${i}`} />;
+                  if (!date) {
+                    return (
+                      <div
+                        key={`pad-${i}`}
+                        className="flex aspect-square items-center justify-center text-xs text-muted-foreground/30"
+                      />
+                    );
+                  }
                   const count   = readCountByDate[date] || 0;
                   const level   = getHeatLevel(count);
                   const isToday = date === today;
@@ -876,22 +931,33 @@ export default function Profile() {
                     <div
                       key={date}
                       title={`${date}${count ? ` — ${count}권 체크` : ''}`}
-                      className={[
-                        'aspect-square rounded-full flex items-center justify-center text-[10px] font-medium transition-all duration-200',
-                        isToday ? 'ring-2 ring-primary/50 ring-offset-1 shadow-sm' : '',
-                        isHigh  ? 'font-semibold' : '',
-                      ].join(' ')}
-                      style={{
-                        backgroundColor: `var(--heatmap-${level})`,
-                        color: isHigh
-                          ? 'var(--heatmap-text)'
-                          : level >= 1
-                            ? 'var(--foreground)'
-                            : undefined,
-                        border: `1px solid color-mix(in oklch, var(--heatmap-${level}) 60%, var(--foreground) 12%)`,
-                      }}
+                      className="flex aspect-square items-center justify-center"
                     >
-                      {day}
+                      <div
+                        className={[
+                          'flex h-[92%] w-[92%] transform-gpu items-center justify-center rounded-full text-xs transition-all duration-200 hover:-translate-y-0.5 hover:scale-105 hover:shadow-md',
+                          level > 0
+                            ? 'font-semibold shadow-sm hover:opacity-80 ring-1 ring-black/20 dark:ring-white/25'
+                            : isToday
+                              ? 'bg-secondary font-semibold text-foreground ring-2 ring-primary/40'
+                              : 'text-muted-foreground hover:bg-secondary/60',
+                          isToday && level > 0
+                            ? 'ring-2 ring-primary/40 ring-offset-2 ring-offset-card'
+                            : '',
+                        ].join(' ')}
+                        style={
+                          level > 0
+                            ? {
+                                backgroundColor: `var(--heatmap-${level})`,
+                                color: isHigh
+                                  ? 'var(--heatmap-text)'
+                                  : 'var(--foreground)',
+                              }
+                            : undefined
+                        }
+                      >
+                        {day}
+                      </div>
                     </div>
                   );
                 })}
@@ -899,21 +965,26 @@ export default function Profile() {
             );
           })()}
           {/* 히트맵 범례 */}
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-[10px] text-muted-foreground">채워진 날은 독서 기록이 있는 날이에요</p>
+          <div className="mt-3 flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <span className="text-[9px] text-muted-foreground/70">적음</span>
+              <span className="mr-0.5 text-[10px] text-muted-foreground">적음</span>
               {[0, 1, 2, 3, 4].map(lv => (
                 <span
                   key={lv}
-                  className="w-2.5 h-2.5 rounded-sm transition-colors duration-200"
+                  className="h-3 w-3 rounded transition-colors duration-200"
                   style={{
                     backgroundColor: `var(--heatmap-${lv})`,
-                    border: '1px solid rgba(0,0,0,0.10)',
+                    border: '1px solid rgba(128,128,128,0.18)',
                   }}
                 />
               ))}
-              <span className="text-[9px] text-muted-foreground/70">많음</span>
+              <span className="ml-0.5 text-[10px] text-muted-foreground">많음</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Flame size={12} className="text-amber-500" />
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {streak}일 연속 독서 중
+              </span>
             </div>
           </div>
         </div>

@@ -396,11 +396,16 @@ export default function BookDetail() {
         memo,
         rating,
         genre: info.categories || [],
+        updatedAt: serverTimestamp(),
       };
 
       if (status === "reading" || status === "done") {
         payload.lastReadDate = today;
         payload.checkedDates = arrayUnion(today);
+      }
+      if (!savedStatus) {
+        payload.addedAt = today;
+        payload.createdAt = serverTimestamp();
       }
 
       await setDoc(bookRef, payload, { merge: true });
@@ -506,7 +511,8 @@ export default function BookDetail() {
         genre: info.categories || [],
         ...(newStatus !== "want" && { lastReadDate: today, checkedDates: arrayUnion(today) }),
         ...(newStatus !== "want" && (isFirstAdd || savedStatus === "want") && { startDate: today }),
-        ...(isFirstAdd && { addedAt: today }),
+        ...(isFirstAdd && { addedAt: today, createdAt: serverTimestamp() }),
+        updatedAt: serverTimestamp(),
       }, { merge: true });
 
       const isFirstCompletion = newStatus === "done" && savedStatus !== "done";
@@ -775,7 +781,7 @@ export default function BookDetail() {
                 type="button"
                 onClick={() => {
                   if (savedStatus) {
-                    navigate(`/library?bookId=${encodeURIComponent(id)}&record=1`);
+                    navigate(`/library?bookId=${encodeURIComponent(id)}`);
                     return;
                   }
                   openShelfPopup();

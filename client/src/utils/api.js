@@ -64,7 +64,7 @@ export function normalizeBook(item) {
       description: item.description || "",
       pageCount: item.subInfo?.itemPage || null,
       categories: item.categoryName ? [parseCategory(item.categoryName)] : [],
-      imageLinks: item.cover ? { thumbnail: item.cover } : null,
+      imageLinks: item.cover ? { thumbnail: upgradeCoverUrl(item.cover) } : null,
     },
   };
 }

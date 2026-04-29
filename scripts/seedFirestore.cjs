@@ -126,7 +126,7 @@ const KIM_UID = "IcifW06lDnUeXepe3fJoOLbxZRm1";
 const KIM_BOOKS = [
   // ── done 도서 ─────────────────────────────────────────────────────────────
   {
-    id: "135179939",
+    id: "1000152",
     title: "채식주의자",
     author: "한강",
     genre: "소설",
@@ -139,7 +139,7 @@ const KIM_BOOKS = [
     _endDate: "2026-01-20",
   },
   {
-    id: "182031367",
+    id: "318933239",
     title: "아몬드",
     author: "손원평",
     genre: "소설",
@@ -152,7 +152,7 @@ const KIM_BOOKS = [
     _endDate: "2026-01-28",
   },
   {
-    id: "254477088",
+    id: "314240466",
     title: "사피엔스",
     author: "유발하라리",
     genre: "인문",
@@ -178,7 +178,7 @@ const KIM_BOOKS = [
     _endDate: "2026-02-20",
   },
   {
-    id: "121813681",
+    id: "94764887",
     title: "82년생 김지영",
     author: "조남주",
     genre: "소설",
@@ -191,7 +191,7 @@ const KIM_BOOKS = [
     _endDate: "2026-03-05",
   },
   {
-    id: "89641882",
+    id: "170482558",
     title: "이기적 유전자",
     author: "리처드 도킨스",
     genre: "인문",
@@ -204,7 +204,7 @@ const KIM_BOOKS = [
     _endDate: "2026-03-15",
   },
   {
-    id: "291556588",
+    id: "269428498",
     title: "불편한 편의점",
     author: "김호연",
     genre: "소설",
@@ -217,7 +217,7 @@ const KIM_BOOKS = [
     _endDate: "2026-03-25",
   },
   {
-    id: "316242847",
+    id: "278770576",
     title: "작별하지 않는다",
     author: "한강",
     genre: "소설",
@@ -244,7 +244,7 @@ const KIM_BOOKS = [
   },
   // ── want 도서 ────────────────────────────────────────────────────────────
   {
-    id: "219246812",
+    id: "143220344",
     title: "흰",
     author: "한강",
     genre: "소설",
@@ -281,7 +281,7 @@ const KIM_BOOKS = [
   },
   // ── reading 도서 ──────────────────────────────────────────────────────────
   {
-    id: "279034661",
+    id: "294963999",
     title: "파친코",
     author: "이민진",
     genre: "소설",
@@ -430,7 +430,7 @@ const PARK_UID = "LmOvpryRYLP3Th314zl69tQQm1j2";
 const PARK_BOOKS = [
   // ── done 도서 ─────────────────────────────────────────────────────────────
   {
-    id: "279034661",
+    id: "294963999",
     title: "파친코",
     author: "이민진",
     genre: "소설",
@@ -456,7 +456,7 @@ const PARK_BOOKS = [
     _endDate: "2026-03-01",
   },
   {
-    id: "291556588",
+    id: "269428498",
     title: "불편한 편의점",
     author: "김호연",
     genre: "소설",
@@ -483,7 +483,7 @@ const PARK_BOOKS = [
   },
   // ── reading 도서 ──────────────────────────────────────────────────────────
   {
-    id: "135179939",
+    id: "1000152",
     title: "채식주의자",
     author: "한강",
     genre: "소설",
@@ -496,7 +496,7 @@ const PARK_BOOKS = [
     _endDate: "2026-04-25",
   },
   {
-    id: "254477088",
+    id: "314240466",
     title: "사피엔스",
     author: "유발하라리",
     genre: "인문",
@@ -510,7 +510,7 @@ const PARK_BOOKS = [
   },
   // ── want 도서 ─────────────────────────────────────────────────────────────
   {
-    id: "121813681",
+    id: "94764887",
     title: "82년생 김지영",
     author: "조남주",
     genre: "소설",
@@ -534,7 +534,7 @@ const PARK_BOOKS = [
     _checkedDates: [],
   },
   {
-    id: "89641882",
+    id: "170482558",
     title: "이기적 유전자",
     author: "리처드 도킨스",
     genre: "인문",
@@ -596,7 +596,7 @@ const LEE_BOOKS = [
     _endDate: "2026-02-20",
   },
   {
-    id: "254477088",
+    id: "314240466",
     title: "사피엔스",
     author: "유발하라리",
     genre: "인문",
@@ -622,7 +622,7 @@ const LEE_BOOKS = [
     _endDate: "2026-03-25",
   },
   {
-    id: "89641882",
+    id: "170482558",
     title: "이기적 유전자",
     author: "리처드 도킨스",
     genre: "인문",
@@ -650,7 +650,7 @@ const LEE_BOOKS = [
   },
   // ── want 도서 ─────────────────────────────────────────────────────────────
   {
-    id: "182031367",
+    id: "318933239",
     title: "아몬드",
     author: "손원평",
     genre: "소설",
@@ -662,7 +662,7 @@ const LEE_BOOKS = [
     _checkedDates: [],
   },
   {
-    id: "316242847",
+    id: "278770576",
     title: "작별하지 않는다",
     author: "한강",
     genre: "소설",
@@ -930,6 +930,99 @@ async function seedMeetings() {
   }
 }
 
+// ── 9단계: meetings 댓글 시드 ────────────────────────────────────────────────
+
+const MEETING_COMMENTS = [
+  {
+    meetingId: "seed-meeting-hanggang",
+    comments: [
+      {
+        id: "comment-hanggang-1",
+        content: "채식주의자 정말 강렬하네요. 영혜 캐릭터가 너무 인상적이었어요!",
+        authorUid: "IcifW06lDnUeXepe3fJoOLbxZRm1",
+        authorName: "김독서",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-21")),
+      },
+      {
+        id: "comment-hanggang-2",
+        content: "저도 읽고 한동안 멍했어요. 다음 작품도 기대됩니다 📚",
+        authorUid: "LmOvpryRYLP3Th314zl69tQQm1j2",
+        authorName: "박문학",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-22")),
+      },
+      {
+        id: "comment-hanggang-3",
+        content: "한강 작가 노벨상 받을 만 하다는 걸 다시 느꼈어요",
+        authorUid: "5kf1UAvpWUbUdSluRJzhupBEWXf2",
+        authorName: "이철학",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-23")),
+      },
+    ],
+  },
+  {
+    meetingId: "seed-meeting-humanities",
+    comments: [
+      {
+        id: "comment-humanities-1",
+        content: "총균쇠 분량이 어마어마하네요.. 같이 읽으니까 버틸 수 있어요 😅",
+        authorUid: "5kf1UAvpWUbUdSluRJzhupBEWXf2",
+        authorName: "이철학",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-23")),
+      },
+      {
+        id: "comment-humanities-2",
+        content: "재레드 다이아몬드의 관점이 너무 흥미로워요. 지리가 역사를 결정한다니!",
+        authorUid: "IcifW06lDnUeXepe3fJoOLbxZRm1",
+        authorName: "김독서",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-24")),
+      },
+    ],
+  },
+  {
+    meetingId: "seed-meeting-selfdev",
+    comments: [
+      {
+        id: "comment-selfdev-1",
+        content: "아주 작은 습관의 힘 읽고 나서 진짜로 아침 루틴 만들었어요!",
+        authorUid: "LmOvpryRYLP3Th314zl69tQQm1j2",
+        authorName: "박문학",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-26")),
+      },
+      {
+        id: "comment-selfdev-2",
+        content: "저도 원씽 읽고 우선순위 정하는 법이 완전히 바뀌었어요 💪",
+        authorUid: "IcifW06lDnUeXepe3fJoOLbxZRm1",
+        authorName: "김독서",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-26")),
+      },
+      {
+        id: "comment-selfdev-3",
+        content: "실천 위주라서 읽고 바로 적용할 수 있는 게 좋아요",
+        authorUid: "5kf1UAvpWUbUdSluRJzhupBEWXf2",
+        authorName: "이철학",
+        createdAt: admin.firestore.Timestamp.fromDate(new Date("2026-04-27")),
+      },
+    ],
+  },
+];
+
+async function seedMeetingComments() {
+  console.log("\n=== 9단계: meetings 댓글 시드 ===\n");
+
+  for (const { meetingId, comments } of MEETING_COMMENTS) {
+    for (const { id, ...fields } of comments) {
+      const ref = db.collection("meetings").doc(meetingId).collection("comments").doc(id);
+      const snap = await ref.get();
+      if (snap.exists) {
+        console.log(`[SKIP]   meetings/${meetingId}/comments/${id} — 이미 존재`);
+        continue;
+      }
+      await ref.set(fields);
+      console.log(`[CREATE] meetings/${meetingId}/comments/${id} (${fields.authorName})`);
+    }
+  }
+}
+
 // ── 메인 ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -983,6 +1076,9 @@ async function main() {
   // 8단계
   await cleanMeetings();
   await seedMeetings();
+
+  // 9단계
+  await seedMeetingComments();
 
   console.log("\n완료!");
   process.exit(0);
