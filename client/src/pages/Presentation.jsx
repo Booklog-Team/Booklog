@@ -181,36 +181,44 @@ const Presentation = () => {
         position: "object-top"
       }
     },
-    // 15. 개발 환경 & 기술 스택
+    // 15. 기술 스택
     {
       type: "tech",
-      title: "개발 환경 & 기술 스택",
-      frontend: ["React 19", "Vite 6", "Tailwind CSS 4", "shadcn/ui", "Framer Motion", "Recharts"],
-      backend: ["Firebase Auth", "Firestore", "Express.js Proxy"],
-      apis: ["OpenWeatherMap", "Aladin API", "Groq AI", "Google Maps"]
+      title: "Tech Stack",
+      items: [
+        { name: "React + Vite", desc: "고성능 UI 컴포넌트 개발 및 모던 빌드 시스템", icon: <Code2 />, color: "text-[#61DAFB]" },
+        { name: "Tailwind CSS", desc: "유틸리티 우선 방식의 고속 스타일링 및 디자인 시스템", icon: <Layers />, color: "text-[#38B2AC]" },
+        { name: "Firebase Auth", desc: "Google OAuth를 통한 안전하고 간편한 사용자 인증", icon: <ShieldCheck />, color: "text-[#FFA000]" },
+        { name: "Firestore (NoSQL)", desc: "실시간 데이터 동기화 및 유연한 문서 지향 데이터베이스", icon: <Database />, color: "text-[#FFCA28]" },
+        { name: "Jira & Notion", desc: "체계적인 Task 관리 및 프로젝트 문서화/기록", icon: <CheckCircle2 />, color: "text-[#0052CC]" },
+        { name: "GitHub & Slack", desc: "효율적인 코드 버전 관리 및 실시간 팀 커뮤니케이션", icon: <Globe />, color: "text-[#FFFFFF]" }
+      ]
     },
-    // 16. API 연동 아키텍처
+    // 16. API 연동 및 데이터 아키텍처
     {
       type: "architecture",
-      title: "API 연동 아키텍처",
+      title: "API 연동 및 데이터 아키텍처",
       flow: [
-        { from: "위치/날씨", to: "Geolocation + OpenWeatherMap", result: "실시간 환경 인식" },
-        { from: "도서 데이터", to: "Aladin API", result: "70만 종 도서 메타데이터" },
-        { from: "지능형 선별", to: "Groq AI (LLM)", result: "날씨/감성 필터링" },
-        { from: "사용자 활동", to: "Firebase Firestore", result: "실시간 동기화" }
+        { from: "환경 인식", to: "OpenWeatherMap", result: "실시간 위치/날씨 데이터" },
+        { from: "도서 검색", to: "알라딘 Open API", result: "70만 종 도서 메타데이터" },
+        { from: "지능형 추천", to: "Groq AI (LLaMA 3)", result: "사용자 맞춤형 도서 큐레이션 및 챗봇" },
+        { from: "정보 조회", to: "도서관정보나루 API", result: "전국 도서관 대출 현황/보유 정보" },
+        { from: "위치 시각화", to: "Google Maps API", result: "인근 도서관 위치 및 정보 렌더링" },
+        { from: "상태 동기화", to: "Firebase Firestore", result: "사용자 활동 데이터 실시간 저장" }
       ]
     },
     // 17-23. 주요 기능 7개
     {
       type: "feature",
-      title: "주요 기능: 날씨 × AI 홈 배너",
+      title: "주요 기능: AI 홈 배너 x 날씨 API",
       subtitle: "Geolocation + OpenWeatherMap + Aladin + Groq AI",
       points: [
-        "현재 위치의 날씨와 시간대를 분석하여 무드 결정",
-        "알라딘 베스트셀러 중 무드에 맞는 카테고리 도서 풀 수집",
         "Groq AI가 LLM을 통해 실제 도서 중 테마에 부합하는 책만 선별",
-        "AI 환각을 방지하기 위해 실제 API 데이터 인덱스 기반 추천"
-      ]
+        "AI 환각을 방지하기 위해 실제 API 데이터 인덱스 기반 추천",
+        "현재 위치의 날씨와 시간대를 분석하여 무드 결정",
+        "알라딘 베스트셀러 중 무드에 맞는 카테고리 도서 풀 수집"
+      ],
+      images: ["/features/home.png", "/features/home2.png", "/features/home3.png"]
     },
     {
       type: "feature",
@@ -218,10 +226,11 @@ const Presentation = () => {
       subtitle: "Aladin API + Google Maps",
       points: [
         "실시간 키워드 검색 및 14개 장르별 탐색",
+        "서재 즉시 추가 및 상태 관리",
         "내 주변 도서관 찾기 (정보나루 API + 지도 마커)",
-        "도서 대출 가능 여부 실시간 확인",
-        "서재 즉시 추가 및 상태 관리"
-      ]
+        "도서 대출 가능 여부 실시간 확인"
+      ],
+      images: ["/features/search.png", "/features/search2.png"]
     },
     {
       type: "feature",
@@ -232,7 +241,8 @@ const Presentation = () => {
         "독서 진행률 슬라이더 및 월별 기록 캘린더 시각화",
         "연속 독서 Streak 시스템을 통한 습관 형성 유도",
         "완독 시 애니메이션 효과와 포인트 보상"
-      ]
+      ],
+      image: "/features/library.png"
     },
     {
       type: "feature",
@@ -243,7 +253,8 @@ const Presentation = () => {
         "5단계 독서 레벨 시스템 (새싹 → 도서관 수호자)",
         "기부처 선택을 통한 사회적 가치 실현 (책읽는사회문화재단 등)",
         "독서 활동이 사회 기부로 이어지는 선순환 구조"
-      ]
+      ],
+      image: "/features/points.png"
     },
     {
       type: "feature",
@@ -254,7 +265,8 @@ const Presentation = () => {
         "장르별 실시간 독서 모임 생성 및 참여",
         "모임 전용 실시간 채팅방 제공",
         "방장 전용 공지 및 모임 관리 기능"
-      ]
+      ],
+      image: "/features/community.png"
     },
     {
       type: "feature",
@@ -265,7 +277,8 @@ const Presentation = () => {
         "현재 날씨와 상황(비 오는 날 등)을 반영한 대화",
         "사용자 서재 데이터를 분석하여 중복 없는 미독 도서 제안",
         "대화 문맥에서 도서 의도를 파악하여 즉시 카드 출력"
-      ]
+      ],
+      image: "/features/chatbot.png"
     },
     {
       type: "feature",
@@ -276,7 +289,8 @@ const Presentation = () => {
         "초기 선호 장르 선택을 통한 맞춤형 홈 화면 구성",
         "상세 독서 통계 및 장르 분포 시각화 제공",
         "개인 취향과 레벨을 관리하는 프로필 허브"
-      ]
+      ],
+      image: "/features/onboarding.png"
     },
     // 24. 시연 영상
     {
@@ -321,10 +335,9 @@ const Presentation = () => {
     {
       type: "closing",
       content: {
-        quote: "오늘의 날씨가 당신의 다음 책을 추천합니다",
-        message: "Booklog와 함께 가치 있는 독서 여정을 시작하세요.",
-        thankYou: "감사합니다.",
-        qa: "Q & A"
+        quote: "기록은 데이터로, 독서는 습관으로",
+        message: "당신만의 개인화된 독서 여정, Booklog가 함께합니다.",
+        thankYou: "감사합니다."
       }
     }
   ];
@@ -409,7 +422,7 @@ const Presentation = () => {
       </div>
 
       {/* Content Area */}
-      <div className="relative h-full w-full flex items-center justify-center px-24 py-16">
+      <div className="relative h-full w-full flex items-center justify-center px-24 py-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentSlide}
@@ -417,7 +430,7 @@ const Presentation = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.98 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full max-w-7xl h-full flex flex-col justify-center"
+            className="w-full max-w-[1400px] h-full flex flex-col justify-center"
           >
             <SlideContent slide={slides[currentSlide]} currentSlide={currentSlide} />
           </motion.div>
@@ -764,6 +777,7 @@ const TeamMemberPhoto = ({ src, name }) => {
 
 const SlideContent = ({ slide, currentSlide }) => {
   const { type, title, subtitle, content, data, items, persona, keywords, members, frontend, backend, apis, flow, points, steps } = slide;
+  const [activeImg, setActiveImg] = useState(0);
 
   switch (type) {
     case "cover":
@@ -1022,46 +1036,103 @@ const SlideContent = ({ slide, currentSlide }) => {
 
     case "feature": {
       const { icon: featureIcon, Preview } = getFeatureInfo(title);
+      const images = slide.images || (slide.image ? [slide.image] : []);
+      
+      const nextImg = (e) => {
+        e.stopPropagation();
+        setActiveImg((prev) => (prev + 1) % images.length);
+      };
+      
+      const prevImg = (e) => {
+        e.stopPropagation();
+        setActiveImg((prev) => (prev - 1 + images.length) % images.length);
+      };
+
       return (
-        <div className="space-y-6 h-full flex flex-col justify-center">
-          <SlideHeader title={title} />
-          <div className="flex items-center gap-4 text-left">
-            <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex-shrink-0">
-              {featureIcon}
+        <div className="h-full flex flex-col justify-center py-4">
+          <div className="grid grid-cols-3 gap-16 items-start flex-1">
+            <div className="col-span-1 flex flex-col">
+              <SlideHeader title={title} />
+              <div className="space-y-6 text-left mt-6">
+                {points.map((p, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ x: -30, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: i * 0.15 }}
+                    className="flex items-start gap-5 group"
+                  >
+                    <div className="mt-1 flex-shrink-0 w-9 h-9 rounded-2xl bg-primary/20 flex items-center justify-center text-xs font-black text-primary border border-primary/20 shadow-lg group-hover:bg-primary group-hover:text-white transition-all">
+                      0{i + 1}
+                    </div>
+                    <p className="text-lg text-slate-200 leading-relaxed font-bold text-left group-hover:translate-x-2 transition-transform">{p}</p>
+                  </motion.div>
+                ))}
+              </div>
             </div>
-            <p className="text-primary font-black tracking-[0.2em] text-sm uppercase">{subtitle}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-16 items-center flex-1">
-            <div className="space-y-6 text-left">
-              {points.map((p, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ x: -30, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{ delay: i * 0.15 }}
-                  className="flex items-start gap-6 group"
-                >
-                  <div className="mt-1 flex-shrink-0 w-10 h-10 rounded-2xl bg-primary/20 flex items-center justify-center text-sm font-black text-primary border border-primary/20 shadow-lg group-hover:bg-primary group-hover:text-white transition-all">
-                    0{i + 1}
-                  </div>
-                  <p className="text-xl text-slate-200 leading-relaxed font-bold text-left group-hover:translate-x-2 transition-transform">{p}</p>
-                </motion.div>
-              ))}
-            </div>
+            
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.4, type: "spring" }}
-              className="h-full max-h-[480px] flex flex-col rounded-2xl overflow-hidden border border-white/20 shadow-2xl bg-slate-900"
+              className="col-span-2 h-full max-h-[1000px] flex flex-col rounded-3xl overflow-hidden border border-white/20 shadow-2xl bg-slate-950 relative group/slider"
             >
-              <div className="flex items-center gap-2 px-4 py-3 bg-slate-800 border-b border-white/10 flex-shrink-0">
+              <div className="flex items-center gap-2 px-4 py-3 bg-slate-800 border-b border-white/10 flex-shrink-0 z-20">
                 <div className="w-3 h-3 rounded-full bg-red-500/80" />
                 <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
                 <div className="w-3 h-3 rounded-full bg-green-500/80" />
-                <div className="flex-1 mx-3 py-1 px-3 rounded-lg bg-slate-700 text-slate-400 text-xs font-mono">booklog.kro.kr</div>
+                <div className="flex-1 mx-3 py-1 px-3 rounded-lg bg-slate-700 text-slate-400 text-xs font-mono text-center">booklog.kro.kr</div>
               </div>
-              <div className="flex-1 overflow-hidden relative">
-                {Preview ? <Preview /> : <div className="w-full h-full flex items-center justify-center text-primary/30">{featureIcon && React.cloneElement(featureIcon, { size: 120 })}</div>}
+              
+              <div className="flex-1 overflow-hidden relative bg-black/40">
+                <AnimatePresence mode="wait">
+                  {images.length > 0 ? (
+                    <motion.img 
+                      key={activeImg}
+                      src={images[activeImg]} 
+                      alt={`${title} ${activeImg + 1}`}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                      className="w-full h-full object-contain" 
+                    />
+                  ) : Preview ? (
+                    <Preview />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-primary/30">
+                      {featureIcon && React.cloneElement(featureIcon, { size: 120 })}
+                    </div>
+                  )}
+                </AnimatePresence>
+
+                {/* Navigation Buttons */}
+                {images.length > 1 && (
+                  <>
+                    <button 
+                      onClick={prevImg}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 border border-white/10 flex items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-black/70 z-30"
+                    >
+                      <ChevronLeft size={24} />
+                    </button>
+                    <button 
+                      onClick={nextImg}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 border border-white/10 flex items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-black/70 z-30"
+                    >
+                      <ChevronRight size={24} />
+                    </button>
+                    
+                    {/* Indicators */}
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+                      {images.map((_, i) => (
+                        <div 
+                          key={i} 
+                          className={`w-2 h-2 rounded-full transition-all ${i === activeImg ? 'bg-primary w-6' : 'bg-white/30'}`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>
@@ -1144,12 +1215,52 @@ const SlideContent = ({ slide, currentSlide }) => {
 
     case "tech":
       return (
-        <div className="space-y-16 h-full flex flex-col justify-center py-10">
+        <div className="space-y-12">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-3 gap-16 max-w-7xl mx-auto w-full">
-            <TechCategory icon={<Code2 className="text-blue-400" size={48} />} title="Frontend" items={frontend} color="blue" />
-            <TechCategory icon={<Database className="text-orange-400" size={48} />} title="Backend" items={backend} color="orange" />
-            <TechCategory icon={<Globe className="text-emerald-400" size={48} />} title="APIs" items={apis} color="emerald" />
+          <div className="grid grid-cols-2 gap-6 max-w-6xl mx-auto">
+            {slide.items.map((item, i) => (
+              <motion.div 
+                key={i}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: i * 0.1 }}
+                className="flex items-center gap-8 p-8 rounded-[3rem] bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-primary/5 transition-all group shadow-xl"
+              >
+                <div className={`w-20 h-20 rounded-[2rem] bg-white/5 flex items-center justify-center ${item.color} border border-white/5 group-hover:scale-110 transition-transform shadow-inner`}>
+                  {React.cloneElement(item.icon, { size: 40 })}
+                </div>
+                <div className="text-left">
+                  <h3 className="text-3xl font-black text-white mb-2 group-hover:text-primary transition-colors tracking-tight">{item.name}</h3>
+                  <p className="text-slate-400 font-bold text-lg leading-snug">{item.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      );
+
+    case "apis":
+      return (
+        <div className="space-y-12">
+          <SlideHeader title={title} />
+          <div className="grid grid-cols-1 gap-6 max-w-5xl mx-auto">
+            {slide.apis.map((api, i) => (
+              <motion.div 
+                key={i}
+                initial={{ x: -30, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: i * 0.1 }}
+                className="flex items-center gap-10 p-8 rounded-[2.5rem] bg-white/5 border border-white/10 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+              >
+                <div className="w-16 h-16 rounded-3xl bg-primary/20 flex items-center justify-center text-primary border border-primary/20 group-hover:scale-110 transition-transform">
+                  <Globe size={32} />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-3xl font-black text-white mb-2 group-hover:text-primary transition-colors">{api.name}</h3>
+                  <p className="text-slate-400 font-bold text-xl">{api.desc}</p>
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       );
@@ -1331,9 +1442,6 @@ const SlideContent = ({ slide, currentSlide }) => {
             className="pt-20 flex flex-col items-center gap-4"
           >
             <h1 className="text-4xl font-black text-white">{content.thankYou}</h1>
-            <div className="px-8 py-3 rounded-2xl bg-white text-black font-black text-xl hover:bg-primary hover:text-white transition-all cursor-pointer shadow-2xl active:scale-95">
-              {content.qa}
-            </div>
           </motion.div>
         </div>
       );
@@ -1344,13 +1452,20 @@ const SlideContent = ({ slide, currentSlide }) => {
 };
 
 const SlideHeader = ({ title }) => (
-  <div className="space-y-4 mb-16 text-left relative">
+  <div className="space-y-4 mb-4 text-left relative">
     <div className="flex items-center gap-4">
       <div className="h-1.5 w-24 bg-primary rounded-full" />
       <div className="h-1.5 w-4 bg-primary/30 rounded-full" />
     </div>
-    <h2 className="text-7xl font-black tracking-tighter text-white drop-shadow-xl flex items-center gap-4 pb-2">
-      {title}
+    <h2 className="text-4xl font-black tracking-tighter text-white drop-shadow-xl flex flex-col leading-tight pb-1">
+      {title.includes(':') ? (
+        <>
+          <span>{title.split(':')[0]}:</span>
+          <span>{title.split(':')[1].trim()}</span>
+        </>
+      ) : (
+        title
+      )}
     </h2>
   </div>
 );

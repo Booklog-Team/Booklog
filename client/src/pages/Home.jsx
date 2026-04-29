@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import BookCard from "@/components/BookCard";
 import AppleDashboard from "@/components/AppleDashboard";
 import { getBooksByGenre, searchBooks } from "@/utils/api";
+import { groqFetch } from "@/utils/groqQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useWeather } from "@/contexts/WeatherContext";
@@ -107,43 +108,24 @@ const MOOD_DESC = {
   night:        "깊어가는 밤. 몰입감 있는 문학 소설·철학 인문서만. 가볍거나 실용적인 책 제외.",
 };
 
-// 전역 Groq 직렬화 큐 — 모든 호출을 순서대로, 700ms 간격 유지해 429 방지
-let _groqQueue = Promise.resolve();
-let _lastGroqCall = 0;
-const GROQ_GAP = 700; // ms
+// React StrictMode 이중 실행 방지 — 슬라이드/날씨 로드는 딱 한 번만 실행
+let _slideLoadPromise = null;
+const _weatherRecPromises = new Map(); // moodKey → Promise
 
-function enqueueGroq(fn) {
-  const job = _groqQueue.then(async () => {
-    const gap = GROQ_GAP - (Date.now() - _lastGroqCall);
-    if (gap > 0) await new Promise(r => setTimeout(r, gap));
-    _lastGroqCall = Date.now();
-    return fn();
-  });
-  _groqQueue = job.then(() => undefined, () => undefined);
-  return job;
-}
-
-// 세션 캐시 — 탭 닫으면 초기화, 5분 TTL로 연속 새로고침 시 Groq 절약
-const SESSION_CACHE_TTL = 5 * 60 * 1000;
+// 인메모리 캐시 — 페이지 새로고침마다 초기화되어 매번 새 추천 제공
+// (sessionStorage는 새로고침 후에도 유지되어 추천이 바뀌지 않는 문제가 있었음)
+const _recCache = new Map(); // moodKey → books[]
 
 function loadSessionCache(moodKey) {
-  try {
-    const raw = sessionStorage.getItem(`brec:${moodKey}`);
-    if (!raw) return null;
-    const { books, ts } = JSON.parse(raw);
-    if (Date.now() - ts > SESSION_CACHE_TTL) { sessionStorage.removeItem(`brec:${moodKey}`); return null; }
-    return books;
-  } catch { return null; }
+  return _recCache.get(moodKey) || null;
 }
 
 function saveSessionCache(moodKey, books) {
-  try {
-    sessionStorage.setItem(`brec:${moodKey}`, JSON.stringify({ books, ts: Date.now() }));
-  } catch { }
+  _recCache.set(moodKey, books);
 }
 
 // 알라딘 카테고리 풀 수집 → Groq 상세 기준 선별 → 세션 캐시
-// 429 발생 시 2초 대기 후 1회 재시도, 이후 랜덤 폴백
+// 429 발생 시 Retry-After(기본 35초) 대기 후 1회 재시도, 이후 랜덤 폴백
 async function fetchAIMoodBooks(weatherMain, timeState, count = 2) {
   const moodKey = `${weatherMain ?? "any"}:${timeState ?? "any"}`;
 
@@ -180,28 +162,29 @@ async function fetchAIMoodBooks(weatherMain, timeState, count = 2) {
     return unique;
   }
 
-  // 3. Groq 선별 — 429 시 2초 대기 후 1회 재시도
+  // 3. Groq 선별 — 토큰 절약을 위해 최대 15권만 전송, 429 시 Retry-After 대기 후 1회 재시도
   const wDesc    = MOOD_DESC[weatherMain] || "";
   const tDesc    = MOOD_DESC[timeState]   || "";
   const moodDesc = [wDesc, tDesc].filter(Boolean).join(" / ") || "분위기에 맞는 책";
   const listText = unique
-    .slice(0, 40)
+    .slice(0, 15)
     .map((b, i) => `${i + 1}.${b.volumeInfo?.title}-${b.volumeInfo?.authors?.[0] || ""}`)
     .join(" ");
 
+  const groqBody = {
+    model: "llama-3.1-8b-instant",
+    max_tokens: 15,
+    messages: [
+      // few-shot 예시로 출력 형식을 고정해 파싱 실패 방지
+      { role: "system", content: "Output ONLY comma-separated numbers. Example: 3,7" },
+      { role: "user",   content: "Pick 2 books matching: calm evening\n1.Book A 2.Book B 3.Book C" },
+      { role: "assistant", content: "1,3" },
+      { role: "user",   content: `Pick ${count} books matching: ${moodDesc}\n${listText}` },
+    ],
+  };
+
   try {
-    const res = await enqueueGroq(() => fetch("/api/groq/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        max_tokens: 20,
-        messages: [
-          { role: "system", content: "너는 엄격한 책 큐레이터야. 선별 기준을 반드시 따르고, 기준과 맞지 않는 책은 절대 고르지 마. 번호만 쉼표로 답해." },
-          { role: "user",   content: `선별 기준: ${moodDesc}\n기준에 정확히 맞는 책 ${count}권 번호만 답해.\n${listText}` },
-        ],
-      }),
-    }));
+    const res = await groqFetch(groqBody);
 
     if (res.ok) {
       const data = await res.json();
@@ -209,7 +192,13 @@ async function fetchAIMoodBooks(weatherMain, timeState, count = 2) {
       const indices = [...new Set((rawText.match(/\d+/g) || []).map(Number))]
         .filter(n => n >= 1 && n <= unique.length);
       const selected = indices.slice(0, count).map(n => unique[n - 1]).filter(Boolean);
-      if (selected.length >= count) {
+      if (selected.length >= 1) {
+        // 부족한 슬롯은 Groq가 고르지 않은 책 중 랜덤으로 채움
+        if (selected.length < count) {
+          const selectedIds = new Set(selected.map(b => b.id));
+          const extras = unique.filter(b => !selectedIds.has(b.id)).slice(0, count - selected.length);
+          selected.push(...extras);
+        }
         console.log(`[Rec] ✅ Groq 성공 [${moodKey}] "${rawText}" →`, selected.map(b => b.volumeInfo?.title));
         saveSessionCache(moodKey, selected);
         return selected;
@@ -446,10 +435,21 @@ export default function Home() {
 
   // ── 날씨/시간 기반 추천 도서 로드 (Aladin 풀 → AI 선별 → 캐시) ──────
   useEffect(() => {
+    if (!weather?.main || !timeState) return;
     let cancelled = false;
-    fetchAIMoodBooks(weather?.main, timeState)
-      .then(items => { if (!cancelled) setWeatherRecBooks(items); })
-      .catch(() => { if (!cancelled) setWeatherRecBooks([]); });
+    const key = `${weather.main}:${timeState}`;
+
+    if (!_weatherRecPromises.has(key)) {
+      const p = fetchAIMoodBooks(weather.main, timeState)
+        .catch(() => [])
+        .finally(() => { _weatherRecPromises.delete(key); });
+      _weatherRecPromises.set(key, p);
+    }
+
+    _weatherRecPromises.get(key).then(items => {
+      if (!cancelled) setWeatherRecBooks(items);
+    });
+
     return () => { cancelled = true; };
   }, [weather?.main, timeState]);
 
@@ -464,35 +464,35 @@ export default function Home() {
   }, []);
 
   // ── 데모 슬라이드별 AI 무드 선별 — 순차 로딩으로 Groq 429 방지 ────
+  // _slideLoadPromise로 React StrictMode 이중 실행을 막아 API 호출 4회 보장
   useEffect(() => {
     let cancelled = false;
-    const usedIds = new Set();
 
-    const pick = (books) =>
-      books.filter(b => {
-        if (usedIds.has(b.id)) return false;
-        usedIds.add(b.id);
-        return true;
-      }).slice(0, 2);
+    if (!_slideLoadPromise) {
+      _slideLoadPromise = (async () => {
+        const rain    = await fetchAIMoodBooks("Rain",  "evening");
+        const dawn    = await fetchAIMoodBooks(null,    "dawn");
+        const morning = await fetchAIMoodBooks("Clear", "morning");
+        const snow    = await fetchAIMoodBooks("Snow",  "afternoon");
 
-    const load = async () => {
-      // 순차 실행 — 각 Groq 호출이 완료된 뒤 다음 호출 시작
-      const rainBooks = await fetchAIMoodBooks("Rain",  "evening");
-      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, rain: pick(rainBooks) }));
+        const usedIds = new Set();
+        const pick = (books) => books.filter(b => {
+          if (usedIds.has(b.id)) return false;
+          usedIds.add(b.id);
+          return true;
+        }).slice(0, 2);
 
-      const dawnBooks = await fetchAIMoodBooks(null,    "dawn");
-      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, dawn: pick(dawnBooks) }));
+        return { rain: pick(rain), dawn: pick(dawn), morning: pick(morning), snow: pick(snow) };
+      })().catch(() => null).finally(() => { _slideLoadPromise = null; });
+    }
 
-      const morningBooks = await fetchAIMoodBooks("Clear", "morning");
-      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, morning: pick(morningBooks) }));
+    _slideLoadPromise.then(result => {
+      if (!cancelled && result) {
+        setDemoSlideBooks(result);
+        console.log("[Rec] 🎨 모든 배너 로드 완료");
+      }
+    });
 
-      const snowBooks = await fetchAIMoodBooks("Snow",  "afternoon");
-      if (!cancelled) setDemoSlideBooks(prev => ({ ...prev, snow: pick(snowBooks) }));
-
-      if (!cancelled) console.log("[Rec] 🎨 모든 배너 로드 완료");
-    };
-
-    load().catch(() => {});
     return () => { cancelled = true; };
   }, []);
 

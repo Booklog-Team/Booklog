@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot, User, Search, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { searchBooks, getBooksByGenre, GENRE_MAP } from "@/utils/api";
+import { groqFetchChat } from "@/utils/groqQueue";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShelf } from "@/contexts/ShelfContext";
@@ -57,10 +58,10 @@ function getWeatherBookKeyword(main, temp) {
   return WEATHER_BOOK_MAP[main] || "베스트셀러";
 }
 
-const BASE_SYSTEM_PROMPT = `너는 'Booklog' 도서 앱의 AI 사서야. 사용자 메시지를 분석해서 반드시 아래 JSON 형식으로만 응답해. JSON 외 다른 텍스트는 절대 출력하지 마.
+const BASE_SYSTEM_PROMPT = `너는 'Booklog' 앱의 AI 사서야. 반드시 순수한 한국어(한글+영문+숫자)만 사용해. 한자·중국어·일본어 문자는 절대 쓰지 마. 사용자 메시지를 분석해서 반드시 아래 JSON 형식으로만 응답해. JSON 외 다른 텍스트는 절대 출력하지 마.
 
 {"type":"book","keyword":"알라딘 검색 키워드","message":"자연스러운 한국어 응답"}
-{"type":"weather","message":"날씨 관련 짧은 한국어 응답 (날씨 정보만, 책 언급 금지)"}
+{"type":"weather","message":"날씨 관련 짧은 한국어 응답"}
 {"type":"weather_books","message":"날씨와 어울리는 책 추천 응답"}
 {"type":"user_data","message":"사용자 데이터를 바탕으로 한 자연스러운 한국어 답변"}
 {"type":"community_data","message":"커뮤니티·모임·게시판 정보를 바탕으로 한 자연스러운 한국어 답변"}
@@ -220,25 +221,23 @@ const ChatBot = () => {
 
     try {
       // Groq에게 의도 분석 + 응답 생성 동시 요청 (JSON mode)
-      const groqRes = await fetch("/api/groq/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          max_tokens: 400,
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: BASE_SYSTEM_PROMPT + buildUserContext() },
-            { role: "user", content: userInput },
-          ],
-        }),
+      // groqFetchChat: 공유 큐(1초 간격)로 직렬화, 인터랙티브 응답 최적화
+      const groqRes = await groqFetchChat({
+        model: "llama-3.1-8b-instant",
+        max_tokens: 400,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: BASE_SYSTEM_PROMPT + buildUserContext() },
+          { role: "user", content: userInput },
+        ],
       });
 
-      if (groqRes.status === 429) {
-        const waitMs = 60000;
-        setRateLimitUntil(Date.now() + waitMs);
-        setRateLimitCountdown(60);
-        throw new Error("rate_limit");
+      if (!groqRes.ok) {
+        if (groqRes.status === 429) {
+          setRateLimitUntil(Date.now() + 60000);
+          setRateLimitCountdown(60);
+        }
+        throw new Error(`groq_error_${groqRes.status}`);
       }
 
       const groqData = await groqRes.json();
@@ -289,7 +288,8 @@ const ChatBot = () => {
       } else if (parsed.type === "weather") {
         try {
           weather = await fetchWeather();
-          botText = parsed.message || `${weather.city}의 현재 날씨예요! ${weather.desc}, ${weather.temp}°C입니다.`;
+          // 모델 텍스트 대신 API 데이터로 직접 생성 (한자 혼용 방지)
+          botText = `${weather.city} 현재 날씨예요! ${weather.desc}, 기온 ${weather.temp}°C입니다 ☁️`;
         } catch {
           botText = "날씨 정보를 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
         }
@@ -303,7 +303,8 @@ const ChatBot = () => {
           const keyword = getWeatherBookKeyword(weather.main, weather.temp);
           const { items } = await searchBooks(keyword);
           books = items.slice(0, 3);
-          botText = parsed.message || `${weather.city}의 현재 날씨예요! ${weather.desc} 날씨엔 ${keyword} 책이 잘 어울려요 📚`;
+          // 모델 텍스트 대신 API 데이터로 직접 생성 (한자 혼용 방지)
+          botText = `${weather.city} 날씨는 ${weather.desc}, ${weather.temp}°C예요! 이런 날씨엔 ${keyword} 책이 잘 어울려요 📚`;
         } catch {
           botText = "날씨 정보를 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
         }
