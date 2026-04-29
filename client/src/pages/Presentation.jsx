@@ -208,10 +208,30 @@ const Presentation = () => {
       ]
     },
     // 17-23. 주요 기능 7개
+    // 17-29. 주요 기능 상세
+    {
+      type: "feature",
+      title: "주요 기능: Auth",
+      points: [
+        "Firebase Auth 기반 이메일 로그인과 Google 소셜 로그인 구현",
+        "AuthContext로 로그인 상태 전역 관리",
+        "PrivateRoute로 비인증 접근 차단"
+      ],
+      images: ["/features/auth.png"]
+    },
+    {
+      type: "feature",
+      title: "주요 기능: Onboarding",
+      points: [
+        "최초 로그인 시 관심 장르 선택 플로우",
+        "선택 데이터 Firestore에 저장",
+        "홈 화면 도서 추천의 기반 데이터로 활용"
+      ],
+      images: ["/features/onboarding.png"]
+    },
     {
       type: "feature",
       title: "주요 기능: AI 홈 배너 x 날씨 API",
-      subtitle: "Geolocation + OpenWeatherMap + Aladin + Groq AI",
       points: [
         "Groq AI가 LLM을 통해 실제 도서 중 테마에 부합하는 책만 선별",
         "AI 환각을 방지하기 위해 실제 API 데이터 인덱스 기반 추천",
@@ -223,74 +243,104 @@ const Presentation = () => {
     {
       type: "feature",
       title: "주요 기능: 도서 검색 & 상세",
-      subtitle: "Aladin API + Google Maps",
       points: [
         "실시간 키워드 검색 및 14개 장르별 탐색",
         "서재 즉시 추가 및 상태 관리",
-        "내 주변 도서관 찾기 (정보나루 API + 지도 마커)",
         "도서 대출 가능 여부 실시간 확인"
       ],
       images: ["/features/search.png", "/features/search2.png"]
     },
     {
       type: "feature",
-      title: "주요 기능: 내 서재 & 독서 캘린더",
-      subtitle: "Firebase Firestore",
+      title: "주요 기능: 내 주변 도서관",
       points: [
-        "읽고 싶음 / 읽는 중 / 완독 3단계 상태 관리",
-        "독서 진행률 슬라이더 및 월별 기록 캘린더 시각화",
-        "연속 독서 Streak 시스템을 통한 습관 형성 유도",
-        "완독 시 애니메이션 효과와 포인트 보상"
+        "Geolocation API로 현재 위치 감지",
+        "도서관 정보나루 API로 주변 도서관 검색 및 대출가능 여부 확인",
+        "Google Maps API로 지도에 마커 시각화"
       ],
-      image: "/features/library.png"
+      images: ["/features/map.png"]
     },
     {
       type: "feature",
-      title: "주요 기능: 포인트 & 기부 시스템",
-      subtitle: "Gamification & Social Impact",
+      title: "주요 기능: 내 서재 Library",
       points: [
-        "독서 체크(+10P), 메모(+5P), 커뮤니티 활동 보상",
-        "5단계 독서 레벨 시스템 (새싹 → 도서관 수호자)",
-        "기부처 선택을 통한 사회적 가치 실현 (책읽는사회문화재단 등)",
-        "독서 활동이 사회 기부로 이어지는 선순환 구조"
+        "사용자의 도서를 읽고싶음 / 읽는 중 / 완독 상태로 분류하여 관리",
+        "도서별 진행률, 현재 페이지, 메모, 마지막 기록일 표시",
+        "도서 삭제 및 상태 변경 시 Firestore 데이터와 화면 상태 동기화"
       ],
-      image: "/features/points.png"
+      images: ["/features/library.png", "/features/log_record.png"]
     },
     {
       type: "feature",
-      title: "주요 기능: 커뮤니티 & 독서 모임",
-      subtitle: "Social Reading",
+      title: "주요 기능: 독서 기록 & 캘린더",
       points: [
-        "자유 / 독후감 / 질문 카테고리 기반 소통",
-        "장르별 실시간 독서 모임 생성 및 참여",
-        "모임 전용 실시간 채팅방 제공",
-        "방장 전용 공지 및 모임 관리 기능"
+        "날짜별 독서 기록을 캘린더 형태로 시각화",
+        "독서 상태 변경, 페이지 기록, 메모 작성 내역을 로그로 관리",
+        "연속 독서일(streak)을 계산하여 사용자의 독서 흐름을 직관적으로 표시"
       ],
-      image: "/features/community.png"
+      images: ["/features/calendar.png"]
+    },
+    {
+      type: "feature",
+      title: "주요 기능: 프로필 & 독서 통계",
+      points: [
+        "사용자 정보와 독서 활동 통계를 한 화면에서 확인",
+        "완독 권수, 총 읽은 페이지, 연속 독서일 등 핵심 지표 제공",
+        "월별 독서량과 장르별 독서 비율을 시각화하여 패턴 분석"
+      ],
+      images: ["/features/profile.png", "/features/profile_popup1.png", "/features/profile_popup2.png", "/features/profile_popup3.png"]
+    },
+    {
+      type: "feature",
+      title: "주요 기능: 독서 모임",
+      points: [
+        "독서 모임 목록, 상세 정보 조회 및 생성 기능",
+        "모임별 책 정보, 모집 인원, 마감일, 읽을 범위 상세 관리",
+        "모임장 공지와 감상 공유를 통한 책 중심 커뮤니티"
+      ],
+      images: ["/features/meeting.png"]
+    },
+    {
+      type: "feature",
+      title: "주요 기능: 자유게시판",
+      points: [
+        "게시글 목록 조회, 상세 보기 및 작성 기능 구현",
+        "카테고리 분류, 댓글, 좋아요를 통한 사용자 간 소통 지원",
+        "커뮤니티 탭 내에서 모임과 게시판을 통합적으로 탐색"
+      ],
+      images: ["/features/board.png"]
     },
     {
       type: "feature",
       title: "주요 기능: AI 챗봇 사서",
-      subtitle: "Groq AI + Context Awareness",
       points: [
         "자연어 질문을 통한 개인화된 도서 추천",
         "현재 날씨와 상황(비 오는 날 등)을 반영한 대화",
         "사용자 서재 데이터를 분석하여 중복 없는 미독 도서 제안",
         "대화 문맥에서 도서 의도를 파악하여 즉시 카드 출력"
       ],
-      image: "/features/chatbot.png"
+      images: ["/features/chatbot.png"]
     },
     {
       type: "feature",
-      title: "주요 기능: 온보딩 & 프로필",
-      subtitle: "Personalization",
+      title: "주요 기능: Points & 기부",
       points: [
-        "Google OAuth 기반 간편 가입 프로세스",
-        "초기 선호 장르 선택을 통한 맞춤형 홈 화면 구성",
-        "상세 독서 통계 및 장르 분포 시각화 제공",
-        "개인 취향과 레벨을 관리하는 프로필 허브"
+        "독서 활동으로 포인트 적립 및 레벨 시스템",
+        "포인트로 도서 관련 단체에 기부",
+        "전체 기부 현황 실시간 Firestore 구독"
       ],
-      image: "/features/onboarding.png"
+      images: ["/features/points.png", "/features/donation.png"]
+    },
+    {
+      type: "feature",
+      title: "주요 기능: UI 테마 시스템",
+      points: [
+        "다양한 테마 제공으로 사용자 취향에 맞는 UI 환경 구성",
+        "테마 변경 시 전체 페이지에 즉시 반영되는 설계",
+        "카드 기반 레이아웃과 컬러 조합으로 테마별 분위기 차별화",
+        "독서 흐름(상태)이 테마 내에서도 일관되게 표현됨"
+      ],
+      images: ["/features/theme.png", "/features/theme2.png"]
     },
     // 24. 시연 영상
     {
@@ -298,15 +348,30 @@ const Presentation = () => {
       title: "시연 영상",
       steps: ["온보딩/로그인", "홈 날씨 추천", "도서 탐색/검색", "서재 기록/캘린더", "포인트 기부", "커뮤니티/채팅", "AI 챗봇"]
     },
-    // 20. 문제 & 해결 과정
+    // 20. Troubleshooting
     {
       type: "challenges",
-      title: "문제 & 해결 과정",
+      title: "Troubleshooting",
       items: [
-        { problem: "AI 환각(Hallucination)", solution: "실제 도서 API 결과를 AI에게 넘겨 번호로 선택하게 하는 구조로 환각 0%" },
-        { problem: "API Rate Limit", solution: "700ms 간격의 비동기 큐 처리 및 5분 세션 캐싱 도입" },
-        { problem: "분위기 불일치", solution: "카테고리 제한 및 정교한 네거티브 프롬프트 설계" },
-        { problem: "데이터 부정합", solution: "API별 상이한 데이터 스키마를 통합 래퍼 함수로 정규화" }
+        { 
+          problem: "Firebase 서비스 계정 키 GitHub 노출", 
+          cause: ".gitignore 누락으로 인한 보안 키(serviceAccountKey.json) 공용 저장소 커밋",
+          solution: "노출 키 폐기 및 재발급 → .gitignore 차단 → 환경변수를 통한 주입 방식으로 보안 프로세스 개선" 
+        },
+        { 
+          problem: "상태(State)와 기록(Event) 간 데이터 정합성 불일치", 
+          cause: "책의 현재 상태와 독서 기록 로그를 중복 관리하여 단일 기준(SSOT) 부재",
+          solution: "별도 상태 필드 제거 및 독서 기록 로그를 기준으로 현재 상태를 실시간 계산하는 SSOT 구조로 개편" 
+        },
+        { 
+          problem: "AI 환각(Hallucination) 현상", 
+          solution: "실제 도서 API 검색 결과를 프롬프트에 포함하여 AI가 데이터 인덱스 내에서만 선택하도록 강제" 
+        },
+        { 
+          problem: "API 호출 한도 제한(429) 및 중복 요청으로 인한 자원 낭비", 
+          cause: "Groq AI 무료 티어의 엄격한 RPM/TPM 제한 및 여러 컴포넌트에서의 동시 API 호출",
+          solution: "전역 직렬화 큐(Serialization Queue) 도입으로 호출 간격 제어 및 In-flight 요청 중복 제거와 로컬 캐싱(1시간) 적용" 
+        }
       ]
     },
     // 21. 팀원 소개 & 역할 분담
@@ -1311,7 +1376,13 @@ const SlideContent = ({ slide, currentSlide }) => {
                 <div className="flex items-center gap-3 text-rose-400 font-black text-xs uppercase tracking-widest">
                   <ShieldCheck size={20} /> Problem
                 </div>
-                <p className="text-3xl font-black text-slate-100 leading-tight">{item.problem}</p>
+                <p className="text-3xl font-black text-slate-100 leading-tight mb-4">{item.problem}</p>
+                {item.cause && (
+                  <div className="flex items-start gap-2 text-rose-300/70 text-sm font-bold bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
+                    <span className="flex-shrink-0 mt-0.5">⚠️</span>
+                    <p>원인: {item.cause}</p>
+                  </div>
+                )}
                 <div className="h-px bg-white/10 my-6" />
                 <div className="flex items-center gap-3 text-emerald-400 font-black text-xs uppercase tracking-widest">
                   <Zap size={20} /> Solution

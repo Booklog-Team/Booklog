@@ -10,8 +10,6 @@ import { usePoint } from "@/contexts/PointContext";
 import { getDocs, collection, query, orderBy, limit } from "firebase/firestore";
 import { db } from "@/firebase/config";
 
-const WEATHER_KEY = import.meta.env.VITE_WEATHER_API_KEY;
-
 async function fetchWeather() {
   let lat = 37.5665, lon = 126.9780; // 서울 기본값
   try {
@@ -22,14 +20,11 @@ async function fetchWeather() {
     lon = pos.coords.longitude;
   } catch { /* 위치 허용 안 하면 서울 기본값 사용 */ }
 
-  // 역지오코딩 + 날씨 동시 요청
-  const [geoRes, weatherRes] = await Promise.all([
-    fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${WEATHER_KEY}`),
-    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_KEY}&units=metric&lang=kr`),
-  ]);
-  if (!weatherRes.ok) throw new Error("날씨 API 오류");
-  const [geoData, d] = await Promise.all([geoRes.json(), weatherRes.json()]);
-  const cityName = geoData[0]?.local_names?.ko || geoData[0]?.name || "서울";
+  // 서버 프록시를 통해 날씨 조회 — API 키가 클라이언트 번들에 노출되지 않음
+  const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+  if (!res.ok) throw new Error("날씨 API 오류");
+  const { geo, weather: d } = await res.json();
+  const cityName = geo[0]?.local_names?.ko || geo[0]?.name || "서울";
 
   return {
     city: cityName,
