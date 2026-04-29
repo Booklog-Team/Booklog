@@ -161,9 +161,9 @@ const Presentation = () => {
       type: "team",
       title: "팀원 소개 & 역할 분담",
       members: [
-        { name: "이예진", role: "팀장 / FE", task: "내 서재, 캘린더, 테마 시스템, UI 아키텍처" },
-        { name: "신민서", role: "프론트엔드", task: "온보딩, 포인트 시스템, 커뮤니티, 모임, API 배포" },
-        { name: "홍준화", role: "프론트엔드", task: "홈, AI 추천, 검색/상세, 챗봇, API 연동, 디자인" }
+        { name: "이예진", role: "팀장 / 프론트엔드", task: "내 서재, 독서 캘린더, 테마 시스템, UI 아키텍처" },
+        { name: "신민서", role: "프론트엔드 / DB", task: "온보딩, 회원가입/로그인, 포인트 시스템, 커뮤니티, 데이터 관리, 배포" },
+        { name: "홍준화", role: "프론트엔드 / API", task: "홈, AI 추천, 도서 검색/상세, 챗봇, API 연동, 디자인, 발표 자료 제작" }
       ]
     },
     // Slide 6: Tech Stack
