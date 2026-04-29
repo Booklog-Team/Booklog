@@ -71,7 +71,10 @@ app.post("/api/groq/chat/completions", async (req, res) => {
 app.get("/api/weather", async (req, res) => {
   const { lat, lon } = req.query;
   const key = process.env.VITE_WEATHER_API_KEY;
-  if (!key) return res.status(500).json({ error: "WEATHER_API_KEY not configured" });
+  if (!key) {
+    console.error("Weather proxy: VITE_WEATHER_API_KEY is not set in environment");
+    return res.status(500).json({ error: "WEATHER_API_KEY not configured" });
+  }
   try {
     const [geoRes, weatherRes] = await Promise.all([
       axios.get(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`),
@@ -79,7 +82,7 @@ app.get("/api/weather", async (req, res) => {
     ]);
     res.json({ geo: geoRes.data, weather: weatherRes.data });
   } catch (error) {
-    console.error("Weather error:", error.response?.data || error.message);
+    console.error("Weather proxy error:", error.response?.status, error.response?.data || error.message);
     res.status(error.response?.status || 500).json({ error: "날씨 API 오류" });
   }
 });
