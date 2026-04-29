@@ -194,7 +194,7 @@ async function fetchAIMoodBooks(weatherMain, timeState, count = 2) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         max_tokens: 20,
         messages: [
           { role: "system", content: "너는 엄격한 책 큐레이터야. 선별 기준을 반드시 따르고, 기준과 맞지 않는 책은 절대 고르지 마. 번호만 쉼표로 답해." },
