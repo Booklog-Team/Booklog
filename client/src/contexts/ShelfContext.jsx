@@ -7,14 +7,14 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
-  deleteDoc,
   writeBatch,
   query,
+  where,
   onSnapshot,
   arrayUnion,
-  arrayRemove,
   increment,
   serverTimestamp,
 } from "firebase/firestore";
@@ -70,6 +70,95 @@ function timestampMs(value) {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
   return 0;
+}
+
+function hasManualSortOrder(log) {
+  return Number.isFinite(Number(log?.sortOrder));
+}
+
+function logUpdateMs(log) {
+  return (
+    timestampMs(log?.orderUpdatedAt) ||
+    timestampMs(log?.updatedAt) ||
+    timestampMs(log?.createdAt) ||
+    timestampMs(log?.date)
+  );
+}
+
+function compareLogsSameDate(a, b) {
+  const aManual = hasManualSortOrder(a);
+  const bManual = hasManualSortOrder(b);
+  if (aManual || bManual) {
+    if (aManual && bManual) {
+      const diff = Number(a.sortOrder) - Number(b.sortOrder);
+      if (diff !== 0) return diff;
+    }
+    if (aManual !== bManual) return aManual ? -1 : 1;
+  }
+
+  const updateDiff = logUpdateMs(b) - logUpdateMs(a);
+  if (updateDiff !== 0) return updateDiff;
+  return String(a.id || "").localeCompare(String(b.id || ""));
+}
+
+function sortBookLogsLatest(logs) {
+  return [...logs].sort((a, b) => {
+    const dateDiff = (b.date || "").localeCompare(a.date || "");
+    if (dateDiff !== 0) return dateDiff;
+    return compareLogsSameDate(a, b);
+  });
+}
+
+function getBookLogStateUpdates(book, logs) {
+  const sortedLogs = sortBookLogsLatest(logs.filter(log => log?.bookId));
+  const latestLog = sortedLogs[0] || null;
+  const readingDates = [
+    ...new Set(
+      logs
+        .filter(log => log.status !== "want" && log.date)
+        .map(log => log.date)
+    ),
+  ].sort();
+
+  if (!latestLog) {
+    return {
+      status: "want",
+      currentPage: 0,
+      lastReadDate: null,
+      startDate: null,
+      endDate: null,
+      checkedDates: [],
+      updatedAt: serverTimestamp(),
+    };
+  }
+
+  const nextStatus = latestLog.status || book?.status || "want";
+  const nextCurrentPage =
+    nextStatus === "want"
+      ? 0
+      : Number(latestLog.currentPage ?? latestLog.toPage ?? 0) || 0;
+  const updates = {
+    status: nextStatus,
+    currentPage:
+      nextStatus === "done"
+        ? Number(latestLog.totalPage || book?.totalPage || nextCurrentPage) || 0
+        : nextCurrentPage,
+    lastReadDate: readingDates[readingDates.length - 1] || null,
+    startDate: readingDates[0] || null,
+    checkedDates: readingDates,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (nextStatus === "done") {
+    updates.endDate = latestLog.date || null;
+    if (Number.isFinite(Number(latestLog.rating))) {
+      updates.rating = Number(latestLog.rating) || 0;
+    }
+  } else {
+    updates.endDate = null;
+  }
+
+  return updates;
 }
 
 /**
@@ -170,6 +259,8 @@ export function ShelfProvider({ children }) {
         checkedDates: book.checkedDates || [],
         memo: book.memo || "",
         addedAt: getTodayKey(),
+        createdAt: book.createdAt || serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     } catch (err) {
       console.error("[ShelfContext] 도서 추가 실패:", err);
@@ -187,7 +278,19 @@ export function ShelfProvider({ children }) {
 
     try {
       const bookRef = doc(db, "users", user.uid, "shelf", bookId);
-      await deleteDoc(bookRef);
+      const logsSnapshot = await getDocs(
+        query(
+          collection(db, "users", user.uid, "readingLogs"),
+          where("bookId", "==", bookId)
+        )
+      );
+      const docsToDelete = [bookRef, ...logsSnapshot.docs.map(item => item.ref)];
+
+      for (let i = 0; i < docsToDelete.length; i += 500) {
+        const batch = writeBatch(db);
+        docsToDelete.slice(i, i + 500).forEach(ref => batch.delete(ref));
+        await batch.commit();
+      }
     } catch (err) {
       console.error("[ShelfContext] 도서 삭제 실패:", err);
       setError(err);
@@ -227,7 +330,7 @@ export function ShelfProvider({ children }) {
     try {
       const bookRef = doc(db, "users", user.uid, "shelf", bookId);
       const currentBook = books.find(b => b.id === bookId);
-      const updates = { status };
+      const updates = { status, updatedAt: serverTimestamp() };
       if (status === "done") {
         const today = getTodayKey();
         updates.currentPage = currentBook?.totalPage || currentBook?.currentPage || 0;
@@ -445,37 +548,22 @@ export function ShelfProvider({ children }) {
     if (!user) throw new Error("사용자가 로그인하지 않았습니다.");
     const targetLog = readingLogs.find(log => log.id === logId);
     try {
-      await deleteDoc(doc(db, "users", user.uid, "readingLogs", logId));
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "users", user.uid, "readingLogs", logId));
 
-      if (targetLog?.date && targetLog.status !== "want") {
+      if (targetLog?.bookId) {
         const remainingBookLogs = readingLogs.filter(
-          log =>
-            log.id !== logId &&
-            log.bookId === targetLog.bookId &&
-            log.status !== "want"
+          log => log.id !== logId && log.bookId === targetLog.bookId
         );
-        const hasOtherSameDateLog = remainingBookLogs.some(
-          log => log.date === targetLog.date
-        );
-        const readingDates = [
-          ...new Set(remainingBookLogs.map(log => log.date).filter(Boolean)),
-        ].sort();
-        const doneDates = remainingBookLogs
-          .filter(log => log.status === "done" && log.date)
-          .map(log => log.date)
-          .sort();
+        const currentBook = books.find(book => book.id === targetLog.bookId);
         const bookRef = doc(db, "users", user.uid, "shelf", targetLog.bookId);
-        await updateDoc(bookRef, {
-          ...(hasOtherSameDateLog
-            ? {}
-            : { checkedDates: arrayRemove(targetLog.date) }),
-          lastReadDate: readingDates[readingDates.length - 1] || null,
-          startDate: readingDates[0] || null,
-          ...(targetLog.status === "done" && {
-            endDate: doneDates[doneDates.length - 1] || null,
-          }),
-        });
+        batch.update(
+          bookRef,
+          getBookLogStateUpdates(currentBook, remainingBookLogs)
+        );
       }
+
+      await batch.commit();
     } catch (err) {
       console.error("[ShelfContext] 독서 로그 삭제 실패:", err);
       setError(err);
@@ -517,6 +605,27 @@ export function ShelfProvider({ children }) {
         };
         batch.update(doc(db, "users", user.uid, "readingLogs", id), updates);
       });
+
+      const sortOrderById = new Map(
+        idsToUpdate.map((id, index) => [id, (index + 1) * 1000])
+      );
+      const nextBookLogs = readingLogs
+        .filter(log => log.bookId === currentLog.bookId)
+        .map(log =>
+          sortOrderById.has(log.id)
+            ? {
+                ...log,
+                sortOrder: sortOrderById.get(log.id),
+                orderUpdatedAt: Date.now(),
+                updatedAt: Date.now(),
+              }
+            : log
+        );
+      const currentBook = books.find(book => book.id === currentLog.bookId);
+      batch.update(
+        doc(db, "users", user.uid, "shelf", currentLog.bookId),
+        getBookLogStateUpdates(currentBook, nextBookLogs)
+      );
 
       await batch.commit();
     } catch (err) {
