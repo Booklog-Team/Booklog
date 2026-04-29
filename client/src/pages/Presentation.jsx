@@ -377,11 +377,44 @@ const Presentation = () => {
     // 21. 팀원 소개 & 역할 분담
     {
       type: "team",
-      title: "팀원 소개 & 역할 분담",
+      title: "👥 역할 분담 (커밋 이력 기준)",
       members: [
-        { name: "이예진", role: "팀장 / 프론트엔드", task: "내 서재, 독서 캘린더, 테마 시스템, UI 아키텍처", photo: "/team/yejin.jpg" },
-        { name: "신민서", role: "프론트엔드 / DB", task: "온보딩, 회원가입/로그인, 포인트 시스템, 커뮤니티, 데이터 관리, 배포", photo: "/team/minseo.jpg" },
-        { name: "홍준화", role: "프론트엔드 / API", task: "홈, AI 추천, 도서 검색/상세, 챗봇, API 연동, 디자인, 발표 자료 제작", photo: "/team/junhwa.jpg" }
+        { 
+          name: "이예진", 
+          role: "팀장 / 프론트엔드", 
+          tasks: [
+            "서재(독서 기록) 핵심 기능 구현",
+            "독서 캘린더 및 streak 시각화",
+            "커뮤니티(모임, 게시판) 기능 개발",
+            "전체 UX 흐름 및 UI 디테일 개선"
+          ], 
+          narrative: "👉 서비스의 핵심 가치(독서 기록 경험) 담당",
+          photo: "/team/yejin.jpg" 
+        },
+        { 
+          name: "신민서", 
+          role: "프론트엔드 / DB", 
+          tasks: [
+            "로그인 / 회원가입 / 온보딩 구현",
+            "Firebase Auth 및 Firestore 설계",
+            "포인트 & 기부 시스템 개발",
+            "목업 데이터 → DB 전환 및 배포(CI/CD)"
+          ], 
+          narrative: "👉 서비스의 데이터 흐름과 사용자 상태 담당",
+          photo: "/team/minseo.jpg" 
+        },
+        { 
+          name: "홍준화", 
+          role: "프론트엔드 / API", 
+          tasks: [
+            "메인 페이지, 검색, 도서 상세 구현",
+            "도서 API 연동 및 추천 기능 개발",
+            "메인 배너 및 UI/UX 개선",
+            "AI 추천 및 챗봇 품질 개선"
+          ], 
+          narrative: "👉 사용자가 서비스를 처음 접하고 탐색하는 흐름 담당",
+          photo: "/team/junhwa.jpg" 
+        }
       ]
     },
     // 22. 회고 & 배운 점
@@ -1414,23 +1447,34 @@ const SlideContent = ({ slide, currentSlide }) => {
       return (
         <div className="space-y-12">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-3 gap-10 max-w-7xl mx-auto">
             {members.map((m, i) => (
               <motion.div 
                 key={i}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: i * 0.2 }}
-                className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 group hover:bg-white/[0.08] transition-all text-center space-y-6 shadow-2xl"
+                className="p-10 rounded-[3.5rem] bg-white/5 border border-white/10 group hover:bg-white/[0.08] transition-all text-center flex flex-col space-y-8 shadow-2xl min-h-[700px]"
               >
-                <div className="w-40 h-40 rounded-full bg-slate-800 mx-auto overflow-hidden group-hover:scale-110 transition-transform shadow-xl">
+                <div className="w-48 h-48 rounded-full bg-slate-800 mx-auto overflow-hidden group-hover:scale-110 transition-transform shadow-2xl border-4 border-white/10">
                   <TeamMemberPhoto src={m.photo} name={m.name} />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black mb-1 text-white">{m.name}</h3>
-                  <p className="text-primary font-bold text-sm uppercase tracking-widest">{m.role}</p>
+                  <h3 className="text-4xl font-black mb-2 text-white tracking-tighter">{m.name}</h3>
+                  <p className="text-primary font-bold text-lg uppercase tracking-widest">{m.role}</p>
                 </div>
-                <p className="text-slate-400 text-sm leading-relaxed">{m.task}</p>
+                <div className="flex-1">
+                  <ul className="text-slate-300 text-base leading-relaxed space-y-3 text-left list-disc list-inside px-2">
+                    {m.tasks.map((t, idx) => (
+                      <li key={idx} className="leading-snug">{t}</li>
+                    ))}
+                  </ul>
+                </div>
+                {m.narrative && (
+                  <div className="pt-6 border-t border-white/10">
+                    <p className="text-primary/90 font-black text-lg leading-tight italic">{m.narrative}</p>
+                  </div>
+                )}
               </motion.div>
             ))}
           </div>
