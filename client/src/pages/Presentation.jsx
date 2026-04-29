@@ -376,7 +376,7 @@ const Presentation = () => {
         { 
           problem: "API 호출 한도 제한(429) 및 중복 요청으로 인한 자원 낭비", 
           cause: "Groq AI 무료 티어의 엄격한 RPM/TPM 제한 및 여러 컴포넌트에서의 동시 API 호출",
-          solution: "전역 직렬화 큐(Serialization Queue) 도입으로 호출 간격 제어 및 In-flight 요청 중복 제거와 로컬 캐싱(1시간) 적용" 
+          solution: "전역 직렬화 큐(Serialization Queue) 도입으로 호출 간격 제어 및 In-flight 요청 중복 제거와 로컬 캐싱(1분) 적용" 
         }
       ]
     },
@@ -1431,30 +1431,33 @@ const SlideContent = ({ slide, currentSlide }) => {
       return (
         <div className="space-y-12">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-2 gap-10 max-w-6xl mx-auto">
+          <div className="grid grid-cols-3 gap-8 max-w-[1600px] mx-auto items-stretch">
             {items.map((item, i) => (
               <motion.div 
                 key={i}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className="p-10 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-5 shadow-2xl text-left hover:border-primary/30 transition-colors"
+                className="p-10 rounded-[3rem] bg-white/5 border border-white/10 flex flex-col shadow-2xl text-left hover:border-primary/30 transition-all hover:bg-white/[0.07]"
               >
-                <div className="flex items-center gap-3 text-rose-400 font-black text-xs uppercase tracking-widest">
-                  <ShieldCheck size={20} /> Problem
+                <div className="flex items-center gap-3 text-rose-400 font-black text-xs uppercase tracking-widest mb-6">
+                  <ShieldCheck size={22} /> Problem
                 </div>
-                <p className="text-3xl font-black text-slate-100 leading-tight mb-4">{item.problem}</p>
+                <p className="text-3xl font-black text-slate-100 leading-tight mb-8 break-keep min-h-[5rem]">{item.problem}</p>
+                
                 {item.cause && (
-                  <div className="flex items-start gap-2 text-rose-300/70 text-sm font-bold bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
-                    <span className="flex-shrink-0 mt-0.5">⚠️</span>
-                    <p>원인: {item.cause}</p>
+                  <div className="flex items-start gap-3 text-rose-300/80 text-sm font-bold bg-rose-500/10 p-5 rounded-2xl border border-rose-500/20 mb-8 flex-1">
+                    <span className="flex-shrink-0 mt-0.5 text-lg">⚠️</span>
+                    <p className="leading-relaxed">원인: {item.cause}</p>
                   </div>
                 )}
-                <div className="h-px bg-white/10 my-6" />
-                <div className="flex items-center gap-3 text-emerald-400 font-black text-xs uppercase tracking-widest">
-                  <Zap size={20} /> Solution
+                
+                <div className="h-px bg-white/10 mb-8" />
+                
+                <div className="flex items-center gap-3 text-emerald-400 font-black text-xs uppercase tracking-widest mb-6">
+                  <Zap size={22} /> Solution
                 </div>
-                <p className="text-slate-300 leading-relaxed text-lg font-medium">{item.solution}</p>
+                <p className="text-slate-200 leading-relaxed text-lg font-bold break-keep">{item.solution}</p>
               </motion.div>
             ))}
           </div>
@@ -1610,14 +1613,14 @@ const SlideHeader = ({ title }) => (
       <div className="h-1.5 w-24 bg-primary rounded-full" />
       <div className="h-1.5 w-4 bg-primary/30 rounded-full" />
     </div>
-    <h2 className="text-4xl font-black tracking-tighter text-white drop-shadow-xl flex flex-col leading-tight pb-1">
-      {title.includes(':') ? (
-        <>
+    <h2 className="text-4xl font-black tracking-tighter text-white drop-shadow-xl leading-tight pb-1">
+      {title.includes(':') && title.startsWith("주요 기능") ? (
+        <div className="flex flex-col">
           <span>{title.split(':')[0]}:</span>
-          <span>{title.split(':')[1].trim()}</span>
-        </>
+          <span className="text-primary">{title.split(':')[1].trim()}</span>
+        </div>
       ) : (
-        title
+        <span>{title}</span>
       )}
     </h2>
   </div>
