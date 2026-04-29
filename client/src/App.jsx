@@ -19,6 +19,7 @@ import Meeting from './pages/Meeting';
 import Board from './pages/Board';
 import Profile from './pages/Profile';
 import Points from './pages/Points';
+import Presentation from './pages/Presentation';
 import NotFound from './pages/NotFound';
 
 import { WeatherProvider } from './contexts/WeatherContext';
@@ -33,6 +34,7 @@ function App() {
             <Routes>
               {/* 비로그인 접근 가능 */}
               <Route path="/auth" element={<Auth />} />
+              <Route path="/presentation" element={<Presentation />} />
 
               {/* 로그인 필수 (PrivateRoute) */}
               <Route element={<PrivateRoute />}>

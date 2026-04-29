@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot, User, Search, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { searchBooks } from "@/utils/api";
+import { searchBooks, getBooksByGenre, GENRE_MAP } from "@/utils/api";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShelf } from "@/contexts/ShelfContext";
@@ -67,7 +67,7 @@ const BASE_SYSTEM_PROMPT = `너는 'Booklog' 도서 앱의 AI 사서야. 사용�
 {"type":"general","message":"친절하고 자연스러운 한국어 답변"}
 
 분류 기준:
-- book: 책/도서 추천, 특정 책이나 작가 검색, 소설·에세이·자기계발 등 장르 언급
+- book: 책/도서 추천 요청, 특정 책이나 작가 검색, 소설·에세이·자기계발 등 장르·분위기 언급. "추천해줘", "읽을 것", "어떤 책", "XX를 위한 책" 등 책 관련이면 모두 book.
 - weather: 날씨·기온·비·맑음·흐림 등 순수 날씨 질문
 - weather_books: 날씨와 함께 책 추천을 명시적으로 요청
 - user_data: 사용자 본인의 서재·독서 현황·포인트·레벨·완독 수·읽는 책·프로필 관련 질문
@@ -75,8 +75,17 @@ const BASE_SYSTEM_PROMPT = `너는 'Booklog' 도서 앱의 AI 사서야. 사용�
 - general: 인사, 역사 인물, 과학, 일반 상식, 그 외 모든 것
 
 keyword 작성법 (book 타입 전용):
-- 핵심 키워드만 짧게 (예: "가벼운 소설 추천해줘" → "가벼운 소설")
-- 작가 이름 언급 시 그 이름으로 (예: "한강 책 찾아줘" → "한강")`;
+- 반드시 알라딘에서 검색되는 1~3단어 핵심 키워드로 작성
+- 작가 이름 언급 시 그 이름으로 (예: "한강 책 찾아줘" → "한강")
+- 분위기·장르 키워드로 변환 (예: "가벼운 소설" → "가벼운 소설", "슬픈 이야기" → "감성 소설")
+- 대상/연령 언급 시 해당 장르로 변환:
+  "20대를 위한" → "자기계발 에세이"
+  "30대 직장인" → "자기계발"
+  "어린이" → "그림책"
+  "중학생" → "청소년 소설"
+  "노인" → "에세이 인문"
+- 막연한 추천 요청 (예: "책 한 권 추천", "요즘 인기 책") → "베스트셀러"
+- 감정/상황 언급 시 분위기 키워드 (예: "힘든 날" → "위로 에세이", "설레는" → "로맨스 소설")`;
 
 const INITIAL_MESSAGE = {
   id: 1,
@@ -249,10 +258,30 @@ const ChatBot = () => {
       if (parsed.type === "book") {
         try {
           const keyword = parsed.keyword || userInput;
-          const { items } = await searchBooks(keyword);
+          let { items } = await searchBooks(keyword);
+
+          // 1차 실패: 키워드 마지막 단어만으로 재시도
+          if (items.length === 0 && keyword.includes(" ")) {
+            const words = keyword.trim().split(/\s+/);
+            const shorter = words[words.length - 1];
+            const res2 = await searchBooks(shorter);
+            items = res2.items;
+          }
+
+          // 2차 실패: 장르 베스트셀러 fallback
+          if (items.length === 0) {
+            const genreKeys = Object.keys(GENRE_MAP).filter(k => keyword.includes(k));
+            const fallbackGenre = genreKeys[0] || "에세이";
+            const res3 = await getBooksByGenre(fallbackGenre, 6);
+            items = res3.items;
+            if (items.length > 0) {
+              botText = parsed.message || `"${keyword}"로 딱 맞는 검색 결과가 없어서, 비슷한 분위기의 책을 골라봤어요 📚`;
+            }
+          }
+
           books = items.slice(0, 3);
           if (books.length === 0) {
-            botText = `"${keyword}" 관련 책을 찾지 못했어요. 다른 키워드로 시도해볼까요?`;
+            botText = "관련 책을 찾지 못했어요. 작가 이름이나 장르(예: 소설, 에세이)로 다시 물어봐주세요!";
           }
         } catch {
           botText = "책 검색 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.";
@@ -448,7 +477,7 @@ const ChatBot = () => {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && handleSend()}
                   placeholder={rateLimitUntil ? "잠시 기다려주세요..." : "책 추천, 검색, 날씨, 궁금한 것 모두!"}
                   disabled={!!rateLimitUntil}
                   className="flex-1 bg-secondary/30 border-none rounded-2xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
