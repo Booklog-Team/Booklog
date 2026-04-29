@@ -59,7 +59,7 @@ const Presentation = () => {
         { label: "서비스명", value: "Booklog" },
         { label: "분류", value: "독서 기록 + AI 추천 + 커뮤니티 웹앱" },
         { label: "타겟", value: "독서 습관 형성을 원하는 입문자 및 다독가" },
-        { label: "핵심 가치", value: "날씨·감성 맞춤 추천 / 게이미피케이션 / 커뮤니티" },
+        { label: "핵심 가치", value: "독서 기록화 / 맞춤형 도서 발견 / 독서 가치 확장" },
         { label: "개발 기간", value: "2026. 04. 22 ~ 04. 29" },
         { label: "주요 기능", value: "홈, 검색, 내 서재, 커뮤니티, 독서모임, 포인트, AI 챗봇" },
         { label: "배포 환경", value: "GitHub Actions / Docker / AWS EC2" }
@@ -288,7 +288,7 @@ const Presentation = () => {
         "완독 권수, 총 읽은 페이지, 연속 독서일 등 핵심 지표 제공",
         "월별 독서량과 장르별 독서 비율을 시각화하여 패턴 분석"
       ],
-      images: ["/features/profile.png", "/features/profile_popup1.png", "/features/profile_popup2.png", "/features/profile_popup3.png"]
+      images: ["/features/profile.png", "/features/profile2.png", "/features/profile_popup1.png", "/features/profile_popup2.png", "/features/profile_popup3.png", "/features/profile_popup4.png"]
     },
     {
       type: "feature",
@@ -362,10 +362,6 @@ const Presentation = () => {
           problem: "상태(State)와 기록(Event) 간 데이터 정합성 불일치", 
           cause: "책의 현재 상태와 독서 기록 로그를 중복 관리하여 단일 기준(SSOT) 부재",
           solution: "별도 상태 필드 제거 및 독서 기록 로그를 기준으로 현재 상태를 실시간 계산하는 SSOT 구조로 개편" 
-        },
-        { 
-          problem: "AI 환각(Hallucination) 현상", 
-          solution: "실제 도서 API 검색 결과를 프롬프트에 포함하여 AI가 데이터 인덱스 내에서만 선택하도록 강제" 
         },
         { 
           problem: "API 호출 한도 제한(429) 및 중복 요청으로 인한 자원 낭비", 
@@ -1148,7 +1144,7 @@ const SlideContent = ({ slide, currentSlide }) => {
 
       return (
         <div className="h-full flex flex-col justify-center py-4">
-          <div className="grid grid-cols-3 gap-16 items-start flex-1">
+          <div className="grid grid-cols-3 gap-16 items-center flex-1">
             <div className="col-span-1 flex flex-col">
               <SlideHeader title={title} />
               <div className="space-y-6 text-left mt-6">
@@ -1173,16 +1169,18 @@ const SlideContent = ({ slide, currentSlide }) => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.4, type: "spring" }}
-              className="col-span-2 h-full max-h-[1000px] flex flex-col rounded-3xl overflow-hidden border border-white/20 shadow-2xl bg-slate-950 relative group/slider"
+              className="col-span-2 h-[800px] flex flex-col rounded-3xl overflow-hidden border border-[#B85C38]/20 shadow-2xl bg-[#FDFAF6] relative group/slider"
             >
-              <div className="flex items-center gap-2 px-4 py-3 bg-slate-800 border-b border-white/10 flex-shrink-0 z-20">
-                <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-                <div className="w-3 h-3 rounded-full bg-green-500/80" />
-                <div className="flex-1 mx-3 py-1 px-3 rounded-lg bg-slate-700 text-slate-400 text-xs font-mono text-center">booklog.kro.kr</div>
+              <div className="flex items-center gap-2 px-6 py-4 bg-[#E8DDD0] border-b border-[#B85C38]/10 flex-shrink-0 z-20">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-[#B85C38]/40" />
+                  <div className="w-3 h-3 rounded-full bg-[#B85C38]/20" />
+                  <div className="w-3 h-3 rounded-full bg-[#B85C38]/10" />
+                </div>
+                <div className="flex-1 mx-4 py-1.5 px-4 rounded-xl bg-white/60 text-[#B85C38]/60 text-xs font-bold tracking-tight text-center border border-white/40 shadow-inner">booklog.kro.kr</div>
               </div>
               
-              <div className="flex-1 overflow-hidden relative bg-black/40">
+              <div className="flex-1 overflow-hidden relative bg-[#FDFAF6]/50">
                 <AnimatePresence mode="wait">
                   {images.length > 0 ? (
                     <motion.img 
@@ -1209,15 +1207,15 @@ const SlideContent = ({ slide, currentSlide }) => {
                   <>
                     <button 
                       onClick={prevImg}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 border border-white/10 flex items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-black/70 z-30"
+                      className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-white opacity-60 hover:opacity-100 transition-opacity hover:bg-black/60 z-30"
                     >
-                      <ChevronLeft size={24} />
+                      <ChevronLeft size={28} />
                     </button>
                     <button 
                       onClick={nextImg}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 border border-white/10 flex items-center justify-center text-white opacity-0 group-hover/slider:opacity-100 transition-opacity hover:bg-black/70 z-30"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/40 border border-white/10 flex items-center justify-center text-white opacity-60 hover:opacity-100 transition-opacity hover:bg-black/60 z-30"
                     >
-                      <ChevronRight size={24} />
+                      <ChevronRight size={28} />
                     </button>
                     
                     {/* Indicators */}
