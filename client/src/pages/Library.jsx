@@ -960,6 +960,16 @@ export default function Library() {
     clearDragState();
   };
 
+  const fireCompletionConfetti = () => {
+    const colors = ["#ff6b9d", "#c084fc", "#60a5fa", "#34d399", "#fbbf24", "#f97316"];
+    const burst = (origin, angle) =>
+      confetti({ particleCount: 60, angle, spread: 70, origin, colors, scalar: 1.1 });
+    burst({ x: 0.5, y: 0.6 }, 90);
+    setTimeout(() => { burst({ x: 0.2, y: 0.7 }, 60); burst({ x: 0.8, y: 0.7 }, 120); }, 250);
+    setTimeout(() => { burst({ x: 0.35, y: 0.55 }, 75); burst({ x: 0.65, y: 0.55 }, 105); }, 550);
+    setTimeout(() => { burst({ x: 0.5, y: 0.5 }, 90); }, 850);
+  };
+
   const handleRecordStatusChange = nextStatus => {
     setRecordStatus(nextStatus);
     if (nextStatus === "done") {
@@ -1040,6 +1050,7 @@ export default function Library() {
       }
 
       toast.success("독서 로그를 저장했습니다.");
+      if (recordStatus === "done") fireCompletionConfetti();
       if (recordSyncLeftPanel) {
         setSelectedDate(recordDate || todayStr);
       }
