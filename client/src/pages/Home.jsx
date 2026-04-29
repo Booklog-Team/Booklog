@@ -112,16 +112,24 @@ const MOOD_DESC = {
 let _slideLoadPromise = null;
 const _weatherRecPromises = new Map(); // moodKey → Promise
 
-// 인메모리 캐시 — 페이지 새로고침마다 초기화되어 매번 새 추천 제공
-// (sessionStorage는 새로고침 후에도 유지되어 추천이 바뀌지 않는 문제가 있었음)
-const _recCache = new Map(); // moodKey → books[]
+// localStorage 캐시 — 3분 TTL
+// 새로고침마다 바뀌되 3분 이내 연속 새로고침 시 Groq 호출 절약 (rate limit 방어)
+const CACHE_TTL = 60 * 1000;
 
 function loadSessionCache(moodKey) {
-  return _recCache.get(moodKey) || null;
+  try {
+    const raw = localStorage.getItem(`brec:${moodKey}`);
+    if (!raw) return null;
+    const { books, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) { localStorage.removeItem(`brec:${moodKey}`); return null; }
+    return books;
+  } catch { return null; }
 }
 
 function saveSessionCache(moodKey, books) {
-  _recCache.set(moodKey, books);
+  try {
+    localStorage.setItem(`brec:${moodKey}`, JSON.stringify({ books, ts: Date.now() }));
+  } catch { }
 }
 
 // 알라딘 카테고리 풀 수집 → Groq 상세 기준 선별 → 세션 캐시

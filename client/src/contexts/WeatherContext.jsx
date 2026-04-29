@@ -184,21 +184,10 @@ export const WeatherProvider = ({ children }) => {
 
   const fetchWeather = async (lat, lon) => {
     try {
-      const API_KEY = import.meta.env.VITE_WEATHER_API_KEY;
-
-      if (!API_KEY) {
-        const weathers = ["Clear", "Clouds", "Rain", "Snow"];
-        const randomWeather = weathers[Math.floor(Math.random() * weathers.length)];
-        setWeather({ main: randomWeather, description: "맑음 (데모)", city: "서울" });
-        return;
-      }
-
-      // 역지오코딩으로 한국어 지명 직접 획득
-      const [geoRes, weatherRes] = await Promise.all([
-        fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${API_KEY}`),
-        fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric&lang=kr`),
-      ]);
-      const [geoData, data] = await Promise.all([geoRes.json(), weatherRes.json()]);
+      // 서버 프록시를 통해 날씨 조회 — API 키가 클라이언트 번들에 노출되지 않음
+      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+      if (!res.ok) throw new Error("날씨 API 오류");
+      const { geo: geoData, weather: data } = await res.json();
 
       const cityName = geoData[0]?.local_names?.ko || CITY_NAME_MAP[geoData[0]?.name] || geoData[0]?.name || "현재 위치";
 

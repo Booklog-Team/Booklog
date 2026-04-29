@@ -55,6 +55,23 @@ async function startServer() {
     }
   });
 
+  // ── 날씨 API 프록시 ──────────────────────────────────────────────
+  app.get("/api/weather", async (req, res) => {
+    const { lat, lon } = req.query;
+    const key = process.env.VITE_WEATHER_API_KEY;
+    if (!key) return res.status(500).json({ error: "WEATHER_API_KEY not configured" });
+    try {
+      const [geoRes, weatherRes] = await Promise.all([
+        fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`),
+        fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${key}&units=metric&lang=kr`),
+      ]);
+      const [geo, weather] = await Promise.all([geoRes.json(), weatherRes.json()]);
+      res.json({ geo, weather });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── 정적 파일 서빙 ─────────────────────────────────────────────
   const staticPath =
     process.env.NODE_ENV === "production"

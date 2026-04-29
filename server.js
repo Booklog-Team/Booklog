@@ -58,10 +58,29 @@ app.post("/api/groq/chat/completions", async (req, res) => {
     );
     res.json(response.data);
   } catch (error) {
+    const retryAfter = error.response?.headers?.["retry-after"];
+    if (retryAfter) res.set("retry-after", retryAfter);
     console.error("Groq error:", error.response?.data || error.message);
     res
       .status(error.response?.status || 500)
       .json(error.response?.data || { error: "Groq API 오류" });
+  }
+});
+
+// 4. 날씨 API 프록시 — VITE_WEATHER_API_KEY를 서버에서 관리해 클라이언트 번들 노출 방지
+app.get("/api/weather", async (req, res) => {
+  const { lat, lon } = req.query;
+  const key = process.env.VITE_WEATHER_API_KEY;
+  if (!key) return res.status(500).json({ error: "WEATHER_API_KEY not configured" });
+  try {
+    const [geoRes, weatherRes] = await Promise.all([
+      axios.get(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`),
+      axios.get(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${key}&units=metric&lang=kr`),
+    ]);
+    res.json({ geo: geoRes.data, weather: weatherRes.data });
+  } catch (error) {
+    console.error("Weather error:", error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({ error: "날씨 API 오류" });
   }
 });
 
