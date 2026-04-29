@@ -42,23 +42,28 @@ app.use("/api/aladin", async (req, res) => {
   }
 });
 
-// 3. Groq API 프록시 (환경변수 적용)
-app.use(
-  "/api/groq",
-  createProxyMiddleware({
-    target: "https://api.groq.com",
-    changeOrigin: true,
-    pathRewrite: { "^/api/groq": "/openai/v1" },
-    on: {
-      proxyReq: proxyReq => {
-        proxyReq.setHeader(
-          "Authorization",
-          `Bearer ${process.env.GROQ_API_KEY || ""}`
-        );
-      },
-    },
-  })
-);
+// 3. Groq API 프록시
+app.post("/api/groq/chat/completions", async (req, res) => {
+  try {
+    const response = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      req.body,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 30000,
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    console.error("Groq error:", error.response?.data || error.message);
+    res
+      .status(error.response?.status || 500)
+      .json(error.response?.data || { error: "Groq API 오류" });
+  }
+});
 
 // 정적 파일 서빙 (빌드된 결과물)
 app.use(express.static(path.join(__dirname, "dist/public")));
