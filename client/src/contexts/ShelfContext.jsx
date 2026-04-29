@@ -10,6 +10,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   query,
   onSnapshot,
   arrayUnion,
@@ -64,6 +65,10 @@ function timestampMs(value) {
   if (!value) return 0;
   if (typeof value.toMillis === "function") return value.toMillis();
   if (typeof value.seconds === "number") return value.seconds * 1000;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value.length <= 10 ? `${value}T00:00:00` : value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
   return 0;
 }
 
@@ -245,6 +250,7 @@ export function ShelfProvider({ children }) {
           author: currentBook.author || "",
           thumbnail: currentBook.thumbnail || "",
           status: "done",
+          eventType: "completed",
           date: today,
           pagesRead: Math.max(0, targetPage - fromPage),
           fromPage,
@@ -353,15 +359,22 @@ export function ShelfProvider({ children }) {
     const date = entry.date || getTodayKey();
     const totalPage = Number(currentBook.totalPage) || 0;
     const nextStatus = entry.status || currentBook.status || "reading";
-    const fromPage = Number(entry.fromPage ?? currentBook.currentPage ?? 0) || 0;
-    const requestedCurrentPage = Number(entry.currentPage ?? fromPage) || 0;
+    const rawFromPage =
+      Number(entry.fromPage ?? currentBook.currentPage ?? 0) || 0;
+    const fromPage = nextStatus === "want" ? 0 : rawFromPage;
+    const requestedCurrentPage =
+      nextStatus === "want" ? 0 : Number(entry.currentPage ?? fromPage) || 0;
     const currentPage =
-      nextStatus === "done" && totalPage
-        ? totalPage
-        : Math.max(0, Math.min(requestedCurrentPage, totalPage || 99999));
-    const pagesRead = Math.max(0, Number(entry.pagesRead) || 0);
+      nextStatus === "want"
+        ? 0
+        : nextStatus === "done" && totalPage
+          ? totalPage
+          : Math.max(0, Math.min(requestedCurrentPage, totalPage || 99999));
+    const pagesRead =
+      nextStatus === "want" ? 0 : Math.max(0, Number(entry.pagesRead) || 0);
     const memo = (entry.memo || "").trim();
     const rating = Math.max(0, Math.min(5, Number(entry.rating) || 0));
+    const eventType = entry.eventType || null;
 
     try {
       await addDoc(collection(db, "users", user.uid, "readingLogs"), {
@@ -377,6 +390,7 @@ export function ShelfProvider({ children }) {
         currentPage,
         totalPage,
         memo,
+        ...(eventType && { eventType }),
         ...(nextStatus === "done" && { rating }),
         createdAt: serverTimestamp(),
       });
@@ -393,6 +407,8 @@ export function ShelfProvider({ children }) {
         updates.lastReadDate = date;
         updates.checkedDates = arrayUnion(date);
         if (!currentBook.startDate) updates.startDate = date;
+      } else if (nextStatus === "want") {
+        updates.currentPage = 0;
       }
 
       if (nextStatus === "done") {
@@ -427,10 +443,84 @@ export function ShelfProvider({ children }) {
    */
   const deleteReadingLog = async logId => {
     if (!user) throw new Error("사용자가 로그인하지 않았습니다.");
+    const targetLog = readingLogs.find(log => log.id === logId);
     try {
       await deleteDoc(doc(db, "users", user.uid, "readingLogs", logId));
+
+      if (targetLog?.date && targetLog.status !== "want") {
+        const remainingBookLogs = readingLogs.filter(
+          log =>
+            log.id !== logId &&
+            log.bookId === targetLog.bookId &&
+            log.status !== "want"
+        );
+        const hasOtherSameDateLog = remainingBookLogs.some(
+          log => log.date === targetLog.date
+        );
+        const readingDates = [
+          ...new Set(remainingBookLogs.map(log => log.date).filter(Boolean)),
+        ].sort();
+        const doneDates = remainingBookLogs
+          .filter(log => log.status === "done" && log.date)
+          .map(log => log.date)
+          .sort();
+        const bookRef = doc(db, "users", user.uid, "shelf", targetLog.bookId);
+        await updateDoc(bookRef, {
+          ...(hasOtherSameDateLog
+            ? {}
+            : { checkedDates: arrayRemove(targetLog.date) }),
+          lastReadDate: readingDates[readingDates.length - 1] || null,
+          startDate: readingDates[0] || null,
+          ...(targetLog.status === "done" && {
+            endDate: doneDates[doneDates.length - 1] || null,
+          }),
+        });
+      }
     } catch (err) {
       console.error("[ShelfContext] 독서 로그 삭제 실패:", err);
+      setError(err);
+      throw err;
+    }
+  };
+
+  /**
+   * 독서 로그 정렬 순서 변경
+   * @param {Object} payload
+   * @param {string} payload.logId
+   * @param {string} payload.targetDate - 현재 로그 날짜(YYYY-MM-DD)
+   * @param {string[]} payload.orderedLogIds - 같은 날짜 내 표시 순서
+   */
+  const moveReadingLog = async ({ logId, targetDate, orderedLogIds = [] }) => {
+    if (!user) throw new Error("사용자가 로그인하지 않았습니다.");
+    if (!logId || !targetDate) throw new Error("이동할 로그 정보가 없습니다.");
+
+    const currentLog = readingLogs.find(log => log.id === logId);
+    if (!currentLog) throw new Error("독서 로그를 찾을 수 없습니다.");
+    if (currentLog.date !== targetDate) {
+      throw new Error("로그 날짜는 드래그앤드랍으로 변경할 수 없습니다.");
+    }
+
+    const uniqueOrderedIds = [...new Set(orderedLogIds.filter(Boolean))];
+    const idsToUpdate = uniqueOrderedIds.includes(logId)
+      ? uniqueOrderedIds
+      : [logId, ...uniqueOrderedIds];
+
+    try {
+      const batch = writeBatch(db);
+      const now = serverTimestamp();
+
+      idsToUpdate.forEach((id, index) => {
+        const updates = {
+          sortOrder: (index + 1) * 1000,
+          orderUpdatedAt: now,
+          updatedAt: now,
+        };
+        batch.update(doc(db, "users", user.uid, "readingLogs", id), updates);
+      });
+
+      await batch.commit();
+    } catch (err) {
+      console.error("[ShelfContext] 독서 로그 이동 실패:", err);
       setError(err);
       throw err;
     }
@@ -547,6 +637,7 @@ export function ShelfProvider({ children }) {
     updateProgress,
     addReadingLog,
     deleteReadingLog,
+    moveReadingLog,
     getBooksByStatus,
     recordDailyReading,
     getDailyReadingStats,

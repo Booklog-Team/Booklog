@@ -7,58 +7,59 @@
 
 ## 1. 프로젝트 개요
 
-| 항목 | 내용 |
-|------|------|
-| 서비스명 | Booklog (북로그) |
+| 항목      | 내용                                                 |
+| --------- | ---------------------------------------------------- |
+| 서비스명  | Booklog (북로그)                                     |
 | 한줄 소개 | 독서를 기록하고, 공유하며, 그 가치를 확장하는 플랫폼 |
-| 개발 기간 | 2026.04.20 ~ 2026.04.30 |
-| 팀 구성 | 3인 |
-| 배포 환경 | AWS EC2 + Docker + Nginx + 내도메인한국 |
-| GitHub | https://github.com/Booklog-Team/Booklog |
+| 개발 기간 | 2026.04.20 ~ 2026.04.30                              |
+| 팀 구성   | 3인                                                  |
+| 배포 환경 | AWS EC2 + Docker + Nginx + 내도메인한국              |
+| GitHub    | https://github.com/Booklog-Team/Booklog              |
 
 ### 서비스 목적
+
 독서 경험을 체계적으로 기록·축적하고, 커뮤니티와 연결하여 독서를 사회적 가치로 확장한다.
 포인트 기반 기부 시스템을 통해 독서 활동에 의미를 더한다.
 
 ### 사용자 구분
 
-| 구분 | 설명 |
-|------|------|
-| 회원 | 서비스 전체 기능 이용 가능 |
+| 구분   | 설명                        |
+| ------ | --------------------------- |
+| 회원   | 서비스 전체 기능 이용 가능  |
 | 모임장 | 독서 모임 생성 및 관리 권한 |
 
 ---
 
 ## 2. 기술 스택
 
-| 구분 | 기술 | 비고 |
-|------|------|------|
-| Frontend | React + Vite | JavaScript |
-| 라우팅 | React Router DOM v6 | |
-| 스타일 | Tailwind CSS | Manus 테마 기반 |
-| 상태 관리 | Context API | AuthContext, ShelfContext, PointContext |
-| 인증/DB | Firebase Authentication + Firestore | |
-| 외부 API | Google Books API | 환경변수로 키 관리 |
-| 폼 관리 | React Hook Form | 로그인/회원가입 유효성 검사 |
-| 날짜 처리 | dayjs | 캘린더, 마지막 읽은 날 |
-| 에디터 | React Quill | 게시판 글쓰기 |
-| 협업 | Slack + GitHub + Jira + Notion | |
-| 인프라 | AWS EC2 + Docker + Nginx | |
-| 도메인 | 내도메인한국 + Let's Encrypt | HTTPS |
+| 구분      | 기술                                | 비고                                    |
+| --------- | ----------------------------------- | --------------------------------------- |
+| Frontend  | React + Vite                        | JavaScript                              |
+| 라우팅    | React Router DOM v6                 |                                         |
+| 스타일    | Tailwind CSS                        | Manus 테마 기반                         |
+| 상태 관리 | Context API                         | AuthContext, ShelfContext, PointContext |
+| 인증/DB   | Firebase Authentication + Firestore |                                         |
+| 외부 API  | Google Books API                    | 환경변수로 키 관리                      |
+| 폼 관리   | React Hook Form                     | 로그인/회원가입 유효성 검사             |
+| 날짜 처리 | dayjs                               | 캘린더, 마지막 읽은 날                  |
+| 에디터    | React Quill                         | 게시판 글쓰기                           |
+| 협업      | Slack + GitHub + Jira + Notion      |                                         |
+| 인프라    | AWS EC2 + Docker + Nginx            |                                         |
+| 도메인    | 내도메인한국 + Let's Encrypt        | HTTPS                                   |
 
 ### 디자인 시스템 (Manus 테마)
 
-| 항목 | 값 |
-|------|------|
-| 컨셉 | 따뜻한 라이브러리 |
-| 배경 | #FDFAF6 (아이보리) |
-| Primary | #B85C38 (테라코타) |
-| Secondary | #E8DDD0 (웜 베이지) |
-| Accent | #4A7C59 (모스 그린) |
-| 텍스트 | #2C2416 (딥 브라운) |
-| 로고 폰트 | DM Mono |
-| 기본 UI 폰트 | Pretendard Variable |
-| 제목/강조 폰트 | Noto Serif KR |
+| 항목           | 값                  |
+| -------------- | ------------------- |
+| 컨셉           | 따뜻한 라이브러리   |
+| 배경           | #FDFAF6 (아이보리)  |
+| Primary        | #B85C38 (테라코타)  |
+| Secondary      | #E8DDD0 (웜 베이지) |
+| Accent         | #4A7C59 (모스 그린) |
+| 텍스트         | #2C2416 (딥 브라운) |
+| 로고 폰트      | DM Mono             |
+| 기본 UI 폰트   | Pretendard Variable |
+| 제목/강조 폰트 | Noto Serif KR       |
 
 ---
 
@@ -198,9 +199,9 @@ VITE_ALADIN_API_KEY=
 
 ```js
 // client/src/firebase/config.js
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -286,6 +287,7 @@ points/
 ## 8. 페이지별 기능 명세
 
 ### 01. Onboarding
+
 - 첫 로그인 시에만 표시 (`isOnboarded` 플래그)
 - 장르 카드 8개 (소설/인문/과학/경제/자기계발/예술/역사/아동)
 - 최대 3개 선택
@@ -293,6 +295,7 @@ points/
 - 건너뛰기 → `isOnboarded: true`만 저장
 
 ### 02. Auth
+
 - 이메일/비밀번호 로그인 (`signInWithEmailAndPassword`)
 - Google 소셜 로그인 (`signInWithPopup`)
 - 회원가입 (`createUserWithEmailAndPassword`)
@@ -300,6 +303,7 @@ points/
 - 로그인 성공 → `isOnboarded` 확인 → 온보딩 or 메인
 
 ### 03. Main
+
 - Hero: 유저 닉네임, 마지막 읽던 책, 독서 통계
 - 장르 필터 칩, 카테고리 카드
 - 취향 맞춤 추천 (Firestore genres 기반 API)
@@ -308,12 +312,14 @@ points/
 - 커뮤니티 배너/모임 미리보기
 
 ### 04. Search
+
 - Google Books API 검색 (400ms 디바운스)
 - 검색 결과 그리드
 - 검색 결과 없음 UI
 - 검색 결과에서 바로 찜 추가 가능 ??????
 
 ### 05. BookDetail
+
 - Google Books API 상세 정보
 - 책 표지/제목/저자/줄거리/평점
 - StatusButtons: 읽고싶음/읽는중/완독 → Firestore 저장
@@ -324,6 +330,7 @@ points/
 - 관련 도서 추천
 
 ### 06. Library
+
 - 대표 도서: lastReadDate 기준, 읽는중 우선
 - 상태별 탭: 읽는중/읽고싶음/완독
 - LibraryCard: 진행률 바, 마지막 읽은 날짜
@@ -331,6 +338,7 @@ points/
 - 캘린더: dayjs 월별 달력, 독서일 표시, 연속 독서일
 
 ### 07. Profile
+
 - 유저 정보 (닉네임, 이메일)
 - 독서 통계 (완독 수, 연속일, 총 페이지)
 - 장르별 독서 비율 차트
@@ -338,6 +346,7 @@ points/
 - 로그아웃
 
 ### 08. Meeting
+
 - 모임 목록/상세
 - 모임 생성 (모임장만 가능)
 - 모임 참여 (`members[]` 배열에 uid 추가)
@@ -345,12 +354,14 @@ points/
 - 게시글/댓글 작성
 
 ### 09. Board
+
 - 자유 게시판 목록/상세
 - 게시글 작성 (React Quill 에디터)
 - 댓글 작성
 - 좋아요
 
 ### 10. Points
+
 - 사용자 포인트 현황 표시
 - 포인트 적립 내역
 - 전체 누적 기부 포인트 시각화 (진행률 바)
@@ -362,15 +373,16 @@ points/
 
 ### 적립 규칙
 
-| 행동 | 포인트 | 제한 |
-|------|--------|------|
-| 오늘 독서 체크 | +10p | 하루 1회 |
-| 메모 작성 | +5p | 하루 1회 |
-| 모임 게시글 작성 | +5p | 하루 1회 |
-| 자유게시판 글 작성 | +3p | 하루 1회 |
-| 완독 | 포인트 없음 | - |
+| 행동               | 포인트      | 제한     |
+| ------------------ | ----------- | -------- |
+| 오늘 독서 체크     | +10p        | 하루 1회 |
+| 메모 작성          | +5p         | 하루 1회 |
+| 모임 게시글 작성   | +5p         | 하루 1회 |
+| 자유게시판 글 작성 | +3p         | 하루 1회 |
+| 완독               | 포인트 없음 | -        |
 
 ### 기부 시스템
+
 - 전체 사용자 포인트 합산 → 기부 금액으로 환산
 - Firestore `points/global` 에 누적
 - 진행 상황 시각화 (목표 대비 %)
@@ -381,10 +393,10 @@ points/
 
 ```js
 // client/src/utils/api.js
-const BASE_URL = 'https://www.googleapis.com/books/v1/volumes';
+const BASE_URL = "https://www.googleapis.com/books/v1/volumes";
 const API_KEY = import.meta.env.VITE_BOOKS_API_KEY;
 
-export const searchBooks = async (query, orderBy = 'relevance') => {
+export const searchBooks = async (query, orderBy = "relevance") => {
   const res = await fetch(
     `${BASE_URL}?q=${encodeURIComponent(query)}&maxResults=20&orderBy=${orderBy}&key=${API_KEY}&langRestrict=ko`
   );
@@ -392,12 +404,12 @@ export const searchBooks = async (query, orderBy = 'relevance') => {
   return data.items || [];
 };
 
-export const getBookDetail = async (bookId) => {
+export const getBookDetail = async bookId => {
   const res = await fetch(`${BASE_URL}/${bookId}?key=${API_KEY}`);
   return await res.json();
 };
 
-export const getBooksByGenre = async (genre) => {
+export const getBooksByGenre = async genre => {
   const res = await fetch(
     `${BASE_URL}?q=subject:${encodeURIComponent(genre)}&maxResults=10&key=${API_KEY}&langRestrict=ko`
   );
@@ -426,27 +438,30 @@ export const getBooksByGenre = async (genre) => {
 
 ## 12. 팀원 역할 분담 ✏️ [갱신]
 
-| 팀원 | 담당 | 파일 |
-|------|------|------|
-| 준화 | 메인/검색/도서상세 | pages/Main.jsx, pages/Search.jsx, pages/BookDetail.jsx, components/book/, utils/api.js |
+| 팀원 | 담당                      | 파일                                                                                                                                                         |
+| ---- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 준화 | 메인/검색/도서상세        | pages/Main.jsx, pages/Search.jsx, pages/BookDetail.jsx, components/book/, utils/api.js                                                                       |
 | 민서 | 인증/온보딩/프로필/포인트 | pages/auth/, pages/Profile.jsx, pages/Points.jsx, firebase/, **contexts/AuthContext.jsx**, **contexts/PointContext.jsx**, components/common/PrivateRoute.jsx |
-| 예진 | 서재/커뮤니티 | pages/Library.jsx, pages/community/, **contexts/ShelfContext.jsx**, components/library/, components/community/ |
+| 예진 | 서재/커뮤니티             | pages/Library.jsx, pages/community/, **contexts/ShelfContext.jsx**, components/library/, components/community/                                               |
 
 > 역할별 상세 내용은 `팀_작업_분배_Team_Roles.pdf` 참고
 
 ### Context 담당 분리 요약
-| Context | 담당 |
-|---------|------|
-| AuthContext.jsx | 민서 |
+
+| Context          | 담당 |
+| ---------------- | ---- |
+| AuthContext.jsx  | 민서 |
 | PointContext.jsx | 민서 |
 | ShelfContext.jsx | 예진 |
 
 ### 공통 작업 규칙
+
 - `constants/` 파일은 충돌 방지를 위해 작업 시작 전 먼저 생성 후 팀 공유
 - 공통 파일 (api.js, contexts/, constants/) 중복 생성 금지 — 하나만 사용
 - 도서 상태값은 반드시 `constants/bookStatus.js`의 `BOOK_STATUS` 사용
 
 ### 각자 첫 번째 작업
+
 - **준화**: `feature/junhwa-main` 브랜치 → constants/ 파일 먼저 작성 후 utils/api.js → Main 시작
 - **민서**: `feature/minseo-auth` 브랜치 → firebase/config.js → AuthContext.jsx → Auth 페이지
 - **예진**: `feature/yejin-context` 브랜치 → ShelfContext.jsx, PointContext.jsx 먼저
@@ -472,6 +487,7 @@ style: CSS/스타일 수정
 ```
 
 ### PR 규칙
+
 - feature → develop PR 시 팀원 1명 이상 리뷰 필수
 - Slack #개발 채널에 PR 링크 공유
 - 머지 후 feature 브랜치 삭제
@@ -552,4 +568,3 @@ CMD ["nginx", "-g", "daemon off;"]
 > 이 문서는 프로젝트 진행에 따라 업데이트됩니다.
 > Claude Code / Antigravity 사용 시 이 파일을 컨텍스트로 제공하고 작업을 요청하세요.
 > 마지막 업데이트: 2026.04.22
-
