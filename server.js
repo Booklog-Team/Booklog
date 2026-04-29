@@ -42,23 +42,34 @@ app.use("/api/aladin", async (req, res) => {
   }
 });
 
-// 3. Groq API 프록시 (환경변수 적용)
-app.use(
-  "/api/groq",
-  createProxyMiddleware({
-    target: "https://api.groq.com",
-    changeOrigin: true,
-    pathRewrite: { "^/api/groq": "/openai/v1" },
-    on: {
-      proxyReq: proxyReq => {
-        proxyReq.setHeader(
-          "Authorization",
-          `Bearer ${process.env.GROQ_API_KEY || ""}`
-        );
+// 3. Groq API 프록시 — http-proxy-middleware 대신 직접 fetch 사용
+// (Express 5 + proxy-middleware 조합의 POST body 미전달 / 504 타임아웃 문제 회피)
+app.post("/api/groq/chat/completions", async (req, res) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "GROQ_API_KEY not configured" });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+
+  try {
+    const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-    },
-  })
-);
+      body: JSON.stringify(req.body),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const data = await upstream.json();
+    res.status(upstream.status).json(data);
+  } catch (e) {
+    clearTimeout(timer);
+    const status = e.name === "AbortError" ? 504 : 500;
+    res.status(status).json({ error: e.message });
+  }
+});
 
 // 정적 파일 서빙 (빌드된 결과물)
 app.use(express.static(path.join(__dirname, "dist/public")));
@@ -69,7 +80,7 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "dist/public/index.html"));
 });
 
-const PORT = 80;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
