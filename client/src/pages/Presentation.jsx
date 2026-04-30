@@ -49,7 +49,7 @@ const Presentation = () => {
       content: {
         title: "BOOKLOG",
         subtitle: "나만의 따뜻한 서재",
-        description: "날씨와 감성, 기록으로 연결되는 AI 독서 플랫폼",
+        description: "기록과 소통으로 연결되는 AI 독서 플랫폼",
         team: ["신민서", "이예진", "홍준화"],
         date: "2026. 04. 30",
         url: "https://booklog.kro.kr/"
@@ -248,17 +248,18 @@ const Presentation = () => {
         "현재 위치의 날씨와 시간대를 분석하여 무드 결정",
         "알라딘 베스트셀러 중 무드에 맞는 카테고리 도서 풀 수집"
       ],
-      images: ["/features/home.png", "/features/home2.png", "/features/home3.png"]
+      images: ["/features/home.png", "/features/home2.png", "/features/home3.png", "/features/home4.png"]
     },
     {
       type: "feature",
       title: "주요 기능: 도서 검색 & 상세",
       points: [
         "실시간 키워드 검색 및 14개 장르별 탐색",
+        "최근 검색어 표시 및 자동 완성 기능",
         "서재 즉시 추가 및 상태 관리",
-        "도서 대출 가능 여부 실시간 확인"
+        "관련 도서 & 추천 도서"
       ],
-      images: ["/features/search.png", "/features/search2.png"]
+      images: ["/features/search.png", "/features/search2.png", "/features/search3.png"]
     },
     {
       type: "feature",
@@ -272,7 +273,7 @@ const Presentation = () => {
     },
     {
       type: "feature",
-      title: "주요 기능: 내 서재 Library",
+      title: "주요 기능: 내 서재",
       points: [
         "사용자의 도서를 읽고싶음 / 읽는 중 / 완독 상태로 분류하여 관리",
         "도서별 진행률, 현재 페이지, 메모, 마지막 기록일 표시",
@@ -356,6 +357,7 @@ const Presentation = () => {
     {
       type: "demo",
       title: "시연 영상",
+      videoSrc: "/videos/demo.mp4", // 🎥 실제 영상 경로 (public/videos/demo.mp4)
       steps: ["온보딩/로그인", "홈 날씨 추천", "도서 탐색/검색", "서재 기록/캘린더", "포인트 기부", "커뮤니티/채팅", "AI 챗봇"]
     },
     // 20. Troubleshooting
@@ -1399,27 +1401,27 @@ const SlideContent = ({ slide, currentSlide }) => {
 
     case "architecture":
       return (
-        <div className="space-y-16 h-full flex flex-col justify-center py-10">
+        <div className="space-y-12 h-full flex flex-col justify-center py-6">
           <SlideHeader title={title} />
-          <div className="grid grid-cols-1 gap-8 max-w-6xl mx-auto items-center w-full">
+          <div className="grid grid-cols-2 gap-8 max-w-[1600px] mx-auto w-full">
             {flow.map((step, i) => (
               <motion.div 
                 key={i}
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.15 }}
-                className="flex items-center gap-12 group"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="flex items-center gap-8 p-10 rounded-[3rem] bg-white/5 border border-white/10 hover:bg-white/[0.08] transition-all group shadow-2xl"
               >
-                <div className="w-56 text-right font-black text-slate-500 text-base uppercase tracking-[0.25em] group-hover:text-primary transition-colors">{step.from}</div>
-                <div className="flex-1 p-12 rounded-[3rem] bg-white/5 border border-white/10 flex items-center justify-between group-hover:bg-white/[0.08] transition-all group-hover:border-primary/30 shadow-2xl relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="font-black text-3xl text-slate-100 flex items-center gap-6 relative z-10">
-                    <ArrowDown className="text-primary -rotate-90" size={32} />
-                    {step.to}
+                <div className="w-20 h-20 rounded-[2rem] bg-primary/20 flex items-center justify-center text-primary font-black text-2xl flex-shrink-0 group-hover:scale-110 transition-transform shadow-inner">
+                  0{i + 1}
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="flex items-center gap-4 mb-3">
+                    <span className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">{step.from}</span>
+                    <ArrowDown size={18} className="text-primary/40 -rotate-90" />
+                    <span className="text-base font-black text-slate-300 tracking-tight truncate">{step.result}</span>
                   </div>
-                  <div className="px-8 py-3 rounded-2xl bg-primary/20 text-primary font-black text-base uppercase tracking-[0.15em] relative z-10 shadow-xl border border-primary/20 backdrop-blur-sm">
-                    {step.result}
-                  </div>
+                  <p className="text-3xl font-black text-primary leading-tight truncate tracking-tighter">{step.to}</p>
                 </div>
               </motion.div>
             ))}
@@ -1466,16 +1468,38 @@ const SlideContent = ({ slide, currentSlide }) => {
 
     case "demo":
       return (
-        <div className="space-y-12 h-full flex flex-col justify-center">
+        <div className="space-y-10 h-full flex flex-col justify-center py-6">
           <SlideHeader title={title} />
-          <div className="relative aspect-video max-w-4xl mx-auto w-full rounded-[3rem] bg-slate-900 border border-white/20 shadow-2xl flex flex-col items-center justify-center overflow-hidden">
-            <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1507842217343-583bb7270b66?q=80&w=2000')] bg-cover" />
-            <PlayCircle size={100} className="text-white mb-8 z-10 animate-bounce" />
-            <div className="z-10 grid grid-cols-4 gap-6 px-10 w-full">
-              {steps.map((step, i) => (
-                <div key={i} className="px-6 py-3 rounded-2xl bg-white/10 backdrop-blur-md text-xs font-black text-center text-white border border-white/10 shadow-lg">{step}</div>
-              ))}
-            </div>
+          <div className="relative aspect-video max-w-[1400px] mx-auto w-full rounded-[3.5rem] bg-black border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden group">
+            {slide.videoSrc ? (
+              <video 
+                src={slide.videoSrc} 
+                controls 
+                autoPlay 
+                muted 
+                loop
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1507842217343-583bb7270b66?q=80&w=2000')] bg-cover" />
+                <PlayCircle size={100} className="text-white mb-8 z-10 animate-bounce opacity-40" />
+                <p className="text-white/40 font-black text-2xl z-10 uppercase tracking-[0.3em]">Demo Video Placeholder</p>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap justify-center gap-4 max-w-6xl mx-auto">
+            {steps.map((step, i) => (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 + (i * 0.1) }}
+                className="px-6 py-3 rounded-2xl bg-white/5 backdrop-blur-md text-sm font-black text-slate-400 border border-white/5 shadow-lg"
+              >
+                {step}
+              </motion.div>
+            ))}
           </div>
         </div>
       );
