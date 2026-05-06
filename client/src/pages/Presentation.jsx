@@ -52,7 +52,8 @@ const Presentation = () => {
         description: "기록과 소통으로 연결되는 AI 독서 플랫폼",
         team: ["신민서", "이예진", "홍준화"],
         date: "2026. 04. 30",
-        url: "https://booklog.kro.kr/"
+        url: "https://booklog.kro.kr/",
+        qrCode: "/qr_code.png"
       }
     },
     // 02. 프로젝트 개요
@@ -946,6 +947,15 @@ const SlideContent = ({ slide, currentSlide }) => {
                 >
                   booklog.kro.kr <ExternalLink size={14} />
                 </a>
+                {content.qrCode && (
+                  <div className="p-2 bg-white rounded-xl shadow-lg border border-white/20 hover:scale-110 transition-transform cursor-pointer">
+                    <img 
+                      src={content.qrCode} 
+                      alt="QR Code" 
+                      className="w-16 h-16 object-contain"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

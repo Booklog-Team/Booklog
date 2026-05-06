@@ -203,7 +203,7 @@ export const WeatherProvider = ({ children }) => {
         icon: data.weather[0].icon
       });
     } catch (error) {
-      console.error("Failed to fetch weather:", error);
+      console.error("[Weather] API 실패 — 기본값 사용:", error.message);
       setWeather({ main: "Clear", temp: 20, city: "서울" });
     } finally {
       setLoading(false);
@@ -217,15 +217,16 @@ export const WeatherProvider = ({ children }) => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-        () => {
-          setWeather({ main: "Clear", temp: 20 });
-          setLoading(false);
+        (err) => {
+          console.warn("[Weather] 위치 권한 거부 또는 타임아웃 — 서울 기본값 사용:", err?.message);
+          // 위치 권한 없으면 서울 좌표로 fallback 시도
+          fetchWeather(37.5665, 126.9780);
         },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
       );
     } else {
-      setWeather({ main: "Clear", temp: 20 });
-      setLoading(false);
+      console.warn("[Weather] Geolocation 미지원 — 서울 기본값 사용");
+      fetchWeather(37.5665, 126.9780);
     }
 
     return () => clearInterval(timer);

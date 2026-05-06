@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import https from "node:https";
 import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
@@ -15,25 +16,49 @@ export default defineConfig(({ mode }) => {
       {
         name: "dev-weather-proxy",
         configureServer(server) {
-          server.middlewares.use(async (req, res, next) => {
+          server.middlewares.use((req, res, next) => {
             if (!req.url?.startsWith("/api/weather")) return next();
             const url = new URL(req.url, "http://localhost");
             const lat = url.searchParams.get("lat");
             const lon = url.searchParams.get("lon");
             const key = env.VITE_WEATHER_API_KEY;
-            if (!key) { res.writeHead(500); res.end(JSON.stringify({ error: "no key" })); return; }
-            try {
-              const [geoRes, wRes] = await Promise.all([
-                fetch(`https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`),
-                fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${key}&units=metric&lang=kr`),
-              ]);
-              const [geo, weather] = await Promise.all([geoRes.json(), wRes.json()]);
-              res.writeHead(200, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ geo, weather }));
-            } catch (e) {
-              res.writeHead(500);
-              res.end(JSON.stringify({ error: e.message }));
+            if (!key) {
+              res.writeHead(500, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "VITE_WEATHER_API_KEY not set" }));
+              return;
             }
+
+            // async/await는 Vite 6 + Connect에서 불안정 — https 모듈 콜백 방식 사용
+            const getJson = (apiUrl, cb) => {
+              https.get(apiUrl, (r) => {
+                let buf = "";
+                r.on("data", (c) => { buf += c; });
+                r.on("end", () => {
+                  try { cb(null, JSON.parse(buf)); } catch (e) { cb(e); }
+                });
+              }).on("error", cb);
+            };
+
+            let geo = null, weather = null, errored = false;
+            const tryDone = () => {
+              if (geo === null || weather === null) return;
+              if (errored) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "OpenWeatherMap API 오류" }));
+              } else {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ geo, weather }));
+              }
+            };
+
+            getJson(
+              `https://api.openweathermap.org/geo/1.0/reverse?lat=${lat}&lon=${lon}&limit=1&appid=${key}`,
+              (err, data) => { if (err) { errored = true; geo = []; } else { geo = data; } tryDone(); }
+            );
+            getJson(
+              `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${key}&units=metric&lang=kr`,
+              (err, data) => { if (err) { errored = true; weather = {}; } else { weather = data; } tryDone(); }
+            );
           });
         },
       },
